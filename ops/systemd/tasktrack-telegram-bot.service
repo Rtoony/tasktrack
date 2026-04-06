@@ -1,0 +1,15 @@
+[Unit]
+Description=TaskTrack Telegram Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/rtoony/projects/collab-tracker
+ExecStart=/bin/bash -lic 'cd /home/rtoony/projects/collab-tracker && exec ./telegram_bot_launcher.sh'
+Restart=on-failure
+RestartSec=5
+Environment=PATH=/home/rtoony/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

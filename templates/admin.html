@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskTrack — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-light: #eef0f3;
+    --text: #1a1d23; --text-muted: #6b7280; --text-light: #9ca3af;
+    --accent: #2563eb; --accent-hover: #1d4ed8; --accent-light: #eff6ff;
+    --danger: #dc2626; --danger-hover: #b91c1c; --danger-light: #fef2f2;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 8px; --radius-lg: 12px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'IBM Plex Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
+  .header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .logo { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em; }
+  .logo span { color: var(--accent); }
+  .nav-links { display: flex; align-items: center; gap: 1rem; }
+  .nav-links a { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; font-weight: 500; }
+  .nav-links a:hover { color: var(--text); }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+  .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; }
+  .workflow-link-card { display: block; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.95rem 1rem; text-decoration: none; color: inherit; background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
+  .workflow-link-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+  .workflow-link-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .workflow-link-copy { font-size: 0.78rem; color: var(--text-muted); }
+  .info-grid { display:grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; align-items:start; }
+  .info-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem 1rem; background:linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); }
+  .info-label { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.3rem; }
+  .info-code { font-family:'IBM Plex Mono', monospace; font-size:1rem; font-weight:600; }
+  .helper-copy { font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem; }
+  .table-note { font-size:0.78rem; color:var(--text-muted); margin-bottom:0.8rem; }
+
+  .add-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+  .add-row input { flex: 1; padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.875rem; border: 1px solid var(--border); border-radius: var(--radius); }
+  .add-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.5rem 1rem; font-family: inherit; font-size: 0.825rem; font-weight: 500; border: none; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
+  .btn-danger { background: var(--danger-light); color: var(--danger); }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-ghost { background: transparent; color: var(--text-muted); }
+  .btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 0.5rem 0.75rem; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-light); }
+  tr:last-child td { border-bottom: none; }
+
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; }
+  .badge-admin { background: #eff6ff; color: #1d4ed8; }
+  .badge-user { background: var(--bg); color: var(--text-muted); }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text); color: #fff; padding: 0.6rem 1.2rem; border-radius: var(--radius); font-size: 0.82rem; opacity: 0; transition: opacity 0.2s; z-index: 300; }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 768px) {
+    .header { padding: 0 1rem; }
+    .container { padding: 1rem; }
+    .add-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="logo"><span>//</span> TaskTrack <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:0.5rem;">Admin</span></div>
+    <div class="nav-links">
+      <a href="/">Back to Tracker</a>
+      <a href="/logout">Sign out</a>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <h2>Workflow Views</h2>
+  <div class="card">
+    <div class="workflow-grid">
+      {% for workflow in workflow_links %}
+      <a class="workflow-link-card" href="{{ workflow.href }}">
+        <div class="workflow-link-title">{{ workflow.title }}</div>
+        <div class="workflow-link-copy">{{ workflow.subtitle }}</div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <h2>Telegram Bot Access</h2>
+  <div class="card">
+    <div class="info-grid" style="margin-bottom:1rem;">
+      <div class="info-panel">
+        <div class="info-label">Pairing Code</div>
+        <div class="info-code" id="telegram-link-code">{{ telegram_link_code }}</div>
+        <div class="helper-copy">In Telegram, send <strong>/link {{ telegram_link_code }}</strong> to the bot from your phone. That chat will then be allowed to create tasks.</div>
+        <div style="margin-top:0.8rem;">
+          <button class="btn btn-primary btn-sm" onclick="regenerateTelegramCode()">Regenerate Code</button>
+        </div>
+      </div>
+      <div class="info-panel">
+        <div class="info-label">Recommended Flow</div>
+        <div class="helper-copy">1. Open <strong>@BR_Task_Admin_Bot</strong> in Telegram.</div>
+        <div class="helper-copy">2. Send the pairing command once.</div>
+        <div class="helper-copy">3. Use the on-screen buttons to create tasks from your phone.</div>
+      </div>
+    </div>
+
+    <div class="table-note">Linked chats currently allowed to use the bot.</div>
+    <table>
+      <thead><tr><th>Display Name</th><th>Username</th><th>Chat ID</th><th>Linked</th><th>Last Seen</th><th></th></tr></thead>
+      <tbody id="telegram-chat-list">
+        {% for chat in telegram_chats %}
+        <tr data-chat-id="{{ chat.chat_id }}">
+          <td style="font-weight:500">{{ chat.display_name or '—' }}</td>
+          <td>{{ ('@' ~ chat.username) if chat.username else '—' }}</td>
+          <td style="font-family:'IBM Plex Mono', monospace; font-size:0.8rem;">{{ chat.chat_id }}</td>
+          <td style="color:var(--text-light);font-size:0.8rem;">{{ chat.linked_at or '—' }}</td>
+          <td style="color:var(--text-light);font-size:0.8rem;">{{ chat.last_seen_at or '—' }}</td>
+          <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="removeTelegramChat('{{ chat.chat_id }}')">Remove</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Approved Emails -->
+  <h2>Approved Emails</h2>
+  <div class="card">
+    <div class="add-row">
+      <input type="email" id="new-email" placeholder="email@example.com">
+      <button class="btn btn-primary" onclick="addEmail()">Add Email</button>
+    </div>
+    <table>
+      <thead><tr><th>Email</th><th>Added</th><th></th></tr></thead>
+      <tbody id="email-list">
+        {% for e in approved_emails %}
+        <tr data-email="{{ e.email }}">
+          <td>{{ e.email }}</td>
+          <td style="color:var(--text-light);font-size:0.8rem;">{{ e.added_at or '—' }}</td>
+          <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="removeEmail('{{ e.email }}', this)">Remove</button></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Users -->
+  <h2>Users</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+      <tbody id="user-list">
+        {% for u in users %}
+        <tr data-uid="{{ u.id }}">
+          <td style="font-weight:500">{{ u.display_name }}</td>
+          <td>{{ u.email }}</td>
+          <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+          <td style="color:var(--text-light);font-size:0.8rem;">{{ u.created_at[:10] if u.created_at else '—' }}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-sm btn-ghost" onclick="toggleRole({{ u.id }}, '{{ u.role }}')">
+              {{ 'Demote' if u.role == 'admin' else 'Promote' }}
+            </button>
+            <button class="btn btn-sm btn-ghost" onclick="promptResetPassword({{ u.id }}, '{{ u.display_name }}')">Reset pw</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteUser({{ u.id }}, '{{ u.display_name }}')">Delete</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(path, opts);
+  if (res.status === 401) { window.location = '/login'; return null; }
+  return res.json();
+}
+
+async function addEmail() {
+  const input = document.getElementById('new-email');
+  const email = input.value.trim();
+  if (!email) return;
+  await api('POST', '/api/admin/approved-emails', { email });
+  input.value = '';
+  toast('Added ' + email);
+  location.reload();
+}
+
+async function removeEmail(email, btn) {
+  await api('DELETE', '/api/admin/approved-emails/' + encodeURIComponent(email));
+  btn.closest('tr').remove();
+  toast('Removed ' + email);
+}
+
+async function toggleRole(uid, current) {
+  const newRole = current === 'admin' ? 'user' : 'admin';
+  await api('PUT', '/api/admin/users/' + uid + '/role', { role: newRole });
+  toast('Role updated');
+  location.reload();
+}
+
+async function deleteUser(uid, name) {
+  if (!confirm('Delete user ' + name + '?')) return;
+  const res = await api('DELETE', '/api/admin/users/' + uid);
+  if (res && res.error) { toast(res.error); return; }
+  document.querySelector('tr[data-uid="' + uid + '"]').remove();
+  toast('Deleted ' + name);
+}
+
+async function promptResetPassword(uid, name) {
+  const pw = prompt('New password for ' + name + ' (min 6 chars):');
+  if (!pw || pw.length < 6) { if (pw !== null) toast('Password too short'); return; }
+  await api('PUT', '/api/admin/users/' + uid + '/reset-password', { password: pw });
+  toast('Password reset for ' + name);
+}
+
+async function regenerateTelegramCode() {
+  const res = await api('PUT', '/api/admin/telegram/link-code/regenerate');
+  if (res && res.telegram_link_code) {
+    document.getElementById('telegram-link-code').textContent = res.telegram_link_code;
+    toast('Telegram pairing code regenerated');
+  }
+}
+
+async function removeTelegramChat(chatId) {
+  if (!confirm('Remove Telegram access for chat ' + chatId + '?')) return;
+  const res = await api('DELETE', '/api/admin/telegram/chats/' + chatId);
+  if (res && !res.error) {
+    document.querySelector('tr[data-chat-id="' + chatId + '"]')?.remove();
+    toast('Telegram chat removed');
+  }
+}
+
+document.getElementById('new-email').addEventListener('keydown', e => { if (e.key === 'Enter') addEmail(); });
+</script>
+</body>
+</html>

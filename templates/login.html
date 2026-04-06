@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TaskTrack — Sign In</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --border: #e2e5ea;
+    --text: #1a1d23;
+    --text-muted: #6b7280;
+    --text-light: #9ca3af;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --danger: #dc2626;
+    --success: #059669;
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    max-width: 400px;
+    padding: 2.5rem 2rem 2rem;
+    margin: 1rem;
+  }
+  .logo {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 1.3rem;
+    text-align: center;
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.02em;
+  }
+  .logo span { color: var(--accent); }
+  .subtitle {
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-bottom: 1.75rem;
+  }
+  .field {
+    margin-bottom: 1rem;
+  }
+  .field label {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.3rem;
+  }
+  .field input {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+  }
+  .btn {
+    width: 100%;
+    padding: 0.65rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius);
+    cursor: pointer;
+    background: var(--accent);
+    color: #fff;
+    transition: background 0.15s;
+    margin-top: 0.5rem;
+  }
+  .btn:hover { background: var(--accent-hover); }
+  .toggle {
+    text-align: center;
+    margin-top: 1.25rem;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+  }
+  .toggle a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+  .toggle a:hover { text-decoration: underline; }
+  .msg {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius);
+    margin-bottom: 1rem;
+  }
+  .msg-error { background: #fef2f2; color: var(--danger); }
+  .msg-success { background: #ecfdf5; color: var(--success); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo"><span>//</span> TaskTrack</div>
+  <p class="subtitle">{% if mode == 'register' %}Create your account{% else %}Sign in to continue{% endif %}</p>
+
+  {% if error %}<div class="msg msg-error">{{ error }}</div>{% endif %}
+  {% if success %}<div class="msg msg-success">{{ success }}</div>{% endif %}
+
+  {% if mode == 'register' %}
+  <form method="POST" action="/register">
+    <div class="field">
+      <label>Display Name</label>
+      <input type="text" name="name" required autofocus placeholder="Your name">
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" name="email" required placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" required minlength="6" placeholder="At least 6 characters">
+    </div>
+    <button class="btn" type="submit">Create Account</button>
+  </form>
+  <p class="toggle">Already have an account? <a href="/login">Sign in</a></p>
+  {% else %}
+  <form method="POST" action="/login">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" name="email" required autofocus placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" required placeholder="Your password">
+    </div>
+    <button class="btn" type="submit">Sign In</button>
+  </form>
+  <p class="toggle">Need an account? <a href="/register">Register</a></p>
+  {% endif %}
+</div>
+</body>
+</html>

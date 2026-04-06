@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ config.page_title }} | TaskTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f6f7f9; --surface:#fff; --border:#e2e5ea; --text:#1a1d23; --text-muted:#6b7280;
+    --accent:#2563eb; --accent-hover:#1d4ed8; --danger:#dc2626; --danger-bg:#fef2f2; --success:#059669; --success-bg:#ecfdf5;
+    --shadow:0 10px 24px rgba(0,0,0,0.08); --radius:12px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:linear-gradient(180deg, #eef4ff 0%, var(--bg) 22%); color:var(--text); min-height:100vh; }
+  .page { max-width:860px; margin:0 auto; padding:2rem 1.1rem 3rem; }
+  .hero, .form-shell { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
+  .hero { padding:1.25rem 1.35rem; margin-bottom:1rem; }
+  .brand { font-family:'IBM Plex Mono',monospace; font-weight:600; color:var(--text-muted); margin-bottom:0.4rem; }
+  .brand span { color:var(--accent); }
+  h1 { font-size:1.7rem; margin-bottom:0.45rem; }
+  .intro { color:var(--text-muted); }
+  .banner { padding:0.85rem 0.95rem; border-radius:10px; font-size:0.92rem; margin-bottom:1rem; }
+  .banner.error { background:var(--danger-bg); color:var(--danger); border:1px solid #fecaca; }
+  .banner.success { background:var(--success-bg); color:var(--success); border:1px solid #a7f3d0; }
+  .form-head, .form-foot { padding:1rem 1.15rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; align-items:center; }
+  .form-foot { border-top:1px solid var(--border); border-bottom:none; }
+  .form-head p, .form-foot p { color:var(--text-muted); font-size:0.84rem; }
+  .form-body { padding:1rem 1.15rem 1.2rem; }
+  .field { margin-bottom:0.9rem; }
+  .field label { display:block; font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.28rem; }
+  .field input, .field textarea, .field select { width:100%; border:1px solid var(--border); border-radius:10px; padding:0.68rem 0.78rem; font:inherit; color:var(--text); background:var(--surface); }
+  .field textarea { min-height:84px; resize:vertical; }
+  .field input:focus, .field textarea:focus, .field select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.10); }
+  .actions { display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap; }
+  .btn { border:none; text-decoration:none; border-radius:10px; padding:0.72rem 1rem; font:inherit; font-size:0.9rem; font-weight:600; cursor:pointer; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-link { color:var(--accent); text-decoration:none; font-weight:600; }
+  @media (max-width: 760px) { .page { padding:1rem 0.85rem 2rem; } }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="brand"><span>//</span> TaskTrack</div>
+      <h1>{{ config.heading }}</h1>
+      <p class="intro">{{ config.intro }}</p>
+    </section>
+
+    {% if error %}
+    <div class="banner error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="banner success">{{ success }}</div>
+    {% endif %}
+
+    <form class="form-shell" method="post">
+      <div class="form-head">
+        <div>
+          <strong>{{ config.page_title }}</strong>
+          <p>Keep it short and clear. The dashboard team can refine it later if needed.</p>
+        </div>
+        <a class="btn-link" href="/submit">All Submission Forms</a>
+      </div>
+
+      <div class="form-body">
+        {% for field in config.fields %}
+        <div class="field">
+          <label for="{{ field.name }}">{{ field.label }}</label>
+          {% if field.type == 'textarea' %}
+          <textarea id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}">{{ values.get(field.name, '') }}</textarea>
+          {% elif field.type == 'select' %}
+          <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
+            {% for option in field.options %}
+            <option value="{{ option }}" {% if values.get(field.name, '') == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+          {% else %}
+          <input id="{{ field.name }}" name="{{ field.name }}" type="{{ field.type }}" value="{{ values.get(field.name, '') }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="form-foot">
+        <p>This form creates a new record in TaskTrack for review.</p>
+        <div class="actions">
+          <a class="btn-link" href="/">Open Dashboard</a>
+          <button class="btn btn-primary" type="submit">{{ config.submit_label }}</button>
+        </div>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

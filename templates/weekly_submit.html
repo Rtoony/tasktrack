@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Work Submission | TaskTrack</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f6f7f9; --surface:#ffffff; --border:#e2e5ea; --border-light:#eef0f3;
+    --text:#1a1d23; --text-muted:#6b7280; --accent:#2563eb; --accent-hover:#1d4ed8;
+    --success:#059669; --success-bg:#ecfdf5; --danger:#dc2626; --danger-bg:#fef2f2;
+    --shadow-sm:0 1px 2px rgba(0,0,0,0.05); --shadow-md:0 8px 24px rgba(0,0,0,0.08);
+    --radius:10px; --radius-lg:14px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:linear-gradient(180deg, #eef4ff 0%, var(--bg) 24%); color:var(--text); min-height:100vh; }
+  .page { max-width:1080px; margin:0 auto; padding:2rem 1.25rem 3rem; }
+  .masthead { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-md); padding:1.25rem 1.35rem; margin-bottom:1rem; }
+  .brand { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:0.95rem; color:var(--text-muted); margin-bottom:0.5rem; }
+  .brand span { color:var(--accent); }
+  h1 { font-size:1.7rem; line-height:1.1; margin-bottom:0.45rem; }
+  .intro { max-width:760px; color:var(--text-muted); font-size:0.96rem; }
+  .helper { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:0.75rem; margin-top:1rem; }
+  .helper-card { background:#f8fafc; border:1px solid var(--border-light); border-radius:var(--radius); padding:0.8rem 0.9rem; }
+  .helper-title { font-size:0.74rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.25rem; }
+  .helper-copy { font-size:0.84rem; color:var(--text); }
+  .banner { border-radius:var(--radius); padding:0.85rem 0.95rem; margin-bottom:1rem; font-size:0.9rem; }
+  .banner.error { background:var(--danger-bg); border:1px solid #fecaca; color:var(--danger); }
+  .banner.success { background:var(--success-bg); border:1px solid #a7f3d0; color:var(--success); }
+  .form-shell { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .form-head { padding:1rem 1.2rem; border-bottom:1px solid var(--border-light); display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; }
+  .form-head h2 { font-size:0.98rem; }
+  .form-head p { font-size:0.82rem; color:var(--text-muted); }
+  .form-body { padding:1rem 1.2rem 1.2rem; }
+  .field-row { display:grid; grid-template-columns:1fr 180px; gap:0.9rem; margin-bottom:1rem; }
+  .field { margin-bottom:0.85rem; }
+  .field label { display:block; font-size:0.74rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.28rem; }
+  .field input, .field textarea { width:100%; border:1px solid var(--border); border-radius:var(--radius); padding:0.65rem 0.75rem; font:inherit; color:var(--text); background:var(--surface); }
+  .field input:focus, .field textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.10); }
+  .field textarea { min-height:72px; resize:vertical; }
+  .muted-note { font-size:0.78rem; color:var(--text-muted); margin-top:-0.35rem; margin-bottom:0.75rem; }
+  .tasks { display:grid; gap:0.85rem; }
+  .task-card { border:1px solid var(--border); border-radius:var(--radius); background:#fbfcfe; padding:0.95rem; }
+  .task-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem; }
+  .task-title { font-size:0.85rem; font-weight:700; }
+  .task-grid { display:grid; grid-template-columns:1.1fr 1.1fr 1fr; gap:0.8rem; }
+  .task-grid-wide { display:grid; grid-template-columns:1fr 1fr; gap:0.8rem; }
+  .task-actions { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; gap:0.75rem; flex-wrap:wrap; }
+  .btn { border:none; border-radius:var(--radius); padding:0.7rem 1rem; font:inherit; font-size:0.88rem; font-weight:600; cursor:pointer; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-secondary { background:#eff6ff; color:var(--accent); border:1px solid #bfdbfe; }
+  .btn-secondary:hover { background:#dbeafe; }
+  .footer-copy { font-size:0.8rem; color:var(--text-muted); }
+  .top-links { display:flex; gap:0.75rem; flex-wrap:wrap; }
+  .top-link { color:var(--accent); text-decoration:none; font-size:0.84rem; font-weight:600; }
+  .top-link:hover { text-decoration:underline; }
+  @media (max-width: 860px) {
+    .field-row, .task-grid, .task-grid-wide { grid-template-columns:1fr; }
+    .page { padding:1rem 0.9rem 2rem; }
+  }
+</style>
+</head>
+<body>
+  <main class="page">
+    <section class="masthead">
+      <div class="brand"><span>//</span> TaskTrack</div>
+      <h1>Weekly Work Submission</h1>
+      <p class="intro">Use this page on Friday to submit next week’s project work. Keep each line item short and clear. Each completed row becomes a new Project Work task for scheduling follow-up.</p>
+      <div class="helper">
+        <div class="helper-card">
+          <div class="helper-title">Project Number</div>
+          <div class="helper-copy">Must use the exact format <strong>1234.56</strong>.</div>
+        </div>
+        <div class="helper-card">
+          <div class="helper-title">Task Title</div>
+          <div class="helper-copy">Use a short name so the scheduler can scan it quickly.</div>
+        </div>
+        <div class="helper-card">
+          <div class="helper-title">Task Description</div>
+          <div class="helper-copy">Describe what needs to get done next week, not the full project history.</div>
+        </div>
+      </div>
+    </section>
+
+    {% if error %}
+    <div class="banner error">{{ error }}</div>
+    {% endif %}
+    {% if success %}
+    <div class="banner success">{{ success }}</div>
+    {% endif %}
+
+    <form class="form-shell" method="post">
+      <div class="form-head">
+        <div>
+          <h2>Submit Next Week's Work</h2>
+          <p>Fill out at least one row. Leave unused rows blank.</p>
+        </div>
+        <div class="top-links">
+          <a class="top-link" href="/submit/project-work">Reset Form</a>
+          <a class="top-link" href="/">Open TaskTrack Dashboard</a>
+        </div>
+      </div>
+
+      <div class="form-body">
+        <div class="field-row">
+          <div class="field">
+            <label for="submitter_name">Your Name</label>
+            <input id="submitter_name" name="submitter_name" type="text" value="{{ submitter_name }}" placeholder="Jane Smith" required>
+          </div>
+          <div class="field">
+            <label for="week_of">Week Of</label>
+            <input id="week_of" name="week_of" type="date" value="{{ week_of }}" required>
+          </div>
+        </div>
+        <div class="muted-note">Optional fields like Billing Phase, Engineer, and Needed By can be left blank if you do not know them yet.</div>
+
+        <div class="tasks" id="task-list">
+          {% for row in rows %}
+          <section class="task-card">
+            <div class="task-head">
+              <div class="task-title">Project Task {{ loop.index }}</div>
+            </div>
+            <div class="task-grid">
+              <div class="field">
+                <label>Project Number</label>
+                <input name="project_number[]" type="text" value="{{ row.project_number }}" inputmode="numeric" pattern="\d{4}\.\d{2}" placeholder="1234.56">
+              </div>
+              <div class="field">
+                <label>Project Name</label>
+                <input name="project_name[]" type="text" value="{{ row.project_name }}" placeholder="Hospital Expansion">
+              </div>
+              <div class="field">
+                <label>Task Title</label>
+                <input name="title[]" type="text" value="{{ row.title }}" placeholder="Sheet revisions">
+              </div>
+            </div>
+            <div class="field">
+              <label>Task Description</label>
+              <textarea name="task_description[]" placeholder="Describe the work needed next week.">{{ row.task_description }}</textarea>
+            </div>
+            <div class="task-grid-wide">
+              <div class="field">
+                <label>Billing Phase</label>
+                <input name="billing_phase[]" type="text" value="{{ row.billing_phase }}" inputmode="numeric" pattern="\d{2}" placeholder="01">
+              </div>
+              <div class="field">
+                <label>Engineer</label>
+                <input name="engineer[]" type="text" value="{{ row.engineer }}" placeholder="Assigned engineer">
+              </div>
+            </div>
+            <div class="field">
+              <label>Needed By</label>
+              <input name="due_at[]" type="datetime-local" value="{{ row.due_at }}">
+            </div>
+          </section>
+          {% endfor %}
+        </div>
+
+        <div class="task-actions">
+          <button class="btn btn-secondary" type="button" id="add-row-btn">Add Another Task</button>
+          <div class="footer-copy">Submissions are saved directly into Project Work as new tasks for review.</div>
+        </div>
+      </div>
+
+      <div class="form-head">
+        <p>Review the rows you filled out, then submit once.</p>
+        <button class="btn btn-primary" type="submit">Submit Weekly Work</button>
+      </div>
+    </form>
+  </main>
+
+  <template id="task-row-template">
+    <section class="task-card">
+      <div class="task-head">
+        <div class="task-title">Project Task __INDEX__</div>
+      </div>
+      <div class="task-grid">
+        <div class="field">
+          <label>Project Number</label>
+          <input name="project_number[]" type="text" inputmode="numeric" pattern="\d{4}\.\d{2}" placeholder="1234.56">
+        </div>
+        <div class="field">
+          <label>Project Name</label>
+          <input name="project_name[]" type="text" placeholder="Hospital Expansion">
+        </div>
+        <div class="field">
+          <label>Task Title</label>
+          <input name="title[]" type="text" placeholder="Sheet revisions">
+        </div>
+      </div>
+      <div class="field">
+        <label>Task Description</label>
+        <textarea name="task_description[]" placeholder="Describe the work needed next week."></textarea>
+      </div>
+      <div class="task-grid-wide">
+        <div class="field">
+          <label>Billing Phase</label>
+          <input name="billing_phase[]" type="text" inputmode="numeric" pattern="\d{2}" placeholder="01">
+        </div>
+        <div class="field">
+          <label>Engineer</label>
+          <input name="engineer[]" type="text" placeholder="Assigned engineer">
+        </div>
+      </div>
+      <div class="field">
+        <label>Needed By</label>
+        <input name="due_at[]" type="datetime-local">
+      </div>
+    </section>
+  </template>
+
+  <script>
+    const taskList = document.getElementById('task-list');
+    const taskTemplate = document.getElementById('task-row-template');
+    const addRowBtn = document.getElementById('add-row-btn');
+
+    function updateTaskNumbers() {
+      [...taskList.querySelectorAll('.task-card .task-title')].forEach((node, index) => {
+        node.textContent = `Project Task ${index + 1}`;
+      });
+    }
+
+    addRowBtn.addEventListener('click', () => {
+      const html = taskTemplate.innerHTML.replace('__INDEX__', String(taskList.children.length + 1));
+      taskList.insertAdjacentHTML('beforeend', html);
+      updateTaskNumbers();
+    });
+  </script>
+</body>
+</html>
