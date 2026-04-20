@@ -150,6 +150,9 @@
   .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:0.68rem; font-weight:600; letter-spacing:0.02em; white-space:nowrap; cursor:default; }
   .badge-clickable { cursor:pointer; transition:all 0.1s; }
   .badge-clickable:hover { filter:brightness(0.92); transform:scale(1.04); }
+  .badge-ai-review { background:#fef3c7; color:#92400e; border:1px solid #fde68a; margin-left:6px; }
+  [data-theme="dark"] .badge-ai-review { background:#3a3214; color:#fde68a; border-color:#78350f; }
+  tr.ai-review td { box-shadow:inset 3px 0 0 var(--warn); }
   .badge-high,.badge-critical { background:#fef2f2; color:#b91c1c; }
   .badge-medium { background:#fffbeb; color:#b45309; }
   .badge-low { background:#f0fdf4; color:#15803d; }
@@ -178,6 +181,39 @@
   .btn-cancel:hover { background:var(--border-light); color:var(--text); }
   .btn-danger { background:var(--danger); color:#fff; }
   .btn-danger:hover { background:var(--danger-hover); }
+
+  /* ── Intake ──────────────────────────────── */
+  .intake-layout { display:grid; grid-template-columns:minmax(320px,1fr) minmax(320px,1.2fr); gap:1.25rem; }
+  @media (max-width: 1040px) { .intake-layout { grid-template-columns:1fr; } }
+  .intake-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:1.1rem 1.25rem; }
+  .intake-card h3 { font-size:0.92rem; font-weight:600; margin-bottom:0.35rem; }
+  .intake-card .intake-sub { font-size:0.78rem; color:var(--text-muted); margin-bottom:0.9rem; }
+  .intake-textarea { width:100%; min-height:220px; padding:0.65rem 0.75rem; font-family:'IBM Plex Mono',monospace; font-size:0.82rem; line-height:1.5; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg); color:var(--text); resize:vertical; }
+  .intake-textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+  .intake-row { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; margin-top:0.75rem; }
+  .intake-hint { font-size:0.72rem; color:var(--text-light); margin-top:0.35rem; }
+  .intake-meta { font-size:0.72rem; color:var(--text-muted); margin-bottom:0.6rem; }
+  .intake-meta strong { color:var(--text); }
+  .starter-block { background:var(--accent-light); border:1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius:var(--radius); padding:0.7rem 0.85rem; margin-bottom:0.75rem; }
+  .starter-label { font-size:0.68rem; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.25rem; }
+  .starter-text { font-size:0.86rem; font-weight:500; color:var(--text); }
+  .clarify-block { background:var(--warn-light); border:1px solid color-mix(in srgb, var(--warn) 35%, transparent); border-radius:var(--radius); padding:0.7rem 0.85rem; margin-bottom:0.75rem; }
+  .clarify-label { font-size:0.68rem; font-weight:700; color:var(--warn); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem; }
+  .clarify-list { font-size:0.82rem; padding-left:1.1rem; color:var(--text); }
+  .clarify-list li { margin-bottom:0.2rem; }
+  .software-tags { display:flex; gap:0.35rem; flex-wrap:wrap; margin-bottom:0.5rem; }
+  .software-tag { background:var(--bg); border:1px solid var(--border); color:var(--text-muted); font-size:0.7rem; padding:2px 7px; border-radius:4px; }
+  .markdown-block { font-size:0.86rem; line-height:1.55; }
+  .markdown-block ul { padding-left:1.25rem; margin:0.25rem 0 0.5rem; list-style:none; }
+  .markdown-block li { margin-bottom:0.25rem; }
+  .markdown-block li.check-unchecked::before { content:'\u2610'; color:var(--text-muted); margin-right:0.4rem; font-weight:700; }
+  .markdown-block li.check-checked::before { content:'\u2611'; color:var(--success); margin-right:0.4rem; font-weight:700; }
+  .markdown-block li.bullet::before { content:'\u2022'; color:var(--text-light); margin-right:0.4rem; }
+  .markdown-block code { background:var(--bg); padding:1px 5px; border-radius:3px; font-family:'IBM Plex Mono',monospace; font-size:0.82em; }
+  .markdown-block strong { font-weight:600; }
+  .markdown-block p { margin:0.25rem 0; }
+  .intake-status { font-size:0.78rem; color:var(--text-muted); }
+  .intake-status.error { color:var(--danger); }
 
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
@@ -242,6 +278,7 @@
       {% if not standalone_tab %}
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="intake">AI Intake</button>
         <button class="tab-btn" data-tab="project">Project Work <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Development <span class="tab-count" id="count-work">0</span></button>
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
@@ -263,6 +300,7 @@
       <a href="/admin" class="btn-admin-link">Admin Home</a>
       {% else %}
       <a href="/submit" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
+      <a href="https://portal.roonytoony.dev/calendar" class="btn-admin-link" target="_blank" rel="noopener" title="Open the Nexus calendar in a new tab">&#128197; Calendar</a>
       {% endif %}
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">Dark Mode</button>
       <span class="user-name">{{ user_name }}</span>
@@ -320,6 +358,94 @@
       <div class="dash-card">
         <div class="dash-card-header">Recent Activity</div>
         <div class="dash-card-body" id="dash-activity"><div class="empty-card">No activity yet</div></div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>&#128197; Upcoming — Nexus Calendar</span>
+          <a href="https://portal.roonytoony.dev/calendar" target="_blank" rel="noopener" style="font-size:0.72rem;font-weight:500;color:var(--muted);text-decoration:none;">Open &#8599;</a>
+        </div>
+        <div class="dash-card-body" id="dash-calendar"><div class="empty-card">Loading…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── AI INTAKE ─────────────────────────── -->
+  <section id="sec-intake" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">AI Intake</h2>
+        <div class="section-subtitle">Paste a messy note, forwarded email, or voice transcript. The Intake agent drafts a clear CAD task — you confirm before it lands.</div>
+      </div>
+    </div>
+    <div class="intake-layout">
+      <div class="intake-card">
+        <h3>Raw Input</h3>
+        <div class="intake-sub">Dump anything — the more context the better.</div>
+        <textarea id="intake-input" class="intake-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday…'"></textarea>
+        <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
+        <div class="intake-row">
+          <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
+          <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
+          <span class="intake-status" id="intake-status"></span>
+        </div>
+      </div>
+      <div class="intake-card" id="intake-preview-card" style="display:none">
+        <h3>Preview — edit before confirm</h3>
+        <div class="intake-meta" id="intake-preview-meta"></div>
+        <div class="field">
+          <label>Title (gist)</label>
+          <input type="text" id="intake-field-title">
+        </div>
+        <div class="starter-block" id="intake-starter-wrap" style="display:none">
+          <div class="starter-label">Start here &rarr;</div>
+          <div class="field" style="margin-bottom:0">
+            <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
+          </div>
+        </div>
+        <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
+          <div class="clarify-label">Questions to resolve</div>
+          <div class="field" style="margin-bottom:0">
+            <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
+          </div>
+        </div>
+        <div class="field">
+          <label>Checklist (markdown)</label>
+          <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
+          <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Priority</label>
+            <select id="intake-field-priority">
+              <option value="Low">Low</option>
+              <option value="Medium" selected>Medium</option>
+              <option value="High">High</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>CAD Skill Area</label>
+            <input type="text" id="intake-field-skill-area">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Requested By</label>
+            <input type="text" id="intake-field-requested-by">
+          </div>
+          <div class="field">
+            <label>Due Date</label>
+            <input type="date" id="intake-field-due">
+          </div>
+        </div>
+        <div class="field">
+          <label>Software / Tools</label>
+          <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
+          <div class="intake-hint">Comma-separated. Stored as a JSON tag list.</div>
+        </div>
+        <div class="intake-row">
+          <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create CAD task (flag as AI · needs review)</button>
+          <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
+        </div>
       </div>
     </div>
   </section>
@@ -553,6 +679,104 @@
 /* All user values are escaped via DOM textContent or the esc() helper. */
 
 const API_MAP = { work:'work_tasks', project:'project_work_tasks', training:'training_tasks', personnel:'personnel_issues', suggestions:'suggestion_box' };
+
+/* ── Markdown (tiny renderer; DOM-only, no innerHTML) ────────────────── */
+function appendInlineMd(parent, str) {
+  // Handles `code`, **bold**, *italic*. Emits safe text nodes only.
+  const text = String(str || '');
+  const tokens = [];
+  const matches = Array.from(text.matchAll(/(`[^`]+`|\*\*[^*]+\*\*|(?<!\*)\*[^*]+\*)/g));
+  let last = 0;
+  for (const m of matches) {
+    if (m.index > last) tokens.push({ kind: 'text', value: text.slice(last, m.index) });
+    const tok = m[0];
+    if (tok.startsWith('`')) tokens.push({ kind: 'code', value: tok.slice(1, -1) });
+    else if (tok.startsWith('**')) tokens.push({ kind: 'strong', value: tok.slice(2, -2) });
+    else tokens.push({ kind: 'em', value: tok.slice(1, -1) });
+    last = m.index + tok.length;
+  }
+  if (last < text.length) tokens.push({ kind: 'text', value: text.slice(last) });
+  tokens.forEach(t => {
+    if (t.kind === 'text') parent.appendChild(document.createTextNode(t.value));
+    else {
+      const el = document.createElement(t.kind === 'code' ? 'code' : (t.kind === 'strong' ? 'strong' : 'em'));
+      el.textContent = t.value;
+      parent.appendChild(el);
+    }
+  });
+}
+
+function renderMarkdown(src) {
+  const container = document.createElement('div');
+  container.className = 'markdown-block';
+  if (!src) return container;
+  const lines = String(src).replace(/\r\n/g, '\n').split('\n');
+  let currentList = null;
+  let paragraphBuf = [];
+  const flushParagraph = () => {
+    if (!paragraphBuf.length) return;
+    const text = paragraphBuf.join(' ').trim();
+    if (text) {
+      const p = document.createElement('p');
+      appendInlineMd(p, text);
+      container.appendChild(p);
+    }
+    paragraphBuf = [];
+  };
+  const startList = () => {
+    if (currentList) return currentList;
+    flushParagraph();
+    currentList = document.createElement('ul');
+    container.appendChild(currentList);
+    return currentList;
+  };
+  const endList = () => { currentList = null; };
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    if (!line.trim()) { flushParagraph(); endList(); continue; }
+    const checkMatch = line.match(/^\s*[-*]\s*\[( |x|X)\]\s+(.*)$/);
+    const bulletMatch = line.match(/^\s*[-*]\s+(.*)$/);
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (checkMatch) {
+      const ul = startList();
+      const li = document.createElement('li');
+      li.className = checkMatch[1].toLowerCase() === 'x' ? 'check-checked' : 'check-unchecked';
+      appendInlineMd(li, checkMatch[2]);
+      ul.appendChild(li);
+    } else if (bulletMatch) {
+      const ul = startList();
+      const li = document.createElement('li');
+      li.className = 'bullet';
+      appendInlineMd(li, bulletMatch[1]);
+      ul.appendChild(li);
+    } else if (headingMatch) {
+      flushParagraph(); endList();
+      const level = Math.min(6, headingMatch[1].length);
+      const h = document.createElement('h' + Math.min(4, level + 2));
+      appendInlineMd(h, headingMatch[2]);
+      container.appendChild(h);
+    } else {
+      endList();
+      paragraphBuf.push(line);
+    }
+  }
+  flushParagraph();
+  return container;
+}
+
+/* ── Intake field encoding helpers ─────────────────────────────────────── */
+function parseJsonList(raw) {
+  if (raw === null || raw === undefined || raw === '') return [];
+  if (Array.isArray(raw)) return raw.map(s => String(s).trim()).filter(Boolean);
+  const s = String(raw).trim();
+  if (!s) return [];
+  if (s.startsWith('[')) {
+    try { const arr = JSON.parse(s); if (Array.isArray(arr)) return arr.map(x => String(x).trim()).filter(Boolean); } catch {}
+  }
+  return s.split(/\r?\n|,\s*/).map(x => x.trim()).filter(Boolean);
+}
+function listToLines(raw) { return parseJsonList(raw).join('\n'); }
+function listToCsv(raw) { return parseJsonList(raw).join(', '); }
 const TABLE_LABELS = { work_tasks:'CAD Development', project_work_tasks:'Project Work', training_tasks:'Training', personnel_issues:'Capability Tracking', suggestion_box:'Suggestion Box' };
 const sortState = { work:{col:'id',order:'asc'}, project:{col:'id',order:'asc'}, training:{col:'id',order:'asc'}, personnel:{col:'id',order:'asc'}, suggestions:{col:'id',order:'asc'} };
 let currentTab = 'dashboard', editingId = null, editingTable = null;
@@ -728,6 +952,89 @@ async function loadDashboard() {
       actEl.appendChild(div);
     });
   }
+
+  // Calendar upcoming — read-only glance
+  loadCalendarWidget();
+}
+
+async function loadCalendarWidget() {
+  const el = document.getElementById('dash-calendar');
+  if (!el) return;
+  el.replaceChildren();
+  try {
+    const res = await fetch('/api/calendar/upcoming?days=60&limit=8', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (!data.available) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-card';
+      empty.textContent = 'Calendar unavailable' + (data.reason ? ' — ' + data.reason : '');
+      el.appendChild(empty);
+      return;
+    }
+    if (!data.events || data.events.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-card';
+      empty.textContent = 'Nothing upcoming in the next 60 days';
+      el.appendChild(empty);
+      return;
+    }
+    const COLLECTION_DOTS = { personal: '#38bdf8', work: '#fbbf24' };
+    data.events.forEach(e => {
+      const item = document.createElement('div');
+      item.className = 'activity-item';
+      item.style.cursor = 'pointer';
+      item.title = 'Open in Nexus calendar';
+      item.addEventListener('click', () => {
+        window.open('https://portal.roonytoony.dev/calendar?event=' + encodeURIComponent(e.id), '_blank', 'noopener');
+      });
+
+      const dateSpan = document.createElement('span');
+      dateSpan.className = 'activity-time';
+      dateSpan.textContent = formatCalendarDate(e.start, e.all_day);
+      item.appendChild(dateSpan);
+
+      const body = document.createElement('span');
+      const dot = document.createElement('span');
+      dot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:0.4rem;vertical-align:middle;';
+      dot.style.background = COLLECTION_DOTS[e.collection] || '#a78bfa';
+      body.appendChild(dot);
+      body.appendChild(document.createTextNode(e.title || '(untitled)'));
+      if (e.location) {
+        const loc = document.createElement('span');
+        loc.style.cssText = 'color:var(--text-light);font-size:0.72rem;margin-left:0.35rem';
+        loc.textContent = '· ' + e.location;
+        body.appendChild(loc);
+      }
+      item.appendChild(body);
+
+      el.appendChild(item);
+    });
+  } catch (err) {
+    const empty = document.createElement('div');
+    empty.className = 'empty-card';
+    empty.textContent = 'Calendar fetch failed';
+    el.appendChild(empty);
+  }
+}
+
+function formatCalendarDate(iso, allDay) {
+  if (!iso) return '';
+  try {
+    let d;
+    if (allDay && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, day] = iso.split('-').map(Number);
+      d = new Date(y, m - 1, day);
+    } else {
+      d = new Date(iso);
+    }
+    const now = new Date(); now.setHours(0,0,0,0);
+    const target = new Date(d); target.setHours(0,0,0,0);
+    const diffDays = Math.round((target - now) / 86400000);
+    const dateLabel = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    const prefix = diffDays === 0 ? 'Today' : diffDays === 1 ? 'Tomorrow' : dateLabel;
+    if (allDay) return prefix;
+    return prefix + ' ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch { return ''; }
 }
 
 function formatTimeAgo(ts) {
@@ -771,10 +1078,11 @@ async function loadTable(table) {
     if (isOverdue(r)) tr.className='overdue';
 
     if (table==='work') {
-      tr.appendChild(makeCell(r.title,'cell-title'));
+      if (r.needs_review) tr.classList.add('ai-review');
+      tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
       tr.appendChild(makeCell(r.requested_by,'cell-supporting'));
-      tr.appendChild(makeCell(r.description,'cell-desc'));
+      tr.appendChild(makeCell(descriptionPreview(r.description),'cell-desc'));
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
@@ -820,6 +1128,26 @@ async function loadTable(table) {
 }
 
 function makeCell(text,cls) { const td=document.createElement('td'); if(cls)td.className=cls; td.textContent=text||''; return td; }
+
+function makeTitleCell(title, reviewSource) {
+  const td = document.createElement('td');
+  td.className = 'cell-title';
+  td.textContent = title || '';
+  if (reviewSource) {
+    const badge = document.createElement('span');
+    badge.className = 'badge badge-ai-review';
+    badge.textContent = 'AI \u00b7 needs review';
+    badge.title = 'Drafted by AI intake (' + reviewSource + '). Click to open and confirm.';
+    td.appendChild(badge);
+  }
+  return td;
+}
+
+function descriptionPreview(src) {
+  // Strip markdown checklist prefix for compact table preview.
+  const text = String(src || '').replace(/^\s*[-*]\s*\[( |x|X)\]\s*/gm, '\u2713 ').replace(/\n+/g, ' \u00b7 ');
+  return text.length > 140 ? text.slice(0, 140) + '\u2026' : text;
+}
 function makeStatusBadge(val) { const td=document.createElement('td'); if(!val) return td; const s=document.createElement('span'); s.className='badge badge-'+val.toLowerCase().replace(/\s+/g,'-'); s.textContent=val; td.appendChild(s); return td; }
 
 function itemLabel(table) {
@@ -921,6 +1249,9 @@ const FORMS = {
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
     {key:'description',label:'Requested Change',type:'textarea'},
+    {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
+    {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
+    {key:'software',label:'Software / Tools',type:'text',placeholder:'autocad, civil3d, bluebeam'},
     {key:'requested_by',label:'Requested By',type:'text',placeholder:'Who asked for this CAD change?'},
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
@@ -1030,12 +1361,77 @@ function renderField(f,value) {
 
 function buildForm(table,data) {
   const frag=document.createDocumentFragment();
+  const displayData = (table === 'work') ? transformWorkForDisplay(data || {}) : (data || {});
   if (data && data.id) frag.appendChild(buildRecordMeta(data));
+  if (table === 'work' && data && data.needs_review) frag.appendChild(buildReviewBanner(data));
+  if (table === 'work' && displayData.description) frag.appendChild(buildMarkdownPreview(displayData.description));
   FORMS[table].forEach(f=>{
-    if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,data[sf.key])));frag.appendChild(row);}
-    else frag.appendChild(renderField(f,data[f.key]));
+    if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,displayData[sf.key])));frag.appendChild(row);}
+    else frag.appendChild(renderField(f,displayData[f.key]));
   });
   return frag;
+}
+
+function transformWorkForDisplay(data) {
+  const out = { ...data };
+  out.clarifications_needed = listToLines(data.clarifications_needed);
+  out.software = listToCsv(data.software);
+  return out;
+}
+
+function transformWorkForSave(data) {
+  const out = { ...data };
+  out.clarifications_needed = JSON.stringify(parseJsonList(data.clarifications_needed));
+  out.software = JSON.stringify(parseJsonList(data.software));
+  return out;
+}
+
+function buildReviewBanner(data) {
+  const box = document.createElement('div');
+  box.className = 'clarify-block';
+  box.style.marginBottom = '0.9rem';
+  const label = document.createElement('div');
+  label.className = 'clarify-label';
+  label.textContent = 'AI Intake \u00b7 needs review';
+  box.appendChild(label);
+  const copy = document.createElement('div');
+  copy.style.fontSize = '0.82rem';
+  copy.style.color = 'var(--text)';
+  copy.style.marginBottom = '0.55rem';
+  const provenance = [];
+  if (data.source) provenance.push('source: ' + data.source);
+  if (data.ai_model) provenance.push('model: ' + data.ai_model);
+  if (data.created_at) provenance.push('captured: ' + formatDateTime(data.created_at));
+  copy.textContent = 'This task was drafted by the Intake agent. Review and edit fields below, then confirm.' + (provenance.length ? '  [' + provenance.join(' \u00b7 ') + ']' : '');
+  box.appendChild(copy);
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'btn btn-primary';
+  confirmBtn.textContent = 'Confirm \u00b7 clear AI flag';
+  confirmBtn.addEventListener('click', async () => {
+    const res = await api('POST', '/api/work_tasks/' + data.id + '/confirm', {});
+    if (res && !res.error) {
+      toast('task confirmed');
+      closeModal();
+      loadTable('work');
+      loadDashboard();
+    } else if (res?.error) {
+      toast(res.error);
+    }
+  });
+  box.appendChild(confirmBtn);
+  return box;
+}
+
+function buildMarkdownPreview(description) {
+  const wrap = document.createElement('div');
+  wrap.style.marginBottom = '0.9rem';
+  const lbl = document.createElement('label');
+  lbl.textContent = 'Checklist preview';
+  lbl.style.cssText = 'display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem;';
+  wrap.appendChild(lbl);
+  wrap.appendChild(renderMarkdown(description));
+  return wrap;
 }
 
 function buildRecordMeta(data) {
@@ -1133,11 +1529,140 @@ async function editRecord(table,id) { const data=await api('GET','/api/'+API_MAP
 
 async function saveRecord() {
   const table=editingTable;
-  const data=getFormData(table);
+  let data=getFormData(table);
   if (!validateForm(table, data)) return;
+  if (table === 'work') data = transformWorkForSave(data);
   if (editingId) await api('PUT','/api/'+API_MAP[table]+'/'+editingId,data);
   else await api('POST','/api/'+API_MAP[table],data);
   closeModal(); loadTable(table); toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+}
+
+/* ── AI Intake tab ───────────────────────────────────────────────────── */
+let intakePreviewState = null;
+
+function intakeSetStatus(text, cls) {
+  const el = document.getElementById('intake-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('error', cls === 'error');
+}
+
+function intakeSetHint(text) {
+  const el = document.getElementById('intake-hint');
+  if (el) el.textContent = text;
+}
+
+function intakeRenderPreview(plan, model, rawText) {
+  intakePreviewState = { plan, model, rawText };
+  const card = document.getElementById('intake-preview-card');
+  card.style.display = 'block';
+  const meta = document.getElementById('intake-preview-meta');
+  meta.replaceChildren();
+  const span = document.createElement('span');
+  span.textContent = 'Drafted by ';
+  meta.appendChild(span);
+  const strong = document.createElement('strong'); strong.textContent = model || 'unknown model';
+  meta.appendChild(strong);
+
+  document.getElementById('intake-field-title').value = plan.gist || '';
+  document.getElementById('intake-field-priority').value = plan.priority || 'Medium';
+  document.getElementById('intake-field-description').value = (plan.checklist || []).map(s => '- [ ] ' + s).join('\n');
+
+  const starterWrap = document.getElementById('intake-starter-wrap');
+  const starter = plan.fiveMinuteStarter || '';
+  document.getElementById('intake-field-starter').value = starter;
+  starterWrap.style.display = starter ? 'block' : 'none';
+
+  const clarifyWrap = document.getElementById('intake-clarify-wrap');
+  const clarify = (plan.missingInfo || []).join('\n');
+  document.getElementById('intake-field-clarify').value = clarify;
+  clarifyWrap.style.display = clarify ? 'block' : 'none';
+
+  document.getElementById('intake-field-software').value = (plan.software || []).join(', ');
+  document.getElementById('intake-field-skill-area').value = '';
+  document.getElementById('intake-field-requested-by').value = '';
+  document.getElementById('intake-field-due').value = '';
+}
+
+async function intakeRunPreview() {
+  const raw = document.getElementById('intake-input').value.trim();
+  if (!raw) { intakeSetStatus('Paste some text first.', 'error'); return; }
+  const btn = document.getElementById('intake-preview-btn');
+  btn.disabled = true;
+  intakeSetStatus('Running triage \u2026');
+  try {
+    const res = await api('POST', '/api/triage', { text: raw, commit: false, source: 'paste' });
+    if (!res || res.error) {
+      intakeSetStatus((res && res.error) ? (res.error + (res.detail ? ' \u2014 ' + res.detail : '')) : 'triage failed', 'error');
+      return;
+    }
+    intakeRenderPreview(res.plan, res.model, raw);
+    intakeSetStatus('Preview ready. Edit fields, then confirm.');
+  } catch (err) {
+    intakeSetStatus('Triage error: ' + err, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function intakeConfirm() {
+  if (!intakePreviewState) { intakeSetStatus('Run triage first.', 'error'); return; }
+  const btn = document.getElementById('intake-confirm-btn');
+  btn.disabled = true;
+  intakeSetStatus('Creating CAD task \u2026');
+  try {
+    const software = parseJsonList(document.getElementById('intake-field-software').value);
+    const clarify = parseJsonList(document.getElementById('intake-field-clarify').value);
+    const payload = {
+      title: document.getElementById('intake-field-title').value.trim(),
+      description: document.getElementById('intake-field-description').value,
+      priority: document.getElementById('intake-field-priority').value,
+      status: 'Not Started',
+      starter_note: document.getElementById('intake-field-starter').value.trim(),
+      clarifications_needed: JSON.stringify(clarify),
+      software: JSON.stringify(software),
+      cad_skill_area: document.getElementById('intake-field-skill-area').value.trim(),
+      requested_by: document.getElementById('intake-field-requested-by').value.trim(),
+      due_date: document.getElementById('intake-field-due').value || '',
+      needs_review: 1,
+      source: 'paste',
+      ai_raw_input: intakePreviewState.rawText.slice(0, 8000),
+      ai_model: intakePreviewState.model || '',
+    };
+    if (!payload.title) { intakeSetStatus('Title is required.', 'error'); return; }
+    const res = await api('POST', '/api/work_tasks', payload);
+    if (!res || res.error) {
+      intakeSetStatus((res && res.error) || 'Save failed', 'error');
+      return;
+    }
+    intakeSetStatus('Created CAD task #' + res.id + '. Needs review flag set.');
+    intakePreviewState = null;
+    document.getElementById('intake-input').value = '';
+    document.getElementById('intake-preview-card').style.display = 'none';
+    loadTable('work');
+    loadDashboard();
+    toast('CAD task created \u00b7 needs review');
+  } catch (err) {
+    intakeSetStatus('Save error: ' + err, 'error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function intakeClear() {
+  document.getElementById('intake-input').value = '';
+  document.getElementById('intake-preview-card').style.display = 'none';
+  intakePreviewState = null;
+  intakeSetStatus('');
+}
+
+function initIntake() {
+  const pv = document.getElementById('intake-preview-btn');
+  if (!pv) return;
+  pv.addEventListener('click', intakeRunPreview);
+  document.getElementById('intake-clear-btn').addEventListener('click', intakeClear);
+  document.getElementById('intake-regen-btn').addEventListener('click', intakeRunPreview);
+  document.getElementById('intake-confirm-btn').addEventListener('click', intakeConfirm);
 }
 
 /* ── Confirm delete ────────────────────────── */
@@ -1156,6 +1681,7 @@ document.getElementById('confirm-overlay').addEventListener('click',e=>{if(e.tar
 
 /* ── Init ──────────────────────────────────── */
 initTheme();
+initIntake();
 if (STANDALONE_TAB) {
   currentTab = STANDALONE_TAB;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));

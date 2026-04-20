@@ -1,0 +1,19 @@
+[Unit]
+Description=TaskTrack Email Intake — IMAP -> /api/triage poll
+After=network-online.target collab-tracker.service
+Wants=network-online.target
+# Pulls mailbox credentials and TASKTRACK_TOKEN from the "TaskTrack" + "Intake
+# Mailbox" vault groups; won't start without a live BW_SESSION.
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rtoony/projects/collab-tracker
+ExecStartPre=/home/rtoony/bin/nexus-svc-inject tasktrack-email-intake "TaskTrack" "Intake Mailbox"
+ExecStart=/home/rtoony/miniconda3/bin/python3 /home/rtoony/projects/collab-tracker/ops/email_intake.py
+ExecStopPost=/bin/rm -f /dev/shm/nexus-env-tasktrack-email-intake
+EnvironmentFile=-/dev/shm/nexus-env-tasktrack-email-intake
+Environment=PATH=/home/rtoony/bin:/home/rtoony/miniconda3/bin:/usr/local/bin:/usr/bin:/bin
+# oneshot runs release cleanly; timer will relaunch.
+
+[Install]
+WantedBy=default.target

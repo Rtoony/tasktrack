@@ -1,0 +1,12 @@
+[Unit]
+Description=TaskTrack Email Intake — poll IMAP every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=tasktrack-email-intake.service
+
+[Install]
+WantedBy=timers.target

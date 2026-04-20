@@ -3,13 +3,16 @@
 
 import csv
 import io
+import json
 import os
 import re
 import secrets
 import sqlite3
 from datetime import date, datetime
 from functools import wraps
+from pathlib import Path
 
+import requests
 from flask import (
     Flask, Response, g, jsonify, redirect, render_template, request, session,
     url_for,
@@ -31,6 +34,13 @@ ALLOWED_TABLES = {
             "status",
             "due_date",
             "notes",
+            "starter_note",
+            "clarifications_needed",
+            "software",
+            "needs_review",
+            "source",
+            "ai_raw_input",
+            "ai_model",
         ],
         "required": ["title"],
         "label": "CAD Development Task",
@@ -352,6 +362,23 @@ def init_db():
             last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_active INTEGER NOT NULL DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS personal_tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT DEFAULT '',
+            category TEXT DEFAULT 'Personal',
+            priority TEXT DEFAULT 'Medium',
+            status TEXT DEFAULT 'Not Started',
+            due_date TEXT DEFAULT '',
+            recurrence TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            source TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            completed_at TIMESTAMP DEFAULT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_personal_tasks_status ON personal_tasks(status);
+        CREATE INDEX IF NOT EXISTS idx_personal_tasks_completed ON personal_tasks(completed_at);
     """)
 
     # Add role column if upgrading from older schema
@@ -363,6 +390,13 @@ def init_db():
 
     ensure_column(db, "work_tasks", "cad_skill_area", "TEXT DEFAULT ''")
     ensure_column(db, "work_tasks", "requested_by", "TEXT DEFAULT ''")
+    ensure_column(db, "work_tasks", "starter_note", "TEXT DEFAULT ''")
+    ensure_column(db, "work_tasks", "clarifications_needed", "TEXT DEFAULT ''")
+    ensure_column(db, "work_tasks", "software", "TEXT DEFAULT ''")
+    ensure_column(db, "work_tasks", "needs_review", "INTEGER DEFAULT 0")
+    ensure_column(db, "work_tasks", "source", "TEXT DEFAULT 'manual'")
+    ensure_column(db, "work_tasks", "ai_raw_input", "TEXT DEFAULT ''")
+    ensure_column(db, "work_tasks", "ai_model", "TEXT DEFAULT ''")
     ensure_column(db, "project_work_tasks", "project_name", "TEXT DEFAULT ''")
     ensure_column(db, "project_work_tasks", "project_number", "TEXT DEFAULT ''")
     ensure_column(db, "project_work_tasks", "billing_phase", "TEXT DEFAULT ''")
@@ -426,9 +460,16 @@ def ensure_column(db, table_name, column_name, definition):
         row[1]
         for row in db.execute(f"PRAGMA table_info({table_name})").fetchall()
     }
-    if column_name not in cols:
+    if column_name in cols:
+        return
+    try:
         db.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition}")
         db.commit()
+    except sqlite3.OperationalError as err:
+        # Concurrent boot workers can race the ALTER TABLE. If another worker
+        # already added the column, swallow the "duplicate column name" error.
+        if "duplicate column" not in str(err).lower():
+            raise
 
 
 def table_info_map(db, table_name):
@@ -459,6 +500,8 @@ def normalize_ticket_tables(db):
         "id", "title", "cad_skill_area", "description", "requested_by", "request_reference",
         "priority", "status", "due_date", "notes", "created_by_user_id", "created_by_name",
         "created_at", "updated_at",
+        "starter_note", "clarifications_needed", "software", "needs_review", "source",
+        "ai_raw_input", "ai_model",
     ]
     if list(work_info.keys()) != work_expected:
         rebuild_table(
@@ -479,14 +522,23 @@ def normalize_ticket_tables(db):
                 created_by_user_id INTEGER DEFAULT NULL,
                 created_by_name TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                starter_note TEXT DEFAULT '',
+                clarifications_needed TEXT DEFAULT '',
+                software TEXT DEFAULT '',
+                needs_review INTEGER DEFAULT 0,
+                source TEXT DEFAULT 'manual',
+                ai_raw_input TEXT DEFAULT '',
+                ai_model TEXT DEFAULT ''
             )
             """,
             """
             INSERT INTO {table} (
                 id, title, cad_skill_area, description, requested_by, request_reference,
                 priority, status, due_date, notes, created_by_user_id, created_by_name,
-                created_at, updated_at
+                created_at, updated_at,
+                starter_note, clarifications_needed, software, needs_review, source,
+                ai_raw_input, ai_model
             )
             SELECT
                 id,
@@ -502,7 +554,14 @@ def normalize_ticket_tables(db):
                 created_by_user_id,
                 COALESCE(created_by_name, ''),
                 COALESCE(created_at, CURRENT_TIMESTAMP),
-                COALESCE(updated_at, CURRENT_TIMESTAMP)
+                COALESCE(updated_at, CURRENT_TIMESTAMP),
+                COALESCE(starter_note, ''),
+                COALESCE(clarifications_needed, ''),
+                COALESCE(software, ''),
+                COALESCE(needs_review, 0),
+                COALESCE(NULLIF(source, ''), 'manual'),
+                COALESCE(ai_raw_input, ''),
+                COALESCE(ai_model, '')
             FROM work_tasks
             """,
         )
@@ -1691,6 +1750,569 @@ def promote_suggestion_to_cad(record_id):
     db.commit()
     row = db.execute("SELECT * FROM suggestion_box WHERE id = ?", (record_id,)).fetchone()
     return jsonify({"suggestion": dict(row), "work_task_id": new_id})
+
+
+# ── Triage (AI Intake) ─────────────────────────────────────────────────────
+#
+# Converts messy user input (pasted text, forwarded email body, Maximus capture)
+# into a structured ActionPlan: { gist, checklist[], fiveMinuteStarter,
+# missingInfo[], software[] }. The plan is rendered into a single work_tasks
+# row — gist -> title, checklist -> markdown description, etc.
+#
+# Model chain: local first (RTX 5090 via Ollama through LiteLLM), cloud
+# fallback. Both go through the LiteLLM gateway at LITELLM_BASE_URL.
+
+LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000")
+LITELLM_API_KEY = (
+    os.environ.get("LITELLM_API_KEY")
+    or os.environ.get("LITELLM_MASTER_KEY")
+    or ""
+)
+TRIAGE_MODEL_LOCAL = os.environ.get("TRIAGE_MODEL_LOCAL", "qwen3-coder")
+TRIAGE_MODEL_CLOUD = os.environ.get("TRIAGE_MODEL_CLOUD", "gemini-flash")
+TRIAGE_TIMEOUT_S = int(os.environ.get("TRIAGE_TIMEOUT_S", "90"))
+
+TRIAGE_SYSTEM_PROMPT = """You are the TaskTrack Intake agent — a civil-engineering-aware
+project manager who turns messy notes, emails, and quick captures into a clear,
+actionable task draft. Your tone is direct, momentum-building, and practical:
+"here is what this actually means, here is the first honest step." Never pad,
+never moralize, never add generic productivity advice.
+
+You will receive raw input that may be a forwarded email, a voice transcript, a
+pasted wall of text, or a quick note. Return a JSON object (and nothing else)
+with this exact schema:
+
+{
+  "gist": string,                // one-sentence distilled headline, <=120 chars
+  "checklist": string[],         // concrete, ordered action steps
+  "fiveMinuteStarter": string,   // the smallest next physical step, <=180 chars
+  "missingInfo": string[],       // questions that must be resolved before execution
+  "software": string[],          // CAD / engineering tools likely involved (AutoCAD, Civil 3D, Bluebeam, etc.), lowercase short tags, may be empty
+  "priority": string             // "Low" | "Medium" | "High"
+}
+
+Rules:
+- If the input is empty or nonsensical, still return the schema with best-effort
+  placeholders and list the ambiguity under missingInfo.
+- Prefer civil-engineering terminology when the input hints at it (grading,
+  drainage, sheets, details, revisions, redlines, markup, submittal, etc.).
+- Output JSON only. No prose, no markdown fences, no preamble.
+"""
+
+
+def _triage_extract_json(text):
+    text = (text or "").strip()
+    if not text:
+        return None
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            return None
+    return None
+
+
+def _triage_call_model(model, raw_text):
+    headers = {"Content-Type": "application/json"}
+    if LITELLM_API_KEY:
+        headers["Authorization"] = f"Bearer {LITELLM_API_KEY}"
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": TRIAGE_SYSTEM_PROMPT},
+            {"role": "user", "content": raw_text},
+        ],
+        "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+    }
+    resp = requests.post(
+        f"{LITELLM_BASE_URL.rstrip('/')}/v1/chat/completions",
+        headers=headers,
+        json=payload,
+        timeout=TRIAGE_TIMEOUT_S,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    content = data["choices"][0]["message"]["content"]
+    return _triage_extract_json(content)
+
+
+def _triage_normalize_plan(plan):
+    if not isinstance(plan, dict):
+        return None
+
+    def _as_str(v):
+        return str(v).strip() if v is not None else ""
+
+    def _as_str_list(v):
+        if v is None:
+            return []
+        if isinstance(v, str):
+            parts = [p.strip() for p in re.split(r"\r?\n|\u2022|(?<!\d),\s*", v)]
+            return [p for p in parts if p]
+        if isinstance(v, list):
+            return [_as_str(item) for item in v if _as_str(item)]
+        return []
+
+    priority = _as_str(plan.get("priority")).title() or "Medium"
+    if priority not in ("Low", "Medium", "High"):
+        priority = "Medium"
+
+    return {
+        "gist": _as_str(plan.get("gist"))[:500],
+        "checklist": _as_str_list(plan.get("checklist")),
+        "fiveMinuteStarter": _as_str(plan.get("fiveMinuteStarter") or plan.get("starter") or "")[:500],
+        "missingInfo": _as_str_list(plan.get("missingInfo") or plan.get("clarifications")),
+        "software": _as_str_list(plan.get("software") or plan.get("tools")),
+        "priority": priority,
+    }
+
+
+def run_triage(raw_text):
+    """Run the triage chain. Returns (plan_dict, model_used) or raises RuntimeError."""
+    raw_text = (raw_text or "").strip()
+    if not raw_text:
+        raise RuntimeError("empty input")
+
+    errors = []
+    for model in (TRIAGE_MODEL_LOCAL, TRIAGE_MODEL_CLOUD):
+        if not model:
+            continue
+        try:
+            plan = _triage_call_model(model, raw_text)
+        except Exception as exc:  # noqa: BLE001 — record and try the next model
+            errors.append(f"{model}: {exc}")
+            continue
+        normalized = _triage_normalize_plan(plan)
+        if normalized and normalized["gist"]:
+            return normalized, model
+        errors.append(f"{model}: unparseable response")
+
+    raise RuntimeError("triage chain exhausted — " + " | ".join(errors))
+
+
+def _triage_plan_to_work_task(plan, raw_text, model, source, extras=None):
+    checklist_md = "\n".join(f"- [ ] {item}" for item in plan["checklist"]) or ""
+    description = checklist_md
+    payload = {
+        "title": plan["gist"] or (raw_text.splitlines()[0][:120] if raw_text else "Untitled intake"),
+        "description": description,
+        "priority": plan["priority"],
+        "status": "Not Started",
+        "starter_note": plan["fiveMinuteStarter"],
+        "clarifications_needed": json.dumps(plan["missingInfo"]),
+        "software": json.dumps(plan["software"]),
+        "needs_review": 1,
+        "source": source or "paste",
+        "ai_raw_input": raw_text[:8000],
+        "ai_model": model,
+    }
+    if extras:
+        for key in ("requested_by", "request_reference", "due_date", "cad_skill_area", "notes"):
+            val = (extras.get(key) or "").strip()
+            if val:
+                payload[key] = val
+    return payload
+
+
+def _require_triage_auth():
+    """Triage accepts either an active session or a valid TASKTRACK_TOKEN header."""
+    if "user_id" in session:
+        return None
+    if not TASKTRACK_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
+    presented = request.headers.get("X-Token") or request.headers.get("Authorization", "").replace("Bearer ", "")
+    if presented and presented == TASKTRACK_TOKEN:
+        return None
+    return jsonify({"error": "unauthorized"}), 401
+
+
+@app.route("/api/triage", methods=["POST"])
+def triage_endpoint():
+    err = _require_triage_auth()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    raw_text = (data.get("text") or "").strip()
+    if not raw_text:
+        return jsonify({"error": "text is required"}), 400
+    commit = bool(data.get("commit"))
+    source = (data.get("source") or "paste").strip()[:32] or "paste"
+    extras = {k: data.get(k) for k in ("requested_by", "request_reference", "due_date", "cad_skill_area", "notes")}
+
+    try:
+        plan, model = run_triage(raw_text)
+    except RuntimeError as exc:
+        return jsonify({"error": "triage failed", "detail": str(exc)}), 502
+
+    response = {
+        "plan": plan,
+        "model": model,
+        "source": source,
+    }
+
+    if not commit:
+        return jsonify(response)
+
+    payload = _triage_plan_to_work_task(plan, raw_text, model, source, extras=extras)
+    payload["created_by_name"] = session.get("user_name") or f"AI Intake ({source})"
+    payload["created_by_user_id"] = session.get("user_id")
+
+    db = get_db()
+    new_id, create_err = create_direct_record(
+        db,
+        "work_tasks",
+        payload,
+        "AI Intake",
+        action="created",
+        action_detail=f"AI triage ({model}, {source})",
+    )
+    if create_err:
+        db.rollback()
+        return jsonify({"error": create_err}), 400
+    db.commit()
+    row = db.execute("SELECT * FROM work_tasks WHERE id = ?", (new_id,)).fetchone()
+    response["task"] = dict(row)
+    response["task_id"] = new_id
+    return jsonify(response), 201
+
+
+@app.route("/api/work_tasks/<int:record_id>/confirm", methods=["POST"])
+def confirm_work_task(record_id):
+    err = _require_triage_auth()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM work_tasks WHERE id = ?", (record_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    db.execute(
+        "UPDATE work_tasks SET needs_review = 0, updated_at = ? WHERE id = ?",
+        (datetime.utcnow().isoformat(), record_id),
+    )
+    log_activity(db, "work_tasks", record_id, "confirmed", new="cleared needs_review flag")
+    db.commit()
+    updated = db.execute("SELECT * FROM work_tasks WHERE id = ?", (record_id,)).fetchone()
+    return jsonify(dict(updated))
+
+
+# ── Maximus API (token-auth, for Maximus + other trusted machine clients) ──
+#
+# Replaces the retired MyTrack app. Same "quick capture + today / active /
+# completed" shape MyTrack exposed, but data lives in TaskTrack's personal_tasks
+# table going forward. Auth: X-Token header, validated against TASKTRACK_TOKEN
+# (or legacy MYTRACK_TOKEN during migration). No cookie session required.
+
+TASKTRACK_TOKEN = os.environ.get("TASKTRACK_TOKEN", "")
+
+
+def _require_tasktrack_token():
+    if not TASKTRACK_TOKEN:
+        return jsonify({"error": "server token not configured"}), 503
+    presented = request.headers.get("X-Token") or request.headers.get("Authorization", "").replace("Bearer ", "")
+    if presented != TASKTRACK_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
+    return None
+
+
+def _personal_task_row_to_dict(row):
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "title": row["title"],
+        "description": row["description"],
+        "category": row["category"],
+        "priority": row["priority"],
+        "status": row["status"],
+        "due_date": row["due_date"] or None,
+        "recurrence": row["recurrence"] or None,
+        "notes": row["notes"] or None,
+        "source": row["source"] or None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "completed_at": row["completed_at"],
+    }
+
+
+@app.route("/api/maximus/tasks", methods=["GET"])
+def maximus_list_tasks():
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM personal_tasks WHERE completed_at IS NULL ORDER BY "
+        " CASE priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 WHEN 'Low' THEN 2 ELSE 3 END,"
+        " COALESCE(NULLIF(due_date, ''), '9999-99-99'), created_at"
+    ).fetchall()
+    return jsonify({"tasks": [_personal_task_row_to_dict(r) for r in rows]})
+
+
+@app.route("/api/maximus/tasks/today", methods=["GET"])
+def maximus_tasks_today():
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    today = date.today().isoformat()
+    rows = db.execute(
+        "SELECT * FROM personal_tasks "
+        "WHERE completed_at IS NULL AND (due_date = ? OR due_date = '' OR due_date < ?) "
+        "ORDER BY CASE priority WHEN 'High' THEN 0 WHEN 'Medium' THEN 1 WHEN 'Low' THEN 2 ELSE 3 END,"
+        " created_at",
+        (today, today),
+    ).fetchall()
+    return jsonify({"date": today, "tasks": [_personal_task_row_to_dict(r) for r in rows]})
+
+
+@app.route("/api/maximus/tasks/completed", methods=["GET"])
+def maximus_tasks_completed():
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    limit = max(1, min(request.args.get("limit", default=50, type=int), 500))
+    db = get_db()
+    rows = db.execute(
+        "SELECT * FROM personal_tasks WHERE completed_at IS NOT NULL "
+        "ORDER BY completed_at DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return jsonify({"tasks": [_personal_task_row_to_dict(r) for r in rows]})
+
+
+@app.route("/api/maximus/tasks", methods=["POST"])
+def maximus_capture_task():
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    title = (data.get("title") or "").strip()
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    category = (data.get("category") or "Personal").strip()[:64]
+    priority = (data.get("priority") or "Medium").strip()[:16]
+    if priority not in ("High", "Medium", "Low"):
+        priority = "Medium"
+    description = (data.get("description") or "").strip()
+    due_date = (data.get("due_date") or "").strip()
+    recurrence = (data.get("recurrence") or "").strip()
+    notes = (data.get("notes") or "").strip()
+    source = (data.get("source") or "maximus").strip()[:64]
+
+    db = get_db()
+    cur = db.execute(
+        "INSERT INTO personal_tasks (title, description, category, priority, due_date, recurrence, notes, source) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (title, description, category, priority, due_date, recurrence, notes, source),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
+    log_activity(db, "personal_tasks", row["id"], "created", new=title)
+    db.commit()
+    return jsonify({"task": _personal_task_row_to_dict(row)}), 201
+
+
+@app.route("/api/maximus/tasks/<int:task_id>", methods=["GET"])
+def maximus_get_task(task_id):
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({"task": _personal_task_row_to_dict(row)})
+
+
+@app.route("/api/maximus/tasks/<int:task_id>", methods=["PUT"])
+def maximus_update_task(task_id):
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    existing = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not existing:
+        return jsonify({"error": "not found"}), 404
+    data = request.get_json(silent=True) or {}
+    fields = {}
+    for k in ("title", "description", "category", "priority", "status", "due_date", "recurrence", "notes"):
+        if k in data:
+            fields[k] = (data[k] or "").strip() if isinstance(data[k], str) else data[k]
+    if not fields:
+        return jsonify({"task": _personal_task_row_to_dict(existing)})
+    set_clause = ", ".join(f"{k} = ?" for k in fields.keys()) + ", updated_at = CURRENT_TIMESTAMP"
+    params = list(fields.values()) + [task_id]
+    db.execute(f"UPDATE personal_tasks SET {set_clause} WHERE id = ?", params)
+    db.commit()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    log_activity(db, "personal_tasks", task_id, "updated", new=", ".join(fields.keys()))
+    db.commit()
+    return jsonify({"task": _personal_task_row_to_dict(row)})
+
+
+@app.route("/api/maximus/tasks/<int:task_id>/complete", methods=["POST"])
+def maximus_complete_task(task_id):
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    if row["completed_at"]:
+        return jsonify({"task": _personal_task_row_to_dict(row), "already_complete": True})
+    db.execute(
+        "UPDATE personal_tasks SET status = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        ("Complete", task_id),
+    )
+    db.commit()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    log_activity(db, "personal_tasks", task_id, "completed")
+    db.commit()
+    return jsonify({"task": _personal_task_row_to_dict(row)})
+
+
+@app.route("/api/maximus/tasks/<int:task_id>", methods=["DELETE"])
+def maximus_delete_task(task_id):
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "not found"}), 404
+    db.execute("DELETE FROM personal_tasks WHERE id = ?", (task_id,))
+    db.commit()
+    log_activity(db, "personal_tasks", task_id, "deleted", old=row["title"])
+    db.commit()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/maximus/stats", methods=["GET"])
+def maximus_stats():
+    err = _require_tasktrack_token()
+    if err:
+        return err
+    db = get_db()
+    row = db.execute(
+        "SELECT "
+        " SUM(CASE WHEN completed_at IS NULL THEN 1 ELSE 0 END) AS active, "
+        " SUM(CASE WHEN completed_at IS NOT NULL THEN 1 ELSE 0 END) AS done, "
+        " SUM(CASE WHEN completed_at IS NULL AND priority = 'High' THEN 1 ELSE 0 END) AS high, "
+        " SUM(CASE WHEN completed_at IS NOT NULL AND date(completed_at) = date('now') THEN 1 ELSE 0 END) AS done_today "
+        "FROM personal_tasks"
+    ).fetchone()
+    return jsonify({
+        "active": row["active"] or 0,
+        "completed": row["done"] or 0,
+        "high_priority_active": row["high"] or 0,
+        "completed_today": row["done_today"] or 0,
+    })
+
+
+# ── Calendar (read-only mini widget) ─────────────────────────────────────────
+#
+# TaskTrack reads Radicale .ics files directly from disk. Radicale runs on the
+# same host and both services are owned by rtoony. This keeps CRUD in the
+# Nexus portal / Maximus and gives TaskTrack a convenient glance widget.
+
+_RADICALE_ROOT = Path(
+    os.environ.get(
+        "RADICALE_COLLECTIONS_ROOT",
+        str(Path.home() / ".var/lib/radicale/collections"),
+    )
+)
+_RADICALE_USER_DIR = "rtoony"
+
+
+def _calendar_is_date_only(value):
+    from datetime import date as _date, datetime as _datetime
+    return isinstance(value, _date) and not isinstance(value, _datetime)
+
+
+def _calendar_upcoming_events(days: int = 30, limit: int = 8):
+    try:
+        from icalendar import Calendar as _ICalendar
+    except ImportError:
+        return {"available": False, "reason": "icalendar not installed", "events": []}
+
+    user_dir = _RADICALE_ROOT / "collection-root" / _RADICALE_USER_DIR
+    if not user_dir.is_dir():
+        return {"available": False, "reason": "Radicale collections not found", "events": []}
+
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    now = _dt.now(tz=_tz.utc)
+    horizon = now + _td(days=days)
+    out = []
+
+    for collection_dir in user_dir.iterdir():
+        if not collection_dir.is_dir():
+            continue
+        for ics_file in collection_dir.glob("*.ics"):
+            try:
+                cal = _ICalendar.from_ical(ics_file.read_bytes())
+            except Exception:
+                continue
+            for component in cal.walk("VEVENT"):
+                dtstart = component.get("DTSTART")
+                if dtstart is None:
+                    continue
+                start = dtstart.dt
+                dtend = component.get("DTEND")
+                end = dtend.dt if dtend is not None else start
+
+                all_day = _calendar_is_date_only(start) or _calendar_is_date_only(end)
+                if all_day:
+                    cmp_start = _dt(start.year, start.month, start.day, tzinfo=_tz.utc)
+                    e_end = end if hasattr(end, "year") else start
+                    cmp_end = _dt(e_end.year, e_end.month, e_end.day, tzinfo=_tz.utc)
+                else:
+                    cmp_start = start if getattr(start, "tzinfo", None) else start.replace(tzinfo=_tz.utc)
+                    cmp_end = end if getattr(end, "tzinfo", None) else end.replace(tzinfo=_tz.utc)
+
+                if cmp_end < now or cmp_start > horizon:
+                    continue
+
+                if all_day:
+                    display_start = f"{start.year:04d}-{start.month:02d}-{start.day:02d}"
+                else:
+                    display_start = cmp_start.isoformat()
+
+                out.append({
+                    "id": str(component.get("UID", ics_file.stem)),
+                    "title": str(component.get("SUMMARY", "(untitled)")),
+                    "collection": collection_dir.name,
+                    "start": display_start,
+                    "all_day": all_day,
+                    "location": str(component.get("LOCATION")) if component.get("LOCATION") else None,
+                })
+
+    out.sort(key=lambda e: e["start"])
+    return {
+        "available": True,
+        "events": out[:limit],
+        "collections_scanned": [d.name for d in user_dir.iterdir() if d.is_dir()],
+        "server_time": now.isoformat(),
+    }
+
+
+@app.route("/api/calendar/upcoming", methods=["GET"])
+def calendar_upcoming():
+    days = request.args.get("days", default=30, type=int)
+    limit = request.args.get("limit", default=8, type=int)
+    days = max(1, min(days, 365))
+    limit = max(1, min(limit, 50))
+    return jsonify(_calendar_upcoming_events(days=days, limit=limit))
 
 
 # ── Startup ──────────────────────────────────────────────────────────────────
