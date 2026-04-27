@@ -19,11 +19,14 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from werkzeug.exceptions import HTTPException
 
+from sqlalchemy import create_engine, inspect
+
 from . import profile as _profile
 from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
 from .db import DB_PATH, close_db, get_secret_key, init_db
 from .logging_config import configure_logging
 from .middleware import init_request_middleware
+from .models import Base
 from .services.tickets import validate_record_data
 
 LOG = logging.getLogger("tasktrack.app")
@@ -81,6 +84,8 @@ def create_app(db_path=None) -> Flask:
         LOG.warning("profile=%s override: %s default=%r env=%r",
                     _profile.PROFILE, key, default, override)
 
+    _check_schema_matches_models(app.config["DB_PATH"])
+
     app.teardown_appcontext(close_db)
     init_request_middleware(app)
     limiter.init_app(app)
@@ -131,6 +136,41 @@ def create_app(db_path=None) -> Flask:
     app.cli.add_command(init_db_command)
 
     return app
+
+
+def _check_schema_matches_models(db_path: str) -> None:
+    """Refuse to start if the live SQLite has drifted from the model definitions.
+
+    Phase 1D-1 ships models alongside the existing raw-sqlite3 routes;
+    this guard catches the case where the DB has been mutated outside
+    of Alembic since the baseline was stamped. Phase 1D-2's blueprint
+    conversion relies on the live DB matching what models claim.
+
+    The check is permissive about EXTRA columns the live DB has (some
+    historical artifacts) but strict about MISSING columns and tables
+    that the models expect.
+    """
+    engine = create_engine(f"sqlite:///{db_path}")
+    insp = inspect(engine)
+    live_tables = set(insp.get_table_names())
+    issues = []
+    for table in Base.metadata.tables.values():
+        if table.name not in live_tables:
+            issues.append(f"table missing: {table.name}")
+            continue
+        live_cols = {c["name"] for c in insp.get_columns(table.name)}
+        model_cols = {c.name for c in table.columns}
+        missing = model_cols - live_cols
+        if missing:
+            issues.append(f"{table.name}: missing columns {sorted(missing)}")
+    engine.dispose()
+    if issues:
+        raise RuntimeError(
+            "schema drift detected — refusing to start. "
+            "Run `alembic upgrade head` or repair the DB. Issues: "
+            + "; ".join(issues)
+        )
+    LOG.info("schema check: %d tables match models", len(Base.metadata.tables))
 
 
 def _register_legacy_api_redirect(app: Flask) -> None:
