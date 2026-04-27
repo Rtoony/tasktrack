@@ -3,7 +3,7 @@
 > **Captured**: 2026-04-26
 > **Supersedes**: v3 of this document.
 > **Direction**: Decisively professional internal service desk for one civil engineering firm. Productization optional, secondary. Personal-task functionality is removed from the company product.
-> **Status**: Discovery and planning complete. No code changes yet. Phase 0 (stabilize) blocks everything below.
+> **Implementation status (2026-04-27)**: Phases 0, 1A.1, 1A.2, 1A.3, 1B-a, 1B-b, 1C-a, 1C-b, 1D-1 all shipped. **1D-2 (convert blueprints to SQLAlchemy) is the next deliverable** — paused intentionally so it can land methodically with per-blueprint hand-testing rather than rushed in a single session.
 
 ---
 
