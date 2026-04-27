@@ -193,12 +193,158 @@ def answer_callback(callback_id: str):
 def main_menu_markup():
     return {
         "keyboard": [
-            [{"text": "New Task"}, {"text": "Quick CAD"}],
-            [{"text": "Quick Suggestion"}, {"text": "Help"}],
+            [{"text": "New Task"}, {"text": "Smart Capture"}],
+            [{"text": "Quick CAD"}, {"text": "Quick Suggestion"}],
+            [{"text": "Help"}],
         ],
         "resize_keyboard": True,
         "is_persistent": True,
     }
+
+
+# ── Smart Capture (Ollama-powered NL extraction) ────────────────────
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_MODEL = os.environ.get("TASKTRACK_NL_MODEL", "ministral-3:14b")
+
+_NL_PROMPT_TEMPLATE = """You convert short Telegram messages into structured TaskTrack records.
+
+Today's date: {today}
+
+Output ONLY a JSON object matching this schema (no prose, no code fences):
+{{
+  "category": one of ["work_tasks", "project_work_tasks", "training_tasks", "personnel_issues", "suggestion_box"],
+  "title": short title (under 60 chars),
+  "description": fuller description (use the user's words),
+  "due_date": "YYYY-MM-DD" or null,
+  "project_number": string like "1234.56" or null (only for project_work_tasks),
+  "person_name": string or null (only for personnel_issues),
+  "confidence": float 0.0-1.0
+}}
+
+Category cues:
+- work_tasks       → CAD / drafting / drawing / standards / template
+- project_work_tasks → has a project number ####.##  or names a project
+- training_tasks   → training / teach / show / how-to / onboarding
+- personnel_issues → someone's skill gap / mistake / capability concern
+- suggestion_box   → idea / proposal / "what if" / improvement
+If unsure, pick the most plausible and lower confidence.
+
+User message:
+\"\"\"{text}\"\"\"
+"""
+
+
+def extract_task_from_text(text: str) -> dict | None:
+    """Call local Ollama to parse free-form text into a structured record.
+    Returns None if Ollama is unreachable or output is unparseable."""
+    today = date.today().isoformat()
+    prompt = _NL_PROMPT_TEMPLATE.format(today=today, text=text.replace('"""', '"​""'))
+    body = {
+        "model": OLLAMA_MODEL,
+        "prompt": prompt,
+        "format": "json",
+        "stream": False,
+        "options": {"temperature": 0.1, "num_predict": 400},
+    }
+    try:
+        r = requests.post(f"{OLLAMA_URL}/api/generate", json=body, timeout=30)
+        r.raise_for_status()
+        raw = r.json().get("response") or ""
+    except (requests.RequestException, ValueError) as exc:
+        LOG.warning("ollama generate failed: %s", exc)
+        return None
+    try:
+        import json as _json
+        parsed = _json.loads(raw)
+    except (ValueError, TypeError):
+        LOG.warning("ollama returned non-JSON: %s", raw[:200])
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    cat = parsed.get("category")
+    if cat not in GUIDED_FLOWS:
+        return None
+    title = (parsed.get("title") or "").strip()
+    if not title:
+        return None
+    # Sanitize due_date: only keep if it parses as YYYY-MM-DD
+    raw_due = parsed.get("due_date")
+    if raw_due:
+        try:
+            parsed["due_date"] = parse_date_input(str(raw_due))
+        except (ValueError, TypeError):
+            parsed["due_date"] = None
+    return parsed
+
+
+def smart_capture_preview(parsed: dict) -> str:
+    cat = parsed["category"]
+    label = GUIDED_FLOWS[cat]["label"]
+    lines = [
+        f"🤖 *Smart Capture preview*",
+        f"Category: *{label}* (`{cat}`)",
+        f"Title: _{parsed.get('title','')}_",
+    ]
+    if parsed.get("description"):
+        desc = parsed["description"]
+        if len(desc) > 240:
+            desc = desc[:237] + "..."
+        lines.append(f"Description: {desc}")
+    if parsed.get("due_date"):
+        lines.append(f"Due: `{parsed['due_date']}`")
+    if parsed.get("project_number"):
+        lines.append(f"Project: `{parsed['project_number']}`")
+    if parsed.get("person_name"):
+        lines.append(f"Person: {parsed['person_name']}")
+    conf = parsed.get("confidence")
+    if isinstance(conf, (int, float)):
+        lines.append(f"Confidence: `{conf:.2f}`")
+    return "\n".join(lines)
+
+
+def smart_capture_buttons() -> dict:
+    return {
+        "inline_keyboard": [[
+            {"text": "✅ Save", "callback_data": "smart:save"},
+            {"text": "❌ Cancel", "callback_data": "smart:cancel"},
+            {"text": "Manual", "callback_data": "smart:manual"},
+        ]]
+    }
+
+
+def smart_payload_to_record(parsed: dict, actor_name: str) -> tuple[str, dict]:
+    """Translate Smart Capture JSON into the (table_name, payload) shape
+    create_record() expects."""
+    cat = parsed["category"]
+    payload: dict = {
+        "title": (parsed.get("title") or "")[:120],
+        "description": parsed.get("description") or "",
+        "created_by_name": f"Telegram (smart): {actor_name}",
+    }
+    if cat == "project_work_tasks":
+        payload["project_number"] = parsed.get("project_number") or ""
+        payload["project_name"] = parsed.get("project_name") or parsed.get("title") or ""
+        payload["task_description"] = parsed.get("description") or ""
+        payload.pop("description", None)
+        if parsed.get("due_date"):
+            payload["due_at"] = f"{parsed['due_date']} 17:00"
+    elif cat == "personnel_issues":
+        payload["person_name"] = parsed.get("person_name") or "Unknown"
+        payload["issue_description"] = parsed.get("description") or parsed.get("title") or ""
+        payload.pop("description", None)
+        payload.pop("title", None)
+    elif cat == "training_tasks":
+        payload["training_goals"] = parsed.get("description") or parsed.get("title") or ""
+        if parsed.get("due_date"):
+            payload["due_date"] = parsed["due_date"]
+    elif cat == "suggestion_box":
+        payload["summary"] = parsed.get("description") or parsed.get("title") or ""
+        payload.pop("description", None)
+    elif cat == "work_tasks":
+        if parsed.get("due_date"):
+            payload["due_date"] = parsed["due_date"]
+    return cat, payload
 
 
 def category_markup():
@@ -481,13 +627,77 @@ def handle_text_message(message: dict):
     if text == "Quick Suggestion":
         begin_quick_mode(chat_id, "suggestion_box")
         return
+    if text in ("Smart Capture", "/smart"):
+        SESSIONS[chat_id] = {"mode": "smart_pending"}
+        send_message(
+            chat_id,
+            "🤖 Smart Capture ready.\n\nSend one paragraph describing your task. "
+            "I'll extract the category, title, and due date. Use /cancel to abort.",
+            main_menu_markup(),
+        )
+        return
 
     if handle_guided_input(chat_id, user, text):
         return
     if handle_quick_input(chat_id, user, text):
         return
+    if handle_smart_input(chat_id, user, text):
+        return
 
-    send_message(chat_id, "Use `New Task`, `Quick CAD`, or `Quick Suggestion` to start.", main_menu_markup())
+    send_message(chat_id, "Use `New Task`, `Smart Capture`, `Quick CAD`, or `Quick Suggestion` to start.", main_menu_markup())
+
+
+def handle_smart_input(chat_id: int, user: dict, text: str) -> bool:
+    session = SESSIONS.get(chat_id)
+    if not session or session.get("mode") != "smart_pending":
+        return False
+    actor_name = display_name_for_user(user)
+    parsed = extract_task_from_text(text)
+    if not parsed:
+        send_message(
+            chat_id,
+            "I couldn't parse that. Try the menu buttons, or rephrase with a clearer category cue (CAD, project ####.##, training, suggestion).",
+            main_menu_markup(),
+        )
+        SESSIONS.pop(chat_id, None)
+        return True
+    SESSIONS[chat_id] = {
+        "mode": "smart_confirm",
+        "parsed": parsed,
+        "actor_name": actor_name,
+        "raw_text": text,
+    }
+    send_message(chat_id, smart_capture_preview(parsed), smart_capture_buttons())
+    return True
+
+
+def smart_capture_save(chat_id: int) -> None:
+    session = SESSIONS.get(chat_id) or {}
+    parsed = session.get("parsed")
+    actor_name = session.get("actor_name") or "Telegram user"
+    if not parsed:
+        send_message(chat_id, "Nothing to save — start with Smart Capture.", main_menu_markup())
+        return
+    cat, payload = smart_payload_to_record(parsed, actor_name)
+    record_id, error = create_record(cat, payload, actor_name)
+    if error:
+        send_message(chat_id, f"Save failed: {error}", main_menu_markup())
+    else:
+        label = GUIDED_FLOWS[cat]["label"]
+        send_message(chat_id, f"✅ Saved to *{label}* as record #{record_id}.", main_menu_markup())
+    SESSIONS.pop(chat_id, None)
+
+
+def smart_capture_manual(chat_id: int) -> None:
+    """User wants to override: drop into the guided flow for the parsed category."""
+    session = SESSIONS.get(chat_id) or {}
+    parsed = session.get("parsed") or {}
+    cat = parsed.get("category")
+    SESSIONS.pop(chat_id, None)
+    if cat in GUIDED_FLOWS:
+        start_guided_flow(chat_id, cat)
+    else:
+        send_message(chat_id, "Pick a category.", category_markup())
 
 
 def handle_callback(callback: dict):
@@ -497,6 +707,17 @@ def handle_callback(callback: dict):
     user = callback.get("from", {})
     answer_callback(callback["id"])
     if not chat_id:
+        return
+
+    if data == "smart:save":
+        smart_capture_save(chat_id)
+        return
+    if data == "smart:cancel":
+        SESSIONS.pop(chat_id, None)
+        send_message(chat_id, "Smart Capture canceled.", main_menu_markup())
+        return
+    if data == "smart:manual":
+        smart_capture_manual(chat_id)
         return
     if not is_authorized(chat_id):
         send_message(chat_id, "This chat is not paired yet. Use /link CODE first.")

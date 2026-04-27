@@ -214,6 +214,9 @@
   .markdown-block p { margin:0.25rem 0; }
   .intake-status { font-size:0.78rem; color:var(--text-muted); }
   .intake-status.error { color:var(--danger); }
+  .preset-panel { margin-top:1rem; padding:0.85rem 0.95rem; background:color-mix(in srgb, var(--surface) 82%, var(--bg)); border:1px solid var(--border); border-radius:var(--radius); }
+  .preset-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.55rem; }
+  .priority-lock-tag { display:inline-block; margin-left:0.4rem; font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--warn); background:var(--warn-light); padding:1px 6px; border-radius:4px; }
 
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
@@ -374,15 +377,102 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">AI Intake</h2>
-        <div class="section-subtitle">Paste a messy note, forwarded email, or voice transcript. The Intake agent drafts a clear CAD task — you confirm before it lands.</div>
+        <div class="section-subtitle">Paste a messy note, forwarded email, or voice transcript. Pre-set anything the AI shouldn&rsquo;t guess, then preview and confirm.</div>
       </div>
     </div>
     <div class="intake-layout">
       <div class="intake-card">
         <h3>Raw Input</h3>
-        <div class="intake-sub">Dump anything — the more context the better.</div>
-        <textarea id="intake-input" class="intake-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday…'"></textarea>
+        <div class="intake-sub">Dump anything &mdash; the more context the better.</div>
+        <textarea id="intake-input" class="intake-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
         <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
+
+        <div class="preset-panel" id="intake-preset-panel">
+          <div class="preset-title">Presets (lock values before triage runs)</div>
+          <div class="field-row">
+            <div class="field">
+              <label>Target table</label>
+              <select id="preset-target">
+                <option value="work_tasks" selected>CAD Development</option>
+                <option value="project_work_tasks">Project Work</option>
+                <option value="training_tasks">Training</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Priority lock</label>
+              <select id="preset-priority">
+                <option value="">Auto (let AI decide)</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Source</label>
+              <select id="preset-source">
+                <option value="paste" selected>Paste</option>
+                <option value="voice">Voice note</option>
+                <option value="meeting">Meeting</option>
+                <option value="phone">Phone call</option>
+                <option value="contractor">Contractor</option>
+                <option value="email">Email (manual)</option>
+                <option value="maximus">Maximus</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field" id="preset-skill-wrap">
+              <label id="preset-skill-label">CAD Skill Area</label>
+              <input type="text" id="preset-skill" placeholder="Grading, detailing, standards, markup&hellip;">
+            </div>
+            <div class="field">
+              <label>Requested By</label>
+              <input type="text" id="preset-requested-by" placeholder="Who's asking?">
+            </div>
+            <div class="field" id="preset-due-date-wrap">
+              <label>Due Date</label>
+              <input type="date" id="preset-due-date">
+            </div>
+            <div class="field" id="preset-due-at-wrap" style="display:none">
+              <label>Due Date &amp; Time</label>
+              <input type="datetime-local" id="preset-due-at">
+            </div>
+          </div>
+
+          <!-- Project Work extra fields -->
+          <div id="preset-project-extras" style="display:none">
+            <div class="field-row">
+              <div class="field">
+                <label>Project Number (####.##)</label>
+                <input type="text" id="preset-project-number" placeholder="2301.04" inputmode="numeric" maxlength="7">
+                <div class="intake-hint" id="preset-project-number-hint">Auto-detected from raw text when possible.</div>
+              </div>
+              <div class="field">
+                <label>Billing Phase (##)</label>
+                <input type="text" id="preset-billing-phase" placeholder="03" inputmode="numeric" maxlength="2">
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Project Name</label>
+                <input type="text" id="preset-project-name" placeholder="Falls back to the triage gist">
+              </div>
+              <div class="field">
+                <label>Engineer</label>
+                <input type="text" id="preset-engineer" placeholder="Falls back to Requested By">
+              </div>
+            </div>
+          </div>
+
+          <!-- Training extra fields -->
+          <div id="preset-training-extras" style="display:none">
+            <div class="field">
+              <label>Trainees</label>
+              <input type="text" id="preset-trainees" placeholder="Comma-separated. Falls back to Requested By.">
+            </div>
+          </div>
+        </div>
+
         <div class="intake-row">
           <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
           <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
@@ -390,7 +480,7 @@
         </div>
       </div>
       <div class="intake-card" id="intake-preview-card" style="display:none">
-        <h3>Preview — edit before confirm</h3>
+        <h3>Preview &mdash; edit before confirm</h3>
         <div class="intake-meta" id="intake-preview-meta"></div>
         <div class="field">
           <label>Title (gist)</label>
@@ -409,41 +499,25 @@
           </div>
         </div>
         <div class="field">
-          <label>Checklist (markdown)</label>
+          <label id="intake-field-description-label">Checklist (markdown)</label>
           <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
           <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Priority</label>
-            <select id="intake-field-priority">
-              <option value="Low">Low</option>
-              <option value="Medium" selected>Medium</option>
-              <option value="High">High</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>CAD Skill Area</label>
-            <input type="text" id="intake-field-skill-area">
-          </div>
-        </div>
-        <div class="field-row">
-          <div class="field">
-            <label>Requested By</label>
-            <input type="text" id="intake-field-requested-by">
-          </div>
-          <div class="field">
-            <label>Due Date</label>
-            <input type="date" id="intake-field-due">
-          </div>
+        <div class="field">
+          <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
+          <select id="intake-field-priority">
+            <option value="Low">Low</option>
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+          </select>
         </div>
         <div class="field">
           <label>Software / Tools</label>
           <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
-          <div class="intake-hint">Comma-separated. Stored as a JSON tag list.</div>
+          <div class="intake-hint">Comma-separated. Applies to CAD Development tasks; folded into context for Project/Training.</div>
         </div>
         <div class="intake-row">
-          <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create CAD task (flag as AI · needs review)</button>
+          <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
           <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
         </div>
       </div>
@@ -1088,17 +1162,19 @@ async function loadTable(table) {
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeActions(table,r.id,r.title));
     } else if (table==='project') {
+      if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeCell(r.project_number,'cell-title'));
       tr.appendChild(makeCell(r.billing_phase,'cell-supporting'));
       tr.appendChild(makeCell(r.engineer,'cell-supporting'));
       tr.appendChild(makeCell(r.project_name,'cell-supporting'));
-      tr.appendChild(makeCell(r.title,'cell-title'));
+      tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_at));
       tr.appendChild(makeActions(table,r.id,r.title));
     } else if (table==='training') {
-      tr.appendChild(makeCell(r.title,'cell-title'));
+      if (r.needs_review) tr.classList.add('ai-review');
+      tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
       tr.appendChild(makeCell(r.trainees,'cell-supporting'));
       tr.appendChild(makeCell(r.requested_by,'cell-supporting'));
       tr.appendChild(makeCell(r.skill_area,'cell-supporting'));
@@ -1359,12 +1435,16 @@ function renderField(f,value) {
   wrap.appendChild(input); return wrap;
 }
 
+const AI_REVIEW_TABLES = { work: 'work_tasks', project: 'project_work_tasks', training: 'training_tasks' };
+const AI_DESCRIPTION_FIELD = { work: 'description', project: 'task_description', training: 'training_goals' };
+
 function buildForm(table,data) {
   const frag=document.createDocumentFragment();
   const displayData = (table === 'work') ? transformWorkForDisplay(data || {}) : (data || {});
   if (data && data.id) frag.appendChild(buildRecordMeta(data));
-  if (table === 'work' && data && data.needs_review) frag.appendChild(buildReviewBanner(data));
-  if (table === 'work' && displayData.description) frag.appendChild(buildMarkdownPreview(displayData.description));
+  if (data && data.needs_review && AI_REVIEW_TABLES[table]) frag.appendChild(buildReviewBanner(table, data));
+  const descField = AI_DESCRIPTION_FIELD[table];
+  if (descField && data && data.needs_review && displayData[descField]) frag.appendChild(buildMarkdownPreview(displayData[descField]));
   FORMS[table].forEach(f=>{
     if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,displayData[sf.key])));frag.appendChild(row);}
     else frag.appendChild(renderField(f,displayData[f.key]));
@@ -1386,7 +1466,8 @@ function transformWorkForSave(data) {
   return out;
 }
 
-function buildReviewBanner(data) {
+function buildReviewBanner(table, data) {
+  const apiTable = AI_REVIEW_TABLES[table] || 'work_tasks';
   const box = document.createElement('div');
   box.className = 'clarify-block';
   box.style.marginBottom = '0.9rem';
@@ -1409,11 +1490,11 @@ function buildReviewBanner(data) {
   confirmBtn.className = 'btn btn-primary';
   confirmBtn.textContent = 'Confirm \u00b7 clear AI flag';
   confirmBtn.addEventListener('click', async () => {
-    const res = await api('POST', '/api/work_tasks/' + data.id + '/confirm', {});
+    const res = await api('POST', '/api/' + apiTable + '/' + data.id + '/confirm', {});
     if (res && !res.error) {
       toast('task confirmed');
       closeModal();
-      loadTable('work');
+      loadTable(table);
       loadDashboard();
     } else if (res?.error) {
       toast(res.error);
@@ -1540,6 +1621,12 @@ async function saveRecord() {
 /* ── AI Intake tab ───────────────────────────────────────────────────── */
 let intakePreviewState = null;
 
+const INTAKE_TARGET_LABELS = {
+  work_tasks: 'CAD Development',
+  project_work_tasks: 'Project Work',
+  training_tasks: 'Training',
+};
+
 function intakeSetStatus(text, cls) {
   const el = document.getElementById('intake-status');
   if (!el) return;
@@ -1547,25 +1634,91 @@ function intakeSetStatus(text, cls) {
   el.classList.toggle('error', cls === 'error');
 }
 
-function intakeSetHint(text) {
-  const el = document.getElementById('intake-hint');
-  if (el) el.textContent = text;
+function intakeTarget() { return document.getElementById('preset-target').value || 'work_tasks'; }
+
+function intakeApplyTargetLayout() {
+  const target = intakeTarget();
+  const skillLabel = document.getElementById('preset-skill-label');
+  skillLabel.textContent = target === 'training_tasks' ? 'Training Skill Area' : 'CAD Skill Area';
+  document.getElementById('preset-project-extras').style.display = (target === 'project_work_tasks') ? 'block' : 'none';
+  document.getElementById('preset-training-extras').style.display = (target === 'training_tasks') ? 'block' : 'none';
+  document.getElementById('preset-due-date-wrap').style.display = (target === 'project_work_tasks') ? 'none' : 'block';
+  document.getElementById('preset-due-at-wrap').style.display = (target === 'project_work_tasks') ? 'block' : 'none';
+
+  const descLabel = document.getElementById('intake-field-description-label');
+  if (descLabel) {
+    descLabel.textContent = target === 'training_tasks'
+      ? 'Training goals (markdown checklist)'
+      : target === 'project_work_tasks'
+        ? 'Task description (markdown checklist)'
+        : 'Checklist (markdown)';
+  }
 }
 
-function intakeRenderPreview(plan, model, rawText) {
-  intakePreviewState = { plan, model, rawText };
+function intakeCollectPresets() {
+  const target = intakeTarget();
+  const presets = { target_table: target };
+  const get = (id) => (document.getElementById(id).value || '').trim();
+
+  const priority = get('preset-priority');
+  if (priority) presets.priority = priority;
+  presets.source = get('preset-source') || 'paste';
+
+  const skill = get('preset-skill');
+  if (skill) {
+    presets.cad_skill_area = skill;
+    if (target === 'training_tasks') presets.skill_area = skill;
+  }
+  const requestedBy = get('preset-requested-by');
+  if (requestedBy) presets.requested_by = requestedBy;
+
+  if (target === 'project_work_tasks') {
+    const dueAt = get('preset-due-at');
+    if (dueAt) presets.due_at = dueAt;
+    const pn = get('preset-project-number');
+    if (pn) presets.project_number = pn;
+    const pname = get('preset-project-name');
+    if (pname) presets.project_name = pname;
+    const bp = get('preset-billing-phase');
+    if (bp) presets.billing_phase = bp;
+    const eng = get('preset-engineer');
+    if (eng) presets.engineer = eng;
+  } else {
+    const dueDate = get('preset-due-date');
+    if (dueDate) presets.due_date = dueDate;
+    if (target === 'training_tasks') {
+      const trainees = get('preset-trainees');
+      if (trainees) presets.trainees = trainees;
+    }
+  }
+  return presets;
+}
+
+function intakeRenderPreview(plan, model, rawText, detectedProjectNumber) {
+  const target = intakeTarget();
+  intakePreviewState = { plan, model, rawText, target };
   const card = document.getElementById('intake-preview-card');
   card.style.display = 'block';
   const meta = document.getElementById('intake-preview-meta');
   meta.replaceChildren();
-  const span = document.createElement('span');
-  span.textContent = 'Drafted by ';
-  meta.appendChild(span);
-  const strong = document.createElement('strong'); strong.textContent = model || 'unknown model';
-  meta.appendChild(strong);
+  meta.appendChild(document.createTextNode('Drafted by '));
+  const mstrong = document.createElement('strong'); mstrong.textContent = model || 'unknown model'; meta.appendChild(mstrong);
+  meta.appendChild(document.createTextNode(' \u00b7 target '));
+  const tstrong = document.createElement('strong'); tstrong.textContent = INTAKE_TARGET_LABELS[target] || target; meta.appendChild(tstrong);
 
   document.getElementById('intake-field-title').value = plan.gist || '';
-  document.getElementById('intake-field-priority').value = plan.priority || 'Medium';
+  const priorityInput = document.getElementById('intake-field-priority');
+  priorityInput.value = plan.priority || 'Medium';
+  const lockedPriority = (document.getElementById('preset-priority').value || '').trim();
+  const lockTag = document.getElementById('intake-priority-lock-tag');
+  if (lockedPriority) {
+    priorityInput.disabled = true;
+    lockTag.style.display = 'inline-block';
+    priorityInput.value = lockedPriority;
+  } else {
+    priorityInput.disabled = false;
+    lockTag.style.display = 'none';
+  }
   document.getElementById('intake-field-description').value = (plan.checklist || []).map(s => '- [ ] ' + s).join('\n');
 
   const starterWrap = document.getElementById('intake-starter-wrap');
@@ -1579,9 +1732,16 @@ function intakeRenderPreview(plan, model, rawText) {
   clarifyWrap.style.display = clarify ? 'block' : 'none';
 
   document.getElementById('intake-field-software').value = (plan.software || []).join(', ');
-  document.getElementById('intake-field-skill-area').value = '';
-  document.getElementById('intake-field-requested-by').value = '';
-  document.getElementById('intake-field-due').value = '';
+
+  // Auto-fill project number hint if the server detected one and the preset is empty.
+  if (target === 'project_work_tasks' && detectedProjectNumber) {
+    const pn = document.getElementById('preset-project-number');
+    if (!pn.value.trim()) {
+      pn.value = detectedProjectNumber;
+      const hint = document.getElementById('preset-project-number-hint');
+      if (hint) hint.textContent = 'Auto-detected ' + detectedProjectNumber + ' from raw text.';
+    }
+  }
 }
 
 async function intakeRunPreview() {
@@ -1591,12 +1751,13 @@ async function intakeRunPreview() {
   btn.disabled = true;
   intakeSetStatus('Running triage \u2026');
   try {
-    const res = await api('POST', '/api/triage', { text: raw, commit: false, source: 'paste' });
+    const presets = intakeCollectPresets();
+    const res = await api('POST', '/api/triage', { text: raw, commit: false, ...presets });
     if (!res || res.error) {
       intakeSetStatus((res && res.error) ? (res.error + (res.detail ? ' \u2014 ' + res.detail : '')) : 'triage failed', 'error');
       return;
     }
-    intakeRenderPreview(res.plan, res.model, raw);
+    intakeRenderPreview(res.plan, res.model, raw, res.detected_project_number);
     intakeSetStatus('Preview ready. Edit fields, then confirm.');
   } catch (err) {
     intakeSetStatus('Triage error: ' + err, 'error');
@@ -1605,48 +1766,134 @@ async function intakeRunPreview() {
   }
 }
 
+function intakeValidateBeforeCommit(target, presets) {
+  if (target === 'project_work_tasks') {
+    const pn = (presets.project_number || '').trim();
+    if (!/^\d{4}\.\d{2}$/.test(pn)) {
+      intakeSetStatus('Project Number is required for Project Work (####.##). Fill the preset above.', 'error');
+      return false;
+    }
+    if (presets.billing_phase && !/^\d{2}$/.test(presets.billing_phase)) {
+      intakeSetStatus('Billing Phase must be ##.', 'error');
+      return false;
+    }
+  }
+  return true;
+}
+
 async function intakeConfirm() {
   if (!intakePreviewState) { intakeSetStatus('Run triage first.', 'error'); return; }
+  const target = intakePreviewState.target;
+  const title = document.getElementById('intake-field-title').value.trim();
+  if (!title) { intakeSetStatus('Title is required.', 'error'); return; }
+
   const btn = document.getElementById('intake-confirm-btn');
   btn.disabled = true;
-  intakeSetStatus('Creating CAD task \u2026');
+  intakeSetStatus('Creating ' + (INTAKE_TARGET_LABELS[target] || 'task') + ' \u2026');
+
   try {
-    const software = parseJsonList(document.getElementById('intake-field-software').value);
-    const clarify = parseJsonList(document.getElementById('intake-field-clarify').value);
-    const payload = {
-      title: document.getElementById('intake-field-title').value.trim(),
-      description: document.getElementById('intake-field-description').value,
-      priority: document.getElementById('intake-field-priority').value,
-      status: 'Not Started',
-      starter_note: document.getElementById('intake-field-starter').value.trim(),
-      clarifications_needed: JSON.stringify(clarify),
-      software: JSON.stringify(software),
-      cad_skill_area: document.getElementById('intake-field-skill-area').value.trim(),
-      requested_by: document.getElementById('intake-field-requested-by').value.trim(),
-      due_date: document.getElementById('intake-field-due').value || '',
-      needs_review: 1,
-      source: 'paste',
-      ai_raw_input: intakePreviewState.rawText.slice(0, 8000),
-      ai_model: intakePreviewState.model || '',
+    const presets = intakeCollectPresets();
+    if (!intakeValidateBeforeCommit(target, presets)) return;
+
+    // Re-run triage with commit=true — server builds the row per target, honoring presets.
+    // This keeps field mapping and project_number auto-detect centralized server-side.
+    const overrides = {
+      title_override: title,
+      description_override: document.getElementById('intake-field-description').value,
+      priority_override: document.getElementById('intake-field-priority').value,
+      starter_override: document.getElementById('intake-field-starter').value.trim(),
+      clarify_override: document.getElementById('intake-field-clarify').value,
+      software_override: document.getElementById('intake-field-software').value,
     };
-    if (!payload.title) { intakeSetStatus('Title is required.', 'error'); return; }
-    const res = await api('POST', '/api/work_tasks', payload);
+
+    // For fidelity to user edits, post directly to the target table's CRUD instead of re-running triage.
+    const payload = intakeBuildDirectPayload(target, presets, overrides, intakePreviewState);
+    const res = await api('POST', '/api/' + target, payload);
     if (!res || res.error) {
       intakeSetStatus((res && res.error) || 'Save failed', 'error');
       return;
     }
-    intakeSetStatus('Created CAD task #' + res.id + '. Needs review flag set.');
+    intakeSetStatus('Created ' + (INTAKE_TARGET_LABELS[target] || 'task') + ' #' + res.id + '. Needs review flag set.');
     intakePreviewState = null;
     document.getElementById('intake-input').value = '';
     document.getElementById('intake-preview-card').style.display = 'none';
-    loadTable('work');
+    const tabKey = ({ work_tasks: 'work', project_work_tasks: 'project', training_tasks: 'training' })[target];
+    if (tabKey) loadTable(tabKey);
     loadDashboard();
-    toast('CAD task created \u00b7 needs review');
+    toast((INTAKE_TARGET_LABELS[target] || 'Task') + ' created \u00b7 needs review');
   } catch (err) {
     intakeSetStatus('Save error: ' + err, 'error');
   } finally {
     btn.disabled = false;
   }
+}
+
+function intakeBuildDirectPayload(target, presets, overrides, state) {
+  const priority = overrides.priority_override || presets.priority || 'Medium';
+  const checklistMd = overrides.description_override || '';
+  const starter = overrides.starter_override || '';
+  const clarifyList = parseJsonList(overrides.clarify_override || '');
+  const softwareList = parseJsonList(overrides.software_override || '');
+  const contextLines = [];
+  if (starter) contextLines.push('**Start here \u2192** ' + starter);
+  if (clarifyList.length) {
+    contextLines.push('**Questions to resolve:**');
+    clarifyList.forEach(q => contextLines.push('- ' + q));
+  }
+  if (softwareList.length) contextLines.push('**Software:** ' + softwareList.join(', '));
+  const contextBlock = contextLines.join('\n');
+
+  const ai = {
+    needs_review: 1,
+    source: presets.source || 'paste',
+    ai_raw_input: (state.rawText || '').slice(0, 8000),
+    ai_model: state.model || '',
+    priority,
+    status: 'Not Started',
+  };
+
+  if (target === 'work_tasks') {
+    const payload = {
+      title: overrides.title_override,
+      description: checklistMd,
+      starter_note: starter,
+      clarifications_needed: JSON.stringify(clarifyList),
+      software: JSON.stringify(softwareList),
+    };
+    if (presets.cad_skill_area) payload.cad_skill_area = presets.cad_skill_area;
+    if (presets.requested_by) payload.requested_by = presets.requested_by;
+    if (presets.due_date) payload.due_date = presets.due_date;
+    return { ...payload, ...ai };
+  }
+
+  if (target === 'project_work_tasks') {
+    const taskDesc = checklistMd + (contextBlock ? '\n\n' + contextBlock : '');
+    const payload = {
+      title: overrides.title_override,
+      project_name: presets.project_name || overrides.title_override.slice(0, 80),
+      project_number: presets.project_number,
+      task_description: taskDesc,
+    };
+    if (presets.billing_phase) payload.billing_phase = presets.billing_phase;
+    payload.engineer = presets.engineer || presets.requested_by || '';
+    if (presets.due_at) payload.due_at = presets.due_at;
+    return { ...payload, ...ai };
+  }
+
+  if (target === 'training_tasks') {
+    const payload = {
+      title: overrides.title_override,
+      training_goals: checklistMd,
+      additional_context: contextBlock,
+    };
+    if (presets.skill_area || presets.cad_skill_area) payload.skill_area = presets.skill_area || presets.cad_skill_area;
+    if (presets.requested_by) payload.requested_by = presets.requested_by;
+    payload.trainees = presets.trainees || presets.requested_by || '';
+    if (presets.due_date) payload.due_date = presets.due_date;
+    return { ...payload, ...ai };
+  }
+
+  return { ...ai, title: overrides.title_override };
 }
 
 function intakeClear() {
@@ -1663,6 +1910,17 @@ function initIntake() {
   document.getElementById('intake-clear-btn').addEventListener('click', intakeClear);
   document.getElementById('intake-regen-btn').addEventListener('click', intakeRunPreview);
   document.getElementById('intake-confirm-btn').addEventListener('click', intakeConfirm);
+  document.getElementById('preset-target').addEventListener('change', intakeApplyTargetLayout);
+  // Normalize numeric preset inputs.
+  const pn = document.getElementById('preset-project-number');
+  if (pn) pn.addEventListener('input', () => {
+    let digits = pn.value.replace(/\D/g, '').slice(0, 6);
+    if (digits.length > 4) digits = digits.slice(0, 4) + '.' + digits.slice(4);
+    pn.value = digits;
+  });
+  const bp = document.getElementById('preset-billing-phase');
+  if (bp) bp.addEventListener('input', () => { bp.value = bp.value.replace(/\D/g, '').slice(0, 2); });
+  intakeApplyTargetLayout();
 }
 
 /* ── Confirm delete ────────────────────────── */
