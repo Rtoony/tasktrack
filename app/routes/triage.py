@@ -12,9 +12,10 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request, session
 
-from ..db import get_db
+from ..db import get_session
+from ..models import to_dict
 from ..services.audit import log_activity
-from ..services.tickets import create_direct_record
+from ..services.tickets import TABLE_MODELS, create_direct_record
 from ..services.triage import (
     TRIAGE_ALLOWED_TARGETS, TRIAGE_CONFIRM_TABLES, TRIAGE_PRESET_KEYS,
     TRIAGE_TARGET_LABELS, auto_project_number, run_triage,
@@ -75,9 +76,9 @@ def triage_endpoint():
     payload["created_by_name"] = session.get("user_name") or f"AI Intake ({presets['source']})"
     payload["created_by_user_id"] = session.get("user_id")
 
-    db = get_db()
+    sess = get_session()
     new_id, create_err = create_direct_record(
-        db,
+        sess,
         target,
         payload,
         "AI Intake",
@@ -85,11 +86,12 @@ def triage_endpoint():
         action_detail=f"AI triage ({model}, {presets['source']}, {TRIAGE_TARGET_LABELS.get(target, target)})",
     )
     if create_err:
-        db.rollback()
+        sess.rollback()
         return jsonify({"error": create_err}), 400
-    db.commit()
-    row = db.execute(f"SELECT * FROM {target} WHERE id = ?", (new_id,)).fetchone()
-    response["task"] = dict(row)
+    sess.commit()
+    Model = TABLE_MODELS[target]
+    row = sess.get(Model, new_id)
+    response["task"] = to_dict(row)
     response["task_id"] = new_id
     return jsonify(response), 201
 
@@ -101,15 +103,14 @@ def confirm_ai_task(table, record_id):
     err = _require_triage_auth()
     if err:
         return err
-    db = get_db()
-    row = db.execute(f"SELECT * FROM {table} WHERE id = ?", (record_id,)).fetchone()
-    if not row:
+    sess = get_session()
+    Model = TABLE_MODELS[table]
+    row = sess.get(Model, record_id)
+    if row is None:
         return jsonify({"error": "not found"}), 404
-    db.execute(
-        f"UPDATE {table} SET needs_review = 0, updated_at = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), record_id),
-    )
-    log_activity(db, table, record_id, "confirmed", new="cleared needs_review flag")
-    db.commit()
-    updated = db.execute(f"SELECT * FROM {table} WHERE id = ?", (record_id,)).fetchone()
-    return jsonify(dict(updated))
+    row.needs_review = 0
+    row.updated_at = datetime.utcnow()
+    log_activity(sess, table, record_id, "confirmed", new="cleared needs_review flag")
+    sess.commit()
+    sess.refresh(row)
+    return jsonify(to_dict(row))
