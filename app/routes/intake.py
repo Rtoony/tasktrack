@@ -30,7 +30,7 @@ from flask import (
 from .. import limiter
 from .. import profile as _profile
 from ..config import ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
-from ..db import get_db
+from ..db import get_session
 from ..services.tickets import build_weekly_submission_rows, create_direct_record
 
 bp = Blueprint("intake", __name__)
@@ -101,7 +101,7 @@ def submit_project_work():
         elif not week_of:
             error = "Week Of is required."
         else:
-            db = get_db()
+            db = get_session()
             created_count = 0
             batch_id = f"weekly-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
 
@@ -191,7 +191,7 @@ def _render_simple_submission(config_key):
         if config["table"] == "personnel_issues" and not payload.get("severity"):
             payload["severity"] = "Medium"
 
-        db = get_db()
+        db = get_session()
         _, error = create_direct_record(
             db,
             config["table"],
