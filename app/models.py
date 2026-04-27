@@ -21,7 +21,7 @@ Design notes:
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from sqlalchemy import (
@@ -246,12 +246,27 @@ def to_dict(obj) -> dict | None:
 
     Used by route handlers that need to return JSON or pass row data
     to a template — replaces the legacy `dict(sqlite3_row)` pattern.
-    Returns None when obj is None to mirror the prior behavior of
-    routes that fetched-then-checked.
+
+    Datetime / date values are serialized as ISO strings (with a space
+    separator for datetimes, e.g. "2026-04-27 20:06:13") to match the
+    shape the legacy raw-sqlite3 path produced. The SPA's formatTimeAgo
+    helper appends "Z" to that string to parse as UTC; if we let
+    Flask's default JSON encoder render datetimes as RFC 822 ("Mon, 27
+    Apr 2026 GMT") instead, that helper silently breaks. This is the
+    contract surface tests don't cover yet — keep the format stable.
     """
     if obj is None:
         return None
-    return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    out = {}
+    for c in obj.__table__.columns:
+        value = getattr(obj, c.name)
+        if isinstance(value, datetime):
+            out[c.name] = value.isoformat(sep=" ")
+        elif isinstance(value, date):
+            out[c.name] = value.isoformat()
+        else:
+            out[c.name] = value
+    return out
 
 
 __all__ = [
