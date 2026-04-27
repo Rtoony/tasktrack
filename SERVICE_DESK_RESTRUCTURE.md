@@ -630,8 +630,8 @@ Goal: reduce risk on RBAC UI changes by isolating permission-aware markup. Not a
 | AI cloud fallback default-off | **1B** | env-driven; per-call audit row |
 | AI raw-input retention setting | **1B** | setting only; purge cron in 6 |
 | AI triage call audit table | **1B** | one schema addition outside Alembic |
-| CSRF on session-auth APIs | **1B** | Flask-WTF or seasurf |
-| Rate limit on intake forms | **1B** | per-profile caps |
+| CSRF on session-auth APIs | **deferred (post-Phase 8 SPA work)** | `SESSION_COOKIE_SAMESITE=Lax` already prevents browser cross-site POST/PUT/DELETE from carrying cookies, which covers the bulk of CSRF risk. Explicit Flask-WTF tokens require SPA fetch() updates and will land when the frontend is touched in Phase 8 polish. Reconsider sooner if a real cross-site request scenario appears. |
+| Rate limit on intake forms | **1B-b shipped (2026-04-27)** | flask-limiter registered; per-IP caps from profile (60/hr personal, 10/hr company); applied to POST on /submit/{cad-development,training,capability,suggestion-box,project-work}; verified — company profile blocks at 11th request with 429. |
 | Telegram chat_id → user_id binding | **1C** | rejected if unbound |
 | Capability intake removed from public forms | **1C** | regardless of profile |
 | Object-level auth tests | **3** | required for every `/<table>/<id>` route |

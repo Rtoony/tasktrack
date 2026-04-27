@@ -3,17 +3,28 @@
 Phase 1C will rename routes from /submit/* to /intake/* (with redirects)
 and require login in the company profile. Capability submissions move
 out of intake entirely.
+
+Per-route rate limits run off the profile-driven
+INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP setting (60/hr personal, 10/hr
+company). Limits apply per-IP and only on POST submissions; GETs are
+unlimited so the form pages stay browseable.
 """
 import secrets
 from datetime import date, datetime
 
 from flask import Blueprint, render_template, request
 
+from .. import limiter
+from .. import profile as _profile
 from ..config import ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
 from ..db import get_db
 from ..services.tickets import build_weekly_submission_rows, create_direct_record
 
 bp = Blueprint("intake", __name__)
+
+
+def _intake_post_limit():
+    return f"{_profile.INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP} per hour"
 
 
 @bp.route("/submit")
@@ -49,6 +60,7 @@ def submit_hub():
 
 
 @bp.route("/submit/project-work", methods=["GET", "POST"])
+@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_project_work():
     rows = build_weekly_submission_rows(request.form if request.method == "POST" else None)
     submitter_name = (request.form.get("submitter_name") or "").strip() if request.method == "POST" else ""
@@ -178,20 +190,24 @@ def _render_simple_submission(config_key):
 
 
 @bp.route("/submit/cad-development", methods=["GET", "POST"])
+@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_cad_development():
     return _render_simple_submission("cad-development")
 
 
 @bp.route("/submit/training", methods=["GET", "POST"])
+@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_training():
     return _render_simple_submission("training")
 
 
 @bp.route("/submit/capability", methods=["GET", "POST"])
+@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_capability():
     return _render_simple_submission("capability")
 
 
 @bp.route("/submit/suggestion-box", methods=["GET", "POST"])
+@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_suggestion_box():
     return _render_simple_submission("suggestion-box")
