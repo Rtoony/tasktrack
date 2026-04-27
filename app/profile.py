@@ -30,6 +30,7 @@ PROFILE_DEFAULTS = {
     "personal": {
         "ENABLE_AI_INTAKE": "true",
         "ENABLE_CALENDAR_WIDGET": "true",
+        "ENABLE_MAXIMUS_API": "true",
         "INTAKE_FORM_AUTH": "none",
         "INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP": "60",
         "BIND_HOST": "0.0.0.0",
@@ -37,10 +38,12 @@ PROFILE_DEFAULTS = {
         "LOG_FORMAT": "text",
         "ENABLE_DEBUG_ROUTES": "true",
         "ALLOW_HARD_DELETE": "true",
+        "SESSION_COOKIE_SECURE": "true",
     },
     "company": {
         "ENABLE_AI_INTAKE": "false",
         "ENABLE_CALENDAR_WIDGET": "false",
+        "ENABLE_MAXIMUS_API": "false",
         "INTAKE_FORM_AUTH": "required",
         "INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP": "10",
         "BIND_HOST": "127.0.0.1",
@@ -48,6 +51,11 @@ PROFILE_DEFAULTS = {
         "LOG_FORMAT": "structured",
         "ENABLE_DEBUG_ROUTES": "false",
         "ALLOW_HARD_DELETE": "false",
+        # SECURE cookies require HTTPS. Initial company-VM rollout uses
+        # plain HTTP on the LAN behind Windows-network access control;
+        # tasktrack.env explicitly sets this to "false" for that case.
+        # Default stays "true" so a HTTPS-fronted deploy is safe.
+        "SESSION_COOKIE_SECURE": "true",
     },
 }
 
@@ -82,6 +90,7 @@ def get_int(key: str, default: int = 0) -> int:
 # Resolved values exported at module scope for easy import.
 ENABLE_AI_INTAKE = get_bool("ENABLE_AI_INTAKE")
 ENABLE_CALENDAR_WIDGET = get_bool("ENABLE_CALENDAR_WIDGET")
+ENABLE_MAXIMUS_API = get_bool("ENABLE_MAXIMUS_API")
 INTAKE_FORM_AUTH = get_str("INTAKE_FORM_AUTH")  # "none" | "required"
 INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP = get_int("INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP", 60)
 BIND_HOST = get_str("BIND_HOST")
@@ -89,6 +98,7 @@ BRAND_NAME = get_str("BRAND_NAME")
 LOG_FORMAT = get_str("LOG_FORMAT")  # "text" | "structured"
 ENABLE_DEBUG_ROUTES = get_bool("ENABLE_DEBUG_ROUTES")
 ALLOW_HARD_DELETE = get_bool("ALLOW_HARD_DELETE")
+SESSION_COOKIE_SECURE = get_bool("SESSION_COOKIE_SECURE")
 
 
 def overrides() -> list[tuple[str, str, str]]:
@@ -107,6 +117,7 @@ def summary() -> dict:
         "profile": PROFILE,
         "ENABLE_AI_INTAKE": ENABLE_AI_INTAKE,
         "ENABLE_CALENDAR_WIDGET": ENABLE_CALENDAR_WIDGET,
+        "ENABLE_MAXIMUS_API": ENABLE_MAXIMUS_API,
         "INTAKE_FORM_AUTH": INTAKE_FORM_AUTH,
         "INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP": INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP,
         "BIND_HOST": BIND_HOST,
@@ -114,4 +125,5 @@ def summary() -> dict:
         "LOG_FORMAT": LOG_FORMAT,
         "ENABLE_DEBUG_ROUTES": ENABLE_DEBUG_ROUTES,
         "ALLOW_HARD_DELETE": ALLOW_HARD_DELETE,
+        "SESSION_COOKIE_SECURE": SESSION_COOKIE_SECURE,
     }

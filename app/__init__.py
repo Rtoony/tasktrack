@@ -67,7 +67,7 @@ def create_app(db_path=None) -> Flask:
     app.config["DB_PATH"] = db_path or DB_PATH
     app.secret_key = get_secret_key(app.config["DB_PATH"])
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_SECURE"] = _profile.SESSION_COOKIE_SECURE
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
     # Profile + feature flags into app.config so route handlers and
@@ -108,7 +108,6 @@ def create_app(db_path=None) -> Flask:
     from .routes.intake import bp as intake_bp
     from .routes.api import bp as api_bp
     from .routes.admin import bp as admin_bp
-    from .routes.maximus import bp as maximus_bp
     from .routes.telegram_api import bp as telegram_api_bp
 
     app.register_blueprint(auth_bp)
@@ -116,13 +115,16 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(intake_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
-    app.register_blueprint(maximus_bp)
     app.register_blueprint(telegram_api_bp)
 
-    # Feature-flagged blueprints. AI Intake is experimental and currently
-    # not part of the company release (decision 2026-04-27); the calendar
-    # widget is Nexus-specific Radicale integration that the company
-    # product replaces with Outlook in Phase 8.
+    # Feature-flagged blueprints.
+    # - AI Intake: experimental; off in the initial company release
+    #   (decision 2026-04-27).
+    # - Calendar widget: Nexus-specific Radicale integration; replaced
+    #   by Outlook in Phase 8 for the company product.
+    # - Maximus API: built for Josh's personal AI assistant on Nexus;
+    #   off in the company release (the company VM has nothing calling
+    #   /api/v1/maximus/*). Phase 7 will remove or spin out entirely.
     if _profile.ENABLE_AI_INTAKE:
         from .routes.triage import bp as triage_bp
         app.register_blueprint(triage_bp)
@@ -131,9 +133,14 @@ def create_app(db_path=None) -> Flask:
         from .routes.calendar import bp as calendar_bp
         app.register_blueprint(calendar_bp)
 
-    from .cli import db_upgrade_command, init_db_command
+    if _profile.ENABLE_MAXIMUS_API:
+        from .routes.maximus import bp as maximus_bp
+        app.register_blueprint(maximus_bp)
+
+    from .cli import create_admin_command, db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)
     app.cli.add_command(db_upgrade_command)
+    app.cli.add_command(create_admin_command)
 
     return app
 
