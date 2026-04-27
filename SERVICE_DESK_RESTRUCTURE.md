@@ -3,7 +3,7 @@
 > **Captured**: 2026-04-26
 > **Supersedes**: v3 of this document.
 > **Direction**: Decisively professional internal service desk for one civil engineering firm. Productization optional, secondary. Personal-task functionality is removed from the company product.
-> **Implementation status (2026-04-27)**: Phases 0, 1A.1, 1A.2, 1A.3, 1B-a, 1B-b, 1C-a, 1C-b, 1D-1 all shipped. **1D-2 (convert blueprints to SQLAlchemy) is the next deliverable** — paused intentionally so it can land methodically with per-blueprint hand-testing rather than rushed in a single session.
+> **Implementation status (2026-04-27)**: **Phase 1 COMPLETE.** All sub-phases shipped — 0, 1A.1-3, 1B-a/b, 1C-a/b, 1D-1, and 1D-2 (a-j). All routes use SQLAlchemy session; all schema changes go through Alembic. 13 in-process tests passing alongside the HTTP smoke harness. Live service healthy on the new code path. **Phase 2 (Postgres migration) is next** when ready.
 
 ---
 
