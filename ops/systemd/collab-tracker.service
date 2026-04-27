@@ -5,7 +5,10 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/home/rtoony/projects/collab-tracker
-ExecStart=/home/rtoony/miniconda3/bin/gunicorn --bind 0.0.0.0:5050 --workers 2 --access-logfile - app:app
+ExecStartPre=/home/rtoony/bin/nexus-svc-inject collab-tracker "TaskTrack" "Infrastructure"
+ExecStart=/home/rtoony/miniconda3/bin/gunicorn --bind 0.0.0.0:5050 --workers 2 --access-logfile - wsgi:app
+ExecStopPost=/bin/rm -f /dev/shm/nexus-env-collab-tracker
+EnvironmentFile=-/dev/shm/nexus-env-collab-tracker
 Restart=on-failure
 RestartSec=5
 Environment=PATH=/home/rtoony/bin:/usr/local/bin:/usr/bin:/bin

@@ -225,7 +225,8 @@ ADMIN_WORKFLOW_VIEWS = {
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        path = app.config.get("DB_PATH", DB_PATH)
+        g.db = sqlite3.connect(path)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA journal_mode=WAL")
         g.db.execute("PRAGMA foreign_keys=ON")
@@ -239,8 +240,8 @@ def close_db(exc):
         db.close()
 
 
-def init_db():
-    db = sqlite3.connect(DB_PATH)
+def init_db(db_path=None):
+    db = sqlite3.connect(db_path or DB_PATH)
     db.executescript("""
         CREATE TABLE IF NOT EXISTS app_settings (
             key TEXT PRIMARY KEY,
@@ -454,8 +455,8 @@ def init_db():
     db.close()
 
 
-def get_secret_key():
-    db = sqlite3.connect(DB_PATH)
+def get_secret_key(db_path=None):
+    db = sqlite3.connect(db_path or DB_PATH)
     row = db.execute("SELECT value FROM app_settings WHERE key = 'secret_key'").fetchone()
     db.close()
     return row[0] if row else secrets.token_hex(32)
@@ -2518,15 +2519,34 @@ def calendar_upcoming():
     return jsonify(_calendar_upcoming_events(days=days, limit=limit))
 
 
-# ── Startup ──────────────────────────────────────────────────────────────────
+# ── App factory ──────────────────────────────────────────────────────────────
+#
+# Phase 1A.2 introduces the factory pattern but keeps the module-level Flask
+# instance — a true factory (fresh Flask per call) is deferred to Phase 1A.3
+# along with the package split. Keeping `app` at module scope means
+# `@app.route(...)` decorators and bare `url_for("login")` calls continue to
+# work unchanged. Tests that need an isolated DB call create_app(db_path=...)
+# but share the singleton instance.
 
-init_db()
-app.secret_key = get_secret_key()
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = True
-app.config["SESSION_COOKIE_HTTPONLY"] = True
+def create_app(db_path=None):
+    """Configure the module-level Flask app and return it."""
+    app.config["DB_PATH"] = db_path or DB_PATH
+    app.secret_key = get_secret_key(app.config["DB_PATH"])
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    return app
+
+
+@app.cli.command("init-db")
+def init_db_command():
+    """Initialize / migrate the SQLite schema. Safe to run on existing DB."""
+    init_db(app.config.get("DB_PATH", DB_PATH))
+    print("init-db: ok")
+
 
 if __name__ == "__main__":
-    print(f"  Database: {DB_PATH}")
+    create_app()
+    print(f"  Database: {app.config['DB_PATH']}")
     print(f"  Access:   http://0.0.0.0:5050")
     app.run(host="0.0.0.0", port=5050)
