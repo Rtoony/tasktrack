@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TaskTrack — Sign In</title>
+<title>{{ brand_name }} — Sign In</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -123,7 +123,7 @@
 </head>
 <body>
 <div class="card">
-  <div class="logo"><span>//</span> TaskTrack</div>
+  <div class="logo"><span>//</span> {{ brand_name }}</div>
   <p class="subtitle">{% if mode == 'register' %}Create your account{% else %}Sign in to continue{% endif %}</p>
 
   {% if error %}<div class="msg msg-error">{{ error }}</div>{% endif %}

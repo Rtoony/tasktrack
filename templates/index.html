@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TaskTrack</title>
+<title>{{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -277,11 +277,11 @@
 <header class="header">
   <div class="header-inner">
     <div class="header-left">
-      <div class="logo"><span>//</span> TaskTrack{% if standalone_title %}<span class="context-badge">{{ standalone_title }}</span>{% endif %}</div>
+      <div class="logo"><span>//</span> {{ brand_name }}{% if standalone_title %}<span class="context-badge">{{ standalone_title }}</span>{% endif %}</div>
       {% if not standalone_tab %}
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="intake">AI Intake</button>
+        {% if ai_intake_enabled %}<button class="tab-btn" data-tab="intake">AI Intake</button>{% endif %}
         <button class="tab-btn" data-tab="project">Project Work <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Development <span class="tab-count" id="count-work">0</span></button>
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
@@ -362,6 +362,7 @@
         <div class="dash-card-header">Recent Activity</div>
         <div class="dash-card-body" id="dash-activity"><div class="empty-card">No activity yet</div></div>
       </div>
+      {% if calendar_enabled %}
       <div class="dash-card">
         <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;">
           <span>&#128197; Upcoming — Nexus Calendar</span>
@@ -369,9 +370,11 @@
         </div>
         <div class="dash-card-body" id="dash-calendar"><div class="empty-card">Loading…</div></div>
       </div>
+      {% endif %}
     </div>
   </section>
 
+  {% if ai_intake_enabled %}
   <!-- ── AI INTAKE ─────────────────────────── -->
   <section id="sec-intake" class="section">
     <div class="filter-bar">
@@ -523,6 +526,7 @@
       </div>
     </div>
   </section>
+  {% endif %}{# /ai_intake_enabled #}
 
   <!-- ── WORK TASKS ─────────────────────────── -->
   <section id="sec-work" class="section">
@@ -1939,7 +1943,7 @@ document.getElementById('confirm-overlay').addEventListener('click',e=>{if(e.tar
 
 /* ── Init ──────────────────────────────────── */
 initTheme();
-initIntake();
+{% if ai_intake_enabled %}initIntake();{% endif %}
 if (STANDALONE_TAB) {
   currentTab = STANDALONE_TAB;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
