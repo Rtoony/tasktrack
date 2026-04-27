@@ -4,11 +4,13 @@ import secrets
 from flask import (
     Blueprint, jsonify, redirect, render_template, request, session, url_for,
 )
+from sqlalchemy import select
 from werkzeug.security import generate_password_hash
 
 from ..auth import admin_required
 from ..config import ADMIN_WORKFLOW_VIEWS
-from ..db import get_db
+from ..db import get_session
+from ..models import ApprovedEmail, AppSetting, TelegramChatAccess, User
 
 bp = Blueprint("admin", __name__)
 
@@ -16,23 +18,38 @@ bp = Blueprint("admin", __name__)
 @bp.route("/admin")
 @admin_required
 def admin_panel():
-    db = get_db()
-    users = [dict(r) for r in db.execute(
-        "SELECT id, email, display_name, role, created_at FROM users ORDER BY id"
-    ).fetchall()]
-    emails = [dict(r) for r in db.execute(
-        "SELECT email, added_at FROM approved_emails ORDER BY email"
-    ).fetchall()]
-    telegram_link_code = db.execute(
-        "SELECT value FROM app_settings WHERE key = 'telegram_link_code'"
-    ).fetchone()
-    telegram_link_code = telegram_link_code["value"] if telegram_link_code else ""
+    sess = get_session()
+    users = [
+        {
+            "id": u.id,
+            "email": u.email,
+            "display_name": u.display_name,
+            "role": u.role,
+            "created_at": u.created_at.isoformat(sep=" ") if u.created_at else None,
+        }
+        for u in sess.scalars(select(User).order_by(User.id)).all()
+    ]
+    emails = [
+        {
+            "email": ae.email,
+            "added_at": ae.added_at.isoformat(sep=" ") if ae.added_at else None,
+        }
+        for ae in sess.scalars(select(ApprovedEmail).order_by(ApprovedEmail.email)).all()
+    ]
+    code_setting = sess.get(AppSetting, "telegram_link_code")
+    telegram_link_code = code_setting.value if code_setting else ""
     telegram_chats = [
-        dict(r)
-        for r in db.execute(
-            "SELECT chat_id, username, display_name, linked_at, last_seen_at, is_active "
-            "FROM telegram_chat_access ORDER BY linked_at DESC"
-        ).fetchall()
+        {
+            "chat_id": c.chat_id,
+            "username": c.username,
+            "display_name": c.display_name,
+            "linked_at": c.linked_at.isoformat(sep=" ") if c.linked_at else None,
+            "last_seen_at": c.last_seen_at.isoformat(sep=" ") if c.last_seen_at else None,
+            "is_active": c.is_active,
+        }
+        for c in sess.scalars(
+            select(TelegramChatAccess).order_by(TelegramChatAccess.linked_at.desc())
+        ).all()
     ]
     workflow_links = [
         {"key": key, "title": meta["title"], "subtitle": meta["subtitle"], "href": f"/admin/workflow/{key}"}
@@ -72,18 +89,22 @@ def add_approved_email():
     email = (data.get("email") or "").strip().lower()
     if not email:
         return jsonify({"error": "Email is required"}), 400
-    db = get_db()
-    db.execute("INSERT OR IGNORE INTO approved_emails (email) VALUES (?)", (email,))
-    db.commit()
+    sess = get_session()
+    existing = sess.get(ApprovedEmail, email)
+    if existing is None:
+        sess.add(ApprovedEmail(email=email))
+        sess.commit()
     return jsonify({"added": email}), 201
 
 
 @bp.route("/api/v1/admin/approved-emails/<path:email>", methods=["DELETE"])
 @admin_required
 def remove_approved_email(email):
-    db = get_db()
-    db.execute("DELETE FROM approved_emails WHERE email = ?", (email,))
-    db.commit()
+    sess = get_session()
+    existing = sess.get(ApprovedEmail, email)
+    if existing is not None:
+        sess.delete(existing)
+        sess.commit()
     return jsonify({"removed": email})
 
 
@@ -94,9 +115,12 @@ def update_user_role(user_id):
     role = data.get("role", "user")
     if role not in ("admin", "user"):
         return jsonify({"error": "Invalid role"}), 400
-    db = get_db()
-    db.execute("UPDATE users SET role = ? WHERE id = ?", (role, user_id))
-    db.commit()
+    sess = get_session()
+    user = sess.get(User, user_id)
+    if user is None:
+        return jsonify({"error": "Not found"}), 404
+    user.role = role
+    sess.commit()
     return jsonify({"updated": user_id, "role": role})
 
 
@@ -105,9 +129,11 @@ def update_user_role(user_id):
 def delete_user(user_id):
     if user_id == session.get("user_id"):
         return jsonify({"error": "Cannot delete yourself"}), 400
-    db = get_db()
-    db.execute("DELETE FROM users WHERE id = ?", (user_id,))
-    db.commit()
+    sess = get_session()
+    user = sess.get(User, user_id)
+    if user is not None:
+        sess.delete(user)
+        sess.commit()
     return jsonify({"deleted": user_id})
 
 
@@ -118,9 +144,12 @@ def reset_user_password(user_id):
     password = data.get("password", "")
     if len(password) < 6:
         return jsonify({"error": "Password must be at least 6 characters"}), 400
-    db = get_db()
-    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(password), user_id))
-    db.commit()
+    sess = get_session()
+    user = sess.get(User, user_id)
+    if user is None:
+        return jsonify({"error": "Not found"}), 404
+    user.password_hash = generate_password_hash(password)
+    sess.commit()
     return jsonify({"reset": user_id})
 
 
@@ -128,20 +157,22 @@ def reset_user_password(user_id):
 @admin_required
 def regenerate_telegram_link_code():
     code = secrets.token_hex(4).upper()
-    db = get_db()
-    db.execute(
-        "INSERT INTO app_settings (key, value) VALUES ('telegram_link_code', ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (code,),
-    )
-    db.commit()
+    sess = get_session()
+    setting = sess.get(AppSetting, "telegram_link_code")
+    if setting is None:
+        sess.add(AppSetting(key="telegram_link_code", value=code))
+    else:
+        setting.value = code
+    sess.commit()
     return jsonify({"telegram_link_code": code})
 
 
 @bp.route("/api/v1/admin/telegram/chats/<int:chat_id>", methods=["DELETE"])
 @admin_required
 def remove_telegram_chat(chat_id):
-    db = get_db()
-    db.execute("DELETE FROM telegram_chat_access WHERE chat_id = ?", (chat_id,))
-    db.commit()
+    sess = get_session()
+    chat = sess.get(TelegramChatAccess, chat_id)
+    if chat is not None:
+        sess.delete(chat)
+        sess.commit()
     return jsonify({"removed": chat_id})
