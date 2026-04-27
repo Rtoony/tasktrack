@@ -23,7 +23,7 @@ from sqlalchemy import create_engine, inspect
 
 from . import profile as _profile
 from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
-from .db import DB_PATH, close_db, get_secret_key, init_db
+from .db import DB_PATH, close_db, close_session, get_secret_key, init_db
 from .logging_config import configure_logging
 from .middleware import init_request_middleware
 from .models import Base
@@ -87,6 +87,7 @@ def create_app(db_path=None) -> Flask:
     _check_schema_matches_models(app.config["DB_PATH"])
 
     app.teardown_appcontext(close_db)
+    app.teardown_appcontext(close_session)
     init_request_middleware(app)
     limiter.init_app(app)
     _register_error_handlers(app)

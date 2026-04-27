@@ -1,17 +1,27 @@
-"""SQLite plumbing: connection lifecycle, schema init, additive migrations, settings.
+"""SQLite plumbing.
 
-Phase 1D will replace `init_db` / `ensure_column` / `normalize_ticket_tables`
-with SQLAlchemy + Alembic. Until then this module owns the entire schema.
+Two access paths live here during the Phase 1D-2 transition:
+- `get_db()` — legacy raw sqlite3 connection (still used by routes
+  not yet converted).
+- `get_session()` — SQLAlchemy session bound to the same DB. New
+  code uses this; conversions migrate routes one blueprint at a time.
 
-`DB_PATH` stays exported at module scope because telegram_bot.py imports
-it directly via `from app import DB_PATH`. The module-level value is a
-default; the live Flask app reads `current_app.config["DB_PATH"]`.
+`init_db` / `ensure_column` / `normalize_ticket_tables` will be deleted
+by Phase 1D-2i once the last raw call site is gone. Until then this
+module owns both paths.
+
+`DB_PATH` stays exported at module scope because telegram_bot.py
+imports it directly via `from app import DB_PATH`. The module-level
+value is a default; the live Flask app reads
+`current_app.config["DB_PATH"]`.
 """
 import os
 import secrets
 import sqlite3
 
 from flask import current_app, g
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session, sessionmaker
 
 from .config import ALLOWED_TABLES
 
@@ -21,6 +31,8 @@ DB_PATH = os.path.join(
     "tracker.db",
 )
 
+
+# ── Legacy raw-sqlite path ────────────────────────────────────────────────
 
 def get_db():
     if "db" not in g:
@@ -36,6 +48,71 @@ def close_db(exc):
     db = g.pop("db", None)
     if db:
         db.close()
+
+
+# ── SQLAlchemy session path (Phase 1D-2) ──────────────────────────────────
+
+_engine = None
+_session_factory = None
+
+
+def _ensure_engine() -> None:
+    """Lazily build the engine + session factory for the current app's DB.
+
+    Must be called from a request context (or after current_app is
+    pushed) — bind happens on first use. Engine is process-global; if
+    DB_PATH ever changed at runtime the cached engine would point at
+    the original path, but in practice DB_PATH is set once in
+    create_app() and never changes per process.
+    """
+    global _engine, _session_factory
+    if _engine is not None:
+        return
+    path = current_app.config.get("DB_PATH", DB_PATH)
+    _engine = create_engine(
+        f"sqlite:///{path}",
+        future=True,
+        # Gunicorn sync workers serialize requests per worker, but
+        # be defensive: allow the connection to be used across threads
+        # since we wrap it in per-request sessions anyway.
+        connect_args={"check_same_thread": False},
+    )
+
+    @event.listens_for(_engine, "connect")
+    def _set_pragmas(dbapi_conn, _record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+
+    _session_factory = sessionmaker(
+        bind=_engine,
+        future=True,
+        # expire_on_commit=False keeps attributes accessible after a
+        # commit — important for routes that commit then return the
+        # row in a JSON response.
+        expire_on_commit=False,
+    )
+
+
+def get_session() -> Session:
+    """Return a request-scoped SQLAlchemy session."""
+    if "session" not in g:
+        _ensure_engine()
+        g.session = _session_factory()
+    return g.session
+
+
+def close_session(exc) -> None:
+    """Roll back on error, then close. Registered via teardown_appcontext."""
+    sess = g.pop("session", None)
+    if sess is None:
+        return
+    try:
+        if exc is not None:
+            sess.rollback()
+    finally:
+        sess.close()
 
 
 def init_db(db_path=None):

@@ -241,10 +241,24 @@ class TelegramChatAccess(Base):
     user_id: Mapped[Optional[int]] = mapped_column(Integer)
 
 
+def to_dict(obj) -> dict | None:
+    """Serialize a SQLAlchemy model instance to a plain column-name dict.
+
+    Used by route handlers that need to return JSON or pass row data
+    to a template — replaces the legacy `dict(sqlite3_row)` pattern.
+    Returns None when obj is None to mirror the prior behavior of
+    routes that fetched-then-checked.
+    """
+    if obj is None:
+        return None
+    return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+
+
 __all__ = [
     "Base",
     "User", "ApprovedEmail", "AppSetting",
     "WorkTask", "ProjectWorkTask", "TrainingTask",
     "PersonnelIssue", "Suggestion", "PersonalTask",
     "ActivityLog", "Comment", "TelegramChatAccess",
+    "to_dict",
 ]
