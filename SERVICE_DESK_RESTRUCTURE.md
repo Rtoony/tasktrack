@@ -69,6 +69,30 @@ Items still open after batch 2:
 
 ---
 
+## Decisions Locked In (2026-04-27 — AI Intake set aside)
+
+AI Intake is **experimental and not in the initial company release.** Treated the same way as the calendar widget: feature-flagged off in the company profile, on in the personal profile. Code stays in the repo (dormant, not deleted) so Josh can keep experimenting locally and so re-enabling later is a one-flag flip.
+
+**Cascading impact**:
+- New profile flag `ENABLE_AI_INTAKE` (company default `false`, personal default `true`) joins the deployment-profile table.
+- `app/routes/triage.py` blueprint registers conditionally in `create_app()`. When disabled, `/api/triage` and `/api/<table>/<id>/confirm` simply do not exist (404, not 503).
+- `templates/index.html` gates the "AI Intake" tab button, the entire `#sec-intake` section, and the `initIntake()` JS call behind a Jinja conditional. Tab disappears in company profile.
+- The AI-specific Phase 1B work is **dropped**: no `AI_ALLOW_CLOUD_FALLBACK` flag, no `AI_RAW_INPUT_RETENTION_DAYS` setting, no `ai_triage_calls` audit table. Phase 1B becomes pure config + middleware work, **no schema changes at all** (the "one schema mutation outside Alembic" exception is removed).
+- Phase 1C drops AI-specific work; the `TASKTRACK_TOKEN_TRIAGE` scoped token still gets split out for personal-profile use but is unused in company.
+- Phase 6 (originally email-idempotency + AI retention) is **reduced and effectively deferred**. Email intake fed AI Intake; with AI off there's nothing for it to feed. If email intake is ever revived for a non-AI purpose (forwarding into the triage queue for manual routing), the `email_intake_processed` idempotency table lands then.
+- Phase 3 permission vocabulary: `ai.triage` and `ai.config.write` are demoted to **experimental permissions** — granted only when `ENABLE_AI_INTAKE=true`. No change to the atomic-verb design.
+- Phase 8 service-desk feature list is unaffected (attachments, SLA, threading, notifications, Outlook, KB).
+
+**Removal vs deactivation**: chose deactivation (feature flag). Reasoning:
+- Code is small and isolated (one route blueprint + one service module).
+- Telegram bot's `/api/triage` call still works in personal profile.
+- Re-enabling later is a one-line config change, not a port-the-feature-back exercise.
+- Deleting outright would also need to strip `templates/index.html` AI Intake markup permanently, which is more disruptive.
+
+If the firm later confirms AI is permanently out, Phase 7 (or a new dedicated phase) can do the cleanup: delete `app/routes/triage.py`, `app/services/triage.py`, the AI Intake template section, the LiteLLM env vars, and the experimental permissions.
+
+---
+
 ## Executive Recommendation
 
 Make TaskTrack a real internal service desk for one civil engineering firm. Stop treating it as a personal pet project AND don't pretend it's a SaaS product yet.
@@ -115,15 +139,14 @@ Out of scope:
 
 | Setting | personal | company |
 |---|---|---|
+| `ENABLE_AI_INTAKE` | true | **false** (experimental, set aside per 2026-04-27 decision) |
 | `ENABLE_CALENDAR_WIDGET` | true | false |
-| `AI_ALLOW_CLOUD_FALLBACK` | true (still audited) | false |
 | `INTAKE_FORM_AUTH` | none | **required** (login required; no anonymous, no link-token) |
 | `INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP` | 60 | 10 |
 | `BIND_HOST` | 0.0.0.0 | 127.0.0.1 (cloudflared proxies) |
 | `BRAND_NAME` | "TaskTrack" | "BR Task Tracker" |
 | `LOG_FORMAT` | text | structured (JSON/logfmt) |
 | `ENABLE_DEBUG_ROUTES` | true | false |
-| `AI_RAW_INPUT_RETENTION_DAYS` | 365 | 90 |
 | `ALLOW_HARD_DELETE` | true | false (soft-delete only) |
 
 Profile sets defaults; individual env vars override. Overriding a company-profile setting in production logs a startup warning ("AI cloud fallback explicitly enabled in company profile by env override").
