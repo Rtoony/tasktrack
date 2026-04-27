@@ -30,9 +30,9 @@ status="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/")"
 [[ "$status" == "302" ]] || fail "/ returned $status, expected 302"
 pass "/ redirects to /login when unauthenticated"
 
-# 4. /api/work_tasks rejects unauthenticated session calls
-status="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/work_tasks")"
-[[ "$status" == "401" || "$status" == "302" ]] || fail "/api/work_tasks returned $status, expected 401 or 302"
-pass "/api/work_tasks blocks unauthenticated access ($status)"
+# 4. /api/v1/work_tasks rejects unauthenticated session calls
+status="$(curl -s -o /dev/null -w '%{http_code}' "$BASE_URL/api/v1/work_tasks")"
+[[ "$status" == "401" || "$status" == "302" ]] || fail "/api/v1/work_tasks returned $status, expected 401 or 302"
+pass "/api/v1/work_tasks blocks unauthenticated access ($status)"
 
 echo "smoke green"

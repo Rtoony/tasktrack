@@ -65,7 +65,7 @@ def admin_workflow_view(workflow):
     )
 
 
-@bp.route("/api/admin/approved-emails", methods=["POST"])
+@bp.route("/api/v1/admin/approved-emails", methods=["POST"])
 @admin_required
 def add_approved_email():
     data = request.json or {}
@@ -78,7 +78,7 @@ def add_approved_email():
     return jsonify({"added": email}), 201
 
 
-@bp.route("/api/admin/approved-emails/<path:email>", methods=["DELETE"])
+@bp.route("/api/v1/admin/approved-emails/<path:email>", methods=["DELETE"])
 @admin_required
 def remove_approved_email(email):
     db = get_db()
@@ -87,7 +87,7 @@ def remove_approved_email(email):
     return jsonify({"removed": email})
 
 
-@bp.route("/api/admin/users/<int:user_id>/role", methods=["PUT"])
+@bp.route("/api/v1/admin/users/<int:user_id>/role", methods=["PUT"])
 @admin_required
 def update_user_role(user_id):
     data = request.json or {}
@@ -100,7 +100,7 @@ def update_user_role(user_id):
     return jsonify({"updated": user_id, "role": role})
 
 
-@bp.route("/api/admin/users/<int:user_id>", methods=["DELETE"])
+@bp.route("/api/v1/admin/users/<int:user_id>", methods=["DELETE"])
 @admin_required
 def delete_user(user_id):
     if user_id == session.get("user_id"):
@@ -111,7 +111,7 @@ def delete_user(user_id):
     return jsonify({"deleted": user_id})
 
 
-@bp.route("/api/admin/users/<int:user_id>/reset-password", methods=["PUT"])
+@bp.route("/api/v1/admin/users/<int:user_id>/reset-password", methods=["PUT"])
 @admin_required
 def reset_user_password(user_id):
     data = request.json or {}
@@ -124,7 +124,7 @@ def reset_user_password(user_id):
     return jsonify({"reset": user_id})
 
 
-@bp.route("/api/admin/telegram/link-code/regenerate", methods=["PUT"])
+@bp.route("/api/v1/admin/telegram/link-code/regenerate", methods=["PUT"])
 @admin_required
 def regenerate_telegram_link_code():
     code = secrets.token_hex(4).upper()
@@ -138,7 +138,7 @@ def regenerate_telegram_link_code():
     return jsonify({"telegram_link_code": code})
 
 
-@bp.route("/api/admin/telegram/chats/<int:chat_id>", methods=["DELETE"])
+@bp.route("/api/v1/admin/telegram/chats/<int:chat_id>", methods=["DELETE"])
 @admin_required
 def remove_telegram_chat(chat_id):
     db = get_db()

@@ -1,18 +1,31 @@
-"""Intake (request) forms.
+"""Internal request intake forms.
 
-Phase 1C will rename routes from /submit/* to /intake/* (with redirects)
-and require login in the company profile. Capability submissions move
-out of intake entirely.
+Routes live at /intake/* (renamed from /submit/* in Phase 1C-a). The
+legacy /submit/* paths still resolve via a 308 redirect installed in
+app/__init__.py.
 
-Per-route rate limits run off the profile-driven
-INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP setting (60/hr personal, 10/hr
-company). Limits apply per-IP and only on POST submissions; GETs are
-unlimited so the form pages stay browseable.
+When INTAKE_FORM_AUTH=required (company profile default), every intake
+route gates on an active session — anonymous submissions are not
+allowed. In personal profile (INTAKE_FORM_AUTH=none) intake stays open
+to anyone with the URL, matching prior behavior.
+
+Capability submissions have been REMOVED from the intake surface
+entirely, regardless of profile. HR-adjacent observations land via
+the authenticated dashboard only (Phase 4 will give them their own
+restricted module).
+
+Per-route rate limits run off INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP
+(60/hr personal, 10/hr company). Limits apply per-IP and only on
+POST submissions; GETs stay browseable.
 """
 import secrets
 from datetime import date, datetime
+from functools import wraps
 
-from flask import Blueprint, render_template, request
+from flask import (
+    Blueprint, current_app, g, jsonify, redirect, render_template,
+    request, session, url_for,
+)
 
 from .. import limiter
 from .. import profile as _profile
@@ -27,39 +40,53 @@ def _intake_post_limit():
     return f"{_profile.INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP} per hour"
 
 
-@bp.route("/submit")
+def intake_auth_required(f):
+    """Apply session auth only when INTAKE_FORM_AUTH=required (company profile)."""
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if current_app.config.get("INTAKE_FORM_AUTH") == "required":
+            if "user_id" not in session:
+                if request.is_json or request.path.startswith("/api/"):
+                    return jsonify({
+                        "error": "Unauthorized",
+                        "request_id": g.get("request_id", "-"),
+                    }), 401
+                return redirect(url_for("auth.login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@bp.route("/intake")
+@intake_auth_required
 def submit_hub():
     forms = [
         {
             "title": "Weekly Project Work Submission",
             "copy": "Use this on Friday to submit next week’s project tasks in one batch.",
-            "href": "/submit/project-work",
+            "href": "/intake/project-work",
         },
         {
             "title": "CAD Request Submission",
             "copy": "Submit CAD changes, fixes, or manager follow-up requests without opening the dashboard.",
-            "href": "/submit/cad-development",
+            "href": "/intake/cad-development",
         },
         {
             "title": "Training Request Submission",
             "copy": "Submit coaching and training needs as planned work items.",
-            "href": "/submit/training",
-        },
-        {
-            "title": "Capability Observation Submission",
-            "copy": "Document staff capability gaps or incidents that should be tracked over time.",
-            "href": "/submit/capability",
+            "href": "/intake/training",
         },
         {
             "title": "Suggestion Box",
             "copy": "Collect ideas for training, templates, standards, automation, and process improvements.",
-            "href": "/submit/suggestion-box",
+            "href": "/intake/suggestion-box",
         },
     ]
     return render_template("submit_hub.html", forms=forms)
 
 
-@bp.route("/submit/project-work", methods=["GET", "POST"])
+@bp.route("/intake/project-work", methods=["GET", "POST"])
+@intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_project_work():
     rows = build_weekly_submission_rows(request.form if request.method == "POST" else None)
@@ -98,8 +125,8 @@ def submit_project_work():
                     ),
                 }
                 payload.update({
-                    "created_by_user_id": None,
-                    "created_by_name": "Weekly Work Submission",
+                    "created_by_user_id": session.get("user_id"),
+                    "created_by_name": session.get("user_name") or "Weekly Work Submission",
                     "status": ALLOWED_TABLES["project_work_tasks"]["status_flow"][0],
                     "priority": "Medium",
                 })
@@ -154,8 +181,8 @@ def _render_simple_submission(config_key):
             payload[field["name"]] = value
 
         payload.update({
-            "created_by_user_id": None,
-            "created_by_name": config["source_name"],
+            "created_by_user_id": session.get("user_id"),
+            "created_by_name": session.get("user_name") or config["source_name"],
             "status": ALLOWED_TABLES[config["table"]]["status_flow"][0],
         })
 
@@ -189,25 +216,27 @@ def _render_simple_submission(config_key):
     )
 
 
-@bp.route("/submit/cad-development", methods=["GET", "POST"])
+@bp.route("/intake/cad-development", methods=["GET", "POST"])
+@intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_cad_development():
     return _render_simple_submission("cad-development")
 
 
-@bp.route("/submit/training", methods=["GET", "POST"])
+@bp.route("/intake/training", methods=["GET", "POST"])
+@intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_training():
     return _render_simple_submission("training")
 
 
-@bp.route("/submit/capability", methods=["GET", "POST"])
-@limiter.limit(_intake_post_limit, methods=["POST"])
-def submit_capability():
-    return _render_simple_submission("capability")
-
-
-@bp.route("/submit/suggestion-box", methods=["GET", "POST"])
+@bp.route("/intake/suggestion-box", methods=["GET", "POST"])
+@intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_suggestion_box():
     return _render_simple_submission("suggestion-box")
+
+
+# Capability submissions have been REMOVED from the intake surface
+# (decision 2026-04-26 — HR-adjacent data only via authenticated UI).
+# /submit/capability + /intake/capability both return 404.

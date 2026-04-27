@@ -1,10 +1,13 @@
 """AI Intake (triage) routes.
 
-`/api/triage` accepts session OR token auth (for email_intake.py + Maximus).
-`/api/<table>/<id>/confirm` clears the AI needs_review flag once an
+`/api/v1/triage` accepts session OR token auth (for email_intake.py).
+`/api/v1/<table>/<id>/confirm` clears the AI needs_review flag once an
 operator has reviewed an AI-generated row.
+
+Token auth uses the `triage` scope (TASKTRACK_TOKEN_TRIAGE); the legacy
+single-secret TASKTRACK_TOKEN is still accepted for one release with
+a deprecation log.
 """
-import os
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request, session
@@ -17,25 +20,19 @@ from ..services.triage import (
     TRIAGE_TARGET_LABELS, auto_project_number, run_triage,
     triage_plan_to_payload,
 )
+from ..tokens import check_scoped_token
 
 bp = Blueprint("triage", __name__)
 
-TASKTRACK_TOKEN = os.environ.get("TASKTRACK_TOKEN", "")
-
 
 def _require_triage_auth():
-    """Triage accepts either an active session or a valid TASKTRACK_TOKEN header."""
+    """Either active session or `triage`-scoped token (or legacy token)."""
     if "user_id" in session:
         return None
-    if not TASKTRACK_TOKEN:
-        return jsonify({"error": "unauthorized"}), 401
-    presented = request.headers.get("X-Token") or request.headers.get("Authorization", "").replace("Bearer ", "")
-    if presented and presented == TASKTRACK_TOKEN:
-        return None
-    return jsonify({"error": "unauthorized"}), 401
+    return check_scoped_token("triage")
 
 
-@bp.route("/api/triage", methods=["POST"])
+@bp.route("/api/v1/triage", methods=["POST"])
 def triage_endpoint():
     err = _require_triage_auth()
     if err:
@@ -97,7 +94,7 @@ def triage_endpoint():
     return jsonify(response), 201
 
 
-@bp.route("/api/<table>/<int:record_id>/confirm", methods=["POST"])
+@bp.route("/api/v1/<table>/<int:record_id>/confirm", methods=["POST"])
 def confirm_ai_task(table, record_id):
     if table not in TRIAGE_CONFIRM_TABLES:
         return jsonify({"error": "confirm not supported for this table"}), 400

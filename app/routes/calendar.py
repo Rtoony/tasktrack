@@ -6,7 +6,7 @@ from ..services.calendar import calendar_upcoming_events
 bp = Blueprint("calendar", __name__)
 
 
-@bp.route("/api/calendar/upcoming", methods=["GET"])
+@bp.route("/api/v1/calendar/upcoming", methods=["GET"])
 def calendar_upcoming():
     days = request.args.get("days", default=30, type=int)
     limit = request.args.get("limit", default=8, type=int)

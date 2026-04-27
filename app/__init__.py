@@ -85,6 +85,7 @@ def create_app(db_path=None) -> Flask:
     init_request_middleware(app)
     limiter.init_app(app)
     _register_error_handlers(app)
+    _register_legacy_api_redirect(app)
 
     # Inject feature flags + branding into every Jinja render so templates
     # can gate UI without route-by-route context plumbing.
@@ -128,6 +129,44 @@ def create_app(db_path=None) -> Flask:
     app.cli.add_command(init_db_command)
 
     return app
+
+
+def _register_legacy_api_redirect(app: Flask) -> None:
+    """308-redirect /api/<rest> -> /api/v1/<rest> for one release cycle.
+
+    The 308 status preserves the request method (so POST/PUT/DELETE
+    aren't downgraded to GET) and tells caches the move is permanent.
+    Active SPA + email_intake.py + scripts/smoke.sh have all been
+    updated to /api/v1/* directly; this catch-all only matters for
+    external clients that still hit the legacy paths (the Telegram
+    bot until 1C-b lands, and any hand-typed curls).
+    """
+    from flask import redirect
+
+    @app.before_request
+    def _legacy_api_to_v1():
+        path = request.path
+        if path.startswith("/api/") and not path.startswith("/api/v1/"):
+            new_path = "/api/v1" + path[len("/api"):]
+            if request.query_string:
+                new_path += "?" + request.query_string.decode("ascii", errors="ignore")
+            return redirect(new_path, code=308)
+
+    @app.before_request
+    def _legacy_submit_to_intake():
+        # /submit/* -> /intake/*. Capability is intentionally not redirected:
+        # /submit/capability returns 404 (intake surface removed).
+        path = request.path
+        if path == "/submit/capability" or path == "/intake/capability":
+            return jsonify({
+                "error": "capability submissions are not part of the intake surface",
+                "request_id": g.get("request_id", "-"),
+            }), 404
+        if path == "/submit" or path.startswith("/submit/"):
+            new_path = "/intake" + path[len("/submit"):]
+            if request.query_string:
+                new_path += "?" + request.query_string.decode("ascii", errors="ignore")
+            return redirect(new_path, code=308)
 
 
 def _register_error_handlers(app: Flask) -> None:

@@ -302,7 +302,7 @@
       <a href="/" class="btn-admin-link">Full Tracker</a>
       <a href="/admin" class="btn-admin-link">Admin Home</a>
       {% else %}
-      <a href="/submit" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
+      <a href="/intake" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
       <a href="https://portal.roonytoony.dev/calendar" class="btn-admin-link" target="_blank" rel="noopener" title="Open the Nexus calendar in a new tab">&#128197; Calendar</a>
       {% endif %}
       <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">Dark Mode</button>
@@ -545,8 +545,8 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-work-overdue" onchange="loadTable('work')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/submit/cad-development" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/work_tasks/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/intake/cad-development" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('work')">+ Add CAD Task</button>
     </div>
     <div class="table-wrap">
@@ -584,8 +584,8 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-project-overdue" onchange="loadTable('project')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/submit/project-work" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/project_work_tasks/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/intake/project-work" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/project_work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('project')">+ Add Project Task</button>
     </div>
     <div class="table-wrap">
@@ -624,8 +624,8 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-training-overdue" onchange="loadTable('training')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/submit/training" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/training_tasks/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/intake/training" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/training_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('training')">+ Add Training</button>
     </div>
     <div class="table-wrap">
@@ -663,8 +663,7 @@
         <option value="">All Impact Levels</option>
         <option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
-      <a class="btn btn-sm btn-export" href="/submit/capability" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/personnel_issues/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/personnel_issues/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personnel')">+ Add Capability Note</button>
     </div>
     <div class="table-wrap">
@@ -700,8 +699,8 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
-      <a class="btn btn-sm btn-export" href="/submit/suggestion-box" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/suggestion_box/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/intake/suggestion-box" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/suggestion_box/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('suggestions')">+ Add Suggestion</button>
     </div>
     <div class="table-wrap">
@@ -941,7 +940,7 @@ if (searchInput && searchResults) {
     const q = searchInput.value.trim();
     if (q.length < 2) { searchResults.classList.remove('open'); return; }
     searchTimeout = setTimeout(async () => {
-      const data = await api('GET', '/api/search?q='+encodeURIComponent(q));
+      const data = await api('GET', '/api/v1/search?q='+encodeURIComponent(q));
       if (!data || !data.length) { searchResults.classList.remove('open'); return; }
       searchResults.replaceChildren();
       data.forEach(r => {
@@ -972,7 +971,7 @@ if (searchInput && searchResults) {
 
 /* ── Dashboard ─────────────────────────────── */
 async function loadDashboard() {
-  const data = await api('GET','/api/dashboard');
+  const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
   const s = data.stats;
   const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.suggestion_box?.active||0);
@@ -1040,7 +1039,7 @@ async function loadCalendarWidget() {
   if (!el) return;
   el.replaceChildren();
   try {
-    const res = await fetch('/api/calendar/upcoming?days=60&limit=8', { credentials: 'same-origin' });
+    const res = await fetch('/api/v1/calendar/upcoming?days=60&limit=8', { credentials: 'same-origin' });
     const data = await res.json();
     if (!data.available) {
       const empty = document.createElement('div');
@@ -1128,7 +1127,7 @@ function formatTimeAgo(ts) {
 /* ── Load Table (with filters) ─────────────── */
 async function loadTable(table) {
   const st = sortState[table];
-  const data = await api('GET','/api/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order);
+  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order);
   if (!data) return;
   tableCache[table] = data;
 
@@ -1248,7 +1247,7 @@ function makeClickableStatus(table,r) {
   s.textContent = r.status;
   s.title = 'Click to advance status';
   s.addEventListener('click', async () => {
-    const updated = await api('PUT','/api/'+API_MAP[table]+'/'+r.id+'/cycle-status');
+    const updated = await api('PUT','/api/v1/'+API_MAP[table]+'/'+r.id+'/cycle-status');
     if (updated && !updated.error) { toast(itemLabel(table) + ' status updated to ' + updated.status); loadTable(table); }
   });
   td.appendChild(s);
@@ -1275,7 +1274,7 @@ function makeSuggestionActions(r) {
   promote.disabled = promoted;
   if (!promoted) {
     promote.addEventListener('click', async () => {
-      const res = await api('POST','/api/suggestion_box/'+r.id+'/promote-to-cad',{});
+      const res = await api('POST','/api/v1/suggestion_box/'+r.id+'/promote-to-cad',{});
       if (res && !res.error) {
         toast('suggestion promoted to CAD Development');
         loadTable('suggestions');
@@ -1494,7 +1493,7 @@ function buildReviewBanner(table, data) {
   confirmBtn.className = 'btn btn-primary';
   confirmBtn.textContent = 'Confirm \u00b7 clear AI flag';
   confirmBtn.addEventListener('click', async () => {
-    const res = await api('POST', '/api/' + apiTable + '/' + data.id + '/confirm', {});
+    const res = await api('POST', '/api/v1/' + apiTable + '/' + data.id + '/confirm', {});
     if (res && !res.error) {
       toast('task confirmed');
       closeModal();
@@ -1560,7 +1559,7 @@ function validateForm(table, data) {
 
 /* ── Comments ──────────────────────────────── */
 async function loadComments(table,recordId,container) {
-  const comments = await api('GET','/api/'+API_MAP[table]+'/'+recordId+'/comments');
+  const comments = await api('GET','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments');
   container.replaceChildren();
   const title = document.createElement('div'); title.className='comments-title'; title.textContent='Comments'; container.appendChild(title);
 
@@ -1581,7 +1580,7 @@ async function loadComments(table,recordId,container) {
   const btn = document.createElement('button'); btn.textContent='Post';
   btn.addEventListener('click', async () => {
     const body=input.value.trim(); if(!body) return;
-    await api('POST','/api/'+API_MAP[table]+'/'+recordId+'/comments',{body});
+    await api('POST','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments',{body});
     input.value='';
     loadComments(table,recordId,container);
   });
@@ -1610,15 +1609,15 @@ function openModal(table,data) {
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); editingId=null; editingTable=null; }
 
-async function editRecord(table,id) { const data=await api('GET','/api/'+API_MAP[table]+'/'+id); if(data&&!data.error) openModal(table,data); }
+async function editRecord(table,id) { const data=await api('GET','/api/v1/'+API_MAP[table]+'/'+id); if(data&&!data.error) openModal(table,data); }
 
 async function saveRecord() {
   const table=editingTable;
   let data=getFormData(table);
   if (!validateForm(table, data)) return;
   if (table === 'work') data = transformWorkForSave(data);
-  if (editingId) await api('PUT','/api/'+API_MAP[table]+'/'+editingId,data);
-  else await api('POST','/api/'+API_MAP[table],data);
+  if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
+  else await api('POST','/api/v1/'+API_MAP[table],data);
   closeModal(); loadTable(table); toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
 }
 
@@ -1756,7 +1755,7 @@ async function intakeRunPreview() {
   intakeSetStatus('Running triage \u2026');
   try {
     const presets = intakeCollectPresets();
-    const res = await api('POST', '/api/triage', { text: raw, commit: false, ...presets });
+    const res = await api('POST', '/api/v1/triage', { text: raw, commit: false, ...presets });
     if (!res || res.error) {
       intakeSetStatus((res && res.error) ? (res.error + (res.detail ? ' \u2014 ' + res.detail : '')) : 'triage failed', 'error');
       return;
@@ -1812,7 +1811,7 @@ async function intakeConfirm() {
 
     // For fidelity to user edits, post directly to the target table's CRUD instead of re-running triage.
     const payload = intakeBuildDirectPayload(target, presets, overrides, intakePreviewState);
-    const res = await api('POST', '/api/' + target, payload);
+    const res = await api('POST', '/api/v1/' + target, payload);
     if (!res || res.error) {
       intakeSetStatus((res && res.error) || 'Save failed', 'error');
       return;
@@ -1932,7 +1931,7 @@ function confirmDelete(table,id,name) {
   document.getElementById('confirm-name').textContent=name;
   document.getElementById('confirm-overlay').classList.add('open');
   document.getElementById('confirm-delete-btn').onclick=async()=>{
-    await api('DELETE','/api/'+API_MAP[table]+'/'+id);
+    await api('DELETE','/api/v1/'+API_MAP[table]+'/'+id);
     closeConfirm(); loadTable(table); toast(itemLabel(table) + ' deleted');
   };
 }

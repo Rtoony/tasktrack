@@ -50,7 +50,7 @@ def test_root_redirects_to_login(client):
 
 
 def test_api_blocks_unauthenticated(client):
-    r = client.get("/api/work_tasks", follow_redirects=False)
+    r = client.get("/api/v1/work_tasks", follow_redirects=False)
     assert r.status_code in (401, 302)
 
 

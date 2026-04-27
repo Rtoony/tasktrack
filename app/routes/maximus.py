@@ -3,27 +3,24 @@
 Lives in TaskTrack today; Phase 7 will remove this surface entirely
 (default) or split it into a tiny dedicated service if Maximus turns
 out to depend on it.
+
+Token auth uses the `personal` scope (TASKTRACK_TOKEN_PERSONAL); the
+legacy single-secret TASKTRACK_TOKEN is still accepted for one release
+with a deprecation log.
 """
-import os
 from datetime import date
 
 from flask import Blueprint, jsonify, request
 
 from ..db import get_db
 from ..services.audit import log_activity
+from ..tokens import check_scoped_token
 
 bp = Blueprint("maximus", __name__)
 
-TASKTRACK_TOKEN = os.environ.get("TASKTRACK_TOKEN", "")
-
 
 def _require_tasktrack_token():
-    if not TASKTRACK_TOKEN:
-        return jsonify({"error": "server token not configured"}), 503
-    presented = request.headers.get("X-Token") or request.headers.get("Authorization", "").replace("Bearer ", "")
-    if presented != TASKTRACK_TOKEN:
-        return jsonify({"error": "unauthorized"}), 401
-    return None
+    return check_scoped_token("personal")
 
 
 def _personal_task_row_to_dict(row):
@@ -46,7 +43,7 @@ def _personal_task_row_to_dict(row):
     }
 
 
-@bp.route("/api/maximus/tasks", methods=["GET"])
+@bp.route("/api/v1/maximus/tasks", methods=["GET"])
 def maximus_list_tasks():
     err = _require_tasktrack_token()
     if err:
@@ -60,7 +57,7 @@ def maximus_list_tasks():
     return jsonify({"tasks": [_personal_task_row_to_dict(r) for r in rows]})
 
 
-@bp.route("/api/maximus/tasks/today", methods=["GET"])
+@bp.route("/api/v1/maximus/tasks/today", methods=["GET"])
 def maximus_tasks_today():
     err = _require_tasktrack_token()
     if err:
@@ -77,7 +74,7 @@ def maximus_tasks_today():
     return jsonify({"date": today, "tasks": [_personal_task_row_to_dict(r) for r in rows]})
 
 
-@bp.route("/api/maximus/tasks/completed", methods=["GET"])
+@bp.route("/api/v1/maximus/tasks/completed", methods=["GET"])
 def maximus_tasks_completed():
     err = _require_tasktrack_token()
     if err:
@@ -92,7 +89,7 @@ def maximus_tasks_completed():
     return jsonify({"tasks": [_personal_task_row_to_dict(r) for r in rows]})
 
 
-@bp.route("/api/maximus/tasks", methods=["POST"])
+@bp.route("/api/v1/maximus/tasks", methods=["POST"])
 def maximus_capture_task():
     err = _require_tasktrack_token()
     if err:
@@ -124,7 +121,7 @@ def maximus_capture_task():
     return jsonify({"task": _personal_task_row_to_dict(row)}), 201
 
 
-@bp.route("/api/maximus/tasks/<int:task_id>", methods=["GET"])
+@bp.route("/api/v1/maximus/tasks/<int:task_id>", methods=["GET"])
 def maximus_get_task(task_id):
     err = _require_tasktrack_token()
     if err:
@@ -136,7 +133,7 @@ def maximus_get_task(task_id):
     return jsonify({"task": _personal_task_row_to_dict(row)})
 
 
-@bp.route("/api/maximus/tasks/<int:task_id>", methods=["PUT"])
+@bp.route("/api/v1/maximus/tasks/<int:task_id>", methods=["PUT"])
 def maximus_update_task(task_id):
     err = _require_tasktrack_token()
     if err:
@@ -162,7 +159,7 @@ def maximus_update_task(task_id):
     return jsonify({"task": _personal_task_row_to_dict(row)})
 
 
-@bp.route("/api/maximus/tasks/<int:task_id>/complete", methods=["POST"])
+@bp.route("/api/v1/maximus/tasks/<int:task_id>/complete", methods=["POST"])
 def maximus_complete_task(task_id):
     err = _require_tasktrack_token()
     if err:
@@ -184,7 +181,7 @@ def maximus_complete_task(task_id):
     return jsonify({"task": _personal_task_row_to_dict(row)})
 
 
-@bp.route("/api/maximus/tasks/<int:task_id>", methods=["DELETE"])
+@bp.route("/api/v1/maximus/tasks/<int:task_id>", methods=["DELETE"])
 def maximus_delete_task(task_id):
     err = _require_tasktrack_token()
     if err:
@@ -200,7 +197,7 @@ def maximus_delete_task(task_id):
     return jsonify({"ok": True})
 
 
-@bp.route("/api/maximus/stats", methods=["GET"])
+@bp.route("/api/v1/maximus/stats", methods=["GET"])
 def maximus_stats():
     err = _require_tasktrack_token()
     if err:

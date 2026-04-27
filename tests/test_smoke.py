@@ -28,7 +28,7 @@ def test_root_redirects_to_login_when_unauthenticated(base_url):
 
 def test_api_blocks_unauthenticated(base_url):
     r = requests.get(
-        f"{base_url}/api/work_tasks", timeout=5, allow_redirects=False
+        f"{base_url}/api/v1/work_tasks", timeout=5, allow_redirects=False
     )
     # @login_required can return either 401 (JSON) or a 302 to /login;
     # both are acceptable evidence that the endpoint is gated.

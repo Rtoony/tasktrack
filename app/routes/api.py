@@ -26,7 +26,7 @@ bp = Blueprint("api", __name__)
 
 # ── Dashboard ───────────────────────────────────────────────────────────────
 
-@bp.route("/api/dashboard")
+@bp.route("/api/v1/dashboard")
 @login_required
 def dashboard_stats():
     db = get_db()
@@ -70,7 +70,7 @@ def dashboard_stats():
 
 # ── Search ─────────────────────────────────────────────────────────────────
 
-@bp.route("/api/search")
+@bp.route("/api/v1/search")
 @login_required
 def search_records():
     q = (request.args.get("q") or "").strip()
@@ -121,7 +121,7 @@ def search_records():
 
 # ── Comments ───────────────────────────────────────────────────────────────
 
-@bp.route("/api/<table>/<int:record_id>/comments", methods=["GET"])
+@bp.route("/api/v1/<table>/<int:record_id>/comments", methods=["GET"])
 @login_required
 def list_comments(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -134,7 +134,7 @@ def list_comments(table, record_id):
     return jsonify([dict(r) for r in rows])
 
 
-@bp.route("/api/<table>/<int:record_id>/comments", methods=["POST"])
+@bp.route("/api/v1/<table>/<int:record_id>/comments", methods=["POST"])
 @login_required
 def add_comment(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -157,7 +157,7 @@ def add_comment(table, record_id):
 
 # ── Quick Status Toggle ────────────────────────────────────────────────────
 
-@bp.route("/api/<table>/<int:record_id>/cycle-status", methods=["PUT"])
+@bp.route("/api/v1/<table>/<int:record_id>/cycle-status", methods=["PUT"])
 @login_required
 def cycle_status(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -186,7 +186,7 @@ def cycle_status(table, record_id):
 
 # ── Activity Log ───────────────────────────────────────────────────────────
 
-@bp.route("/api/<table>/<int:record_id>/activity")
+@bp.route("/api/v1/<table>/<int:record_id>/activity")
 @login_required
 def record_activity(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -201,7 +201,7 @@ def record_activity(table, record_id):
 
 # ── CSV Export ─────────────────────────────────────────────────────────────
 
-@bp.route("/api/<table>/export.csv")
+@bp.route("/api/v1/<table>/export.csv")
 @login_required
 def export_csv(table):
     if table not in ALLOWED_TABLES:
@@ -227,7 +227,7 @@ def export_csv(table):
 
 # ── CRUD ───────────────────────────────────────────────────────────────────
 
-@bp.route("/api/<table>", methods=["GET"])
+@bp.route("/api/v1/<table>", methods=["GET"])
 @login_required
 def list_records(table):
     if table not in ALLOWED_TABLES:
@@ -244,7 +244,7 @@ def list_records(table):
     return jsonify([dict(r) for r in rows])
 
 
-@bp.route("/api/<table>", methods=["POST"])
+@bp.route("/api/v1/<table>", methods=["POST"])
 @login_required
 def create_record(table):
     if table not in ALLOWED_TABLES:
@@ -271,7 +271,7 @@ def create_record(table):
     return jsonify(dict(row)), 201
 
 
-@bp.route("/api/<table>/<int:record_id>", methods=["GET"])
+@bp.route("/api/v1/<table>/<int:record_id>", methods=["GET"])
 @login_required
 def get_record(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -283,7 +283,7 @@ def get_record(table, record_id):
     return jsonify(dict(row))
 
 
-@bp.route("/api/<table>/<int:record_id>", methods=["PUT"])
+@bp.route("/api/v1/<table>/<int:record_id>", methods=["PUT"])
 @login_required
 def update_record(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -318,7 +318,7 @@ def update_record(table, record_id):
     return jsonify(dict(row))
 
 
-@bp.route("/api/<table>/<int:record_id>", methods=["DELETE"])
+@bp.route("/api/v1/<table>/<int:record_id>", methods=["DELETE"])
 @login_required
 def delete_record(table, record_id):
     if table not in ALLOWED_TABLES:
@@ -336,7 +336,7 @@ def delete_record(table, record_id):
 
 # ── Suggestion Promotion ───────────────────────────────────────────────────
 
-@bp.route("/api/suggestion_box/<int:record_id>/promote-to-cad", methods=["POST"])
+@bp.route("/api/v1/suggestion_box/<int:record_id>/promote-to-cad", methods=["POST"])
 @login_required
 def promote_suggestion_to_cad(record_id):
     db = get_db()

@@ -2,7 +2,7 @@
 """TaskTrack Email Intake poller.
 
 Reads unread mail from an IMAP mailbox, extracts body + sender + subject, and
-POSTs to `${TASKTRACK_URL}/api/triage` with `commit=true` and `source=email` so
+POSTs to `${TASKTRACK_URL}/api/v1/triage` with `commit=true` and `source=email` so
 the task lands in TaskTrack flagged `needs_review`.
 
 Designed to run as a short-lived systemd user service triggered by a timer
@@ -107,7 +107,7 @@ def _post_triage(url: str, token: str, text: str, requested_by: str) -> dict:
         "requested_by": requested_by,
     }
     resp = requests.post(
-        url.rstrip("/") + "/api/triage",
+        url.rstrip("/") + "/api/v1/triage",
         headers={"Content-Type": "application/json", "X-Token": token},
         json=payload,
         timeout=120,
