@@ -1,34 +1,12 @@
-"""In-process tests for the Phase 1A.2 app-factory pattern.
+"""In-process tests using the Flask test client and an isolated temp DB.
 
-Currently SKIPPED — see reason below.
+These bypass the running gunicorn instance and the live DB, exercising
+the same routes via the Flask test client against a fresh SQLite per
+test (schema built from SQLAlchemy metadata in conftest).
 
-These tests exercise routes via the Flask test client against an
-isolated temp SQLite DB. They depend on `init_db()` producing a clean
-schema on a fresh database, which trips a latent bug in
-`normalize_ticket_tables`:
-
-    sqlite3.OperationalError: no such column: description
-
-The bug: `init_db()`'s executescript creates `project_work_tasks` with
-columns in a different order than `normalize_ticket_tables` expects, so
-the rebuild path triggers; the rebuild SELECT references a `description`
-column that older schemas had but fresh ones don't.
-
-The live DB is unaffected (it was never re-initialized after the
-column-order divergence) — only fresh init breaks. Phase 1D will
-delete `init_db()` / `normalize_ticket_tables()` entirely when
-SQLAlchemy + Alembic baselines take over schema management; that's the
-right place to fix this rather than papering over it now.
-
-Until then these tests stay skipped. Re-enable in Phase 1D after
-alembic baseline can produce a clean schema.
+Re-enabled in Phase 1D-2j once Alembic owned schema and the legacy
+runtime mutation that tripped fresh-init was deleted.
 """
-import pytest
-
-pytestmark = pytest.mark.skip(
-    reason="blocked by fresh-init bug in normalize_ticket_tables; "
-    "fixed when SQLAlchemy + Alembic replace the runtime schema mutation in Phase 1D"
-)
 
 
 def test_healthz_via_test_client(client):
@@ -70,3 +48,20 @@ def test_register_rejects_unapproved_email(client):
     )
     assert r.status_code == 200
     assert b"not on the approved list" in r.data
+
+
+def test_legacy_api_path_redirects_to_v1(client):
+    r = client.get("/api/work_tasks", follow_redirects=False)
+    assert r.status_code == 308
+    assert r.headers["Location"].endswith("/api/v1/work_tasks")
+
+
+def test_legacy_submit_path_redirects_to_intake(client):
+    r = client.get("/submit", follow_redirects=False)
+    assert r.status_code == 308
+    assert r.headers["Location"].endswith("/intake")
+
+
+def test_capability_intake_returns_404(client):
+    r = client.get("/intake/capability")
+    assert r.status_code == 404

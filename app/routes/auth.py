@@ -2,9 +2,11 @@
 from flask import (
     Blueprint, redirect, render_template, request, session, url_for,
 )
+from sqlalchemy import func, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from ..db import get_db
+from ..db import get_session
+from ..models import ApprovedEmail, User
 
 bp = Blueprint("auth", __name__)
 
@@ -19,13 +21,17 @@ def login():
         email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
 
-        db = get_db()
-        user = db.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
-        if user and check_password_hash(user["password_hash"], password):
-            session["user_id"] = user["id"]
-            session["user_email"] = user["email"]
-            session["user_name"] = user["display_name"]
-            session["user_role"] = user["role"]
+        sess = get_session()
+        # email is COLLATE NOCASE in the schema; use func.lower() so
+        # SQLAlchemy doesn't add quotes around the COLLATE keyword.
+        user = sess.scalar(
+            select(User).where(func.lower(User.email) == email)
+        )
+        if user and check_password_hash(user.password_hash, password):
+            session["user_id"] = user.id
+            session["user_email"] = user.email
+            session["user_name"] = user.display_name
+            session["user_role"] = user.role
             return redirect(url_for("main.index"))
         error = "Invalid email or password."
 
@@ -49,24 +55,26 @@ def register():
         elif len(password) < 6:
             error = "Password must be at least 6 characters."
         else:
-            db = get_db()
-            approved = db.execute(
-                "SELECT 1 FROM approved_emails WHERE email = ?", (email,)
-            ).fetchone()
-            if not approved:
+            sess = get_session()
+            approved = sess.scalar(
+                select(ApprovedEmail).where(func.lower(ApprovedEmail.email) == email)
+            )
+            if approved is None:
                 error = "This email is not on the approved list. Ask the admin to add you."
             else:
-                existing = db.execute(
-                    "SELECT 1 FROM users WHERE email = ?", (email,)
-                ).fetchone()
-                if existing:
+                existing = sess.scalar(
+                    select(User).where(func.lower(User.email) == email)
+                )
+                if existing is not None:
                     error = "An account with this email already exists. Try logging in."
                 else:
-                    db.execute(
-                        "INSERT INTO users (email, display_name, password_hash, role) VALUES (?, ?, ?, 'user')",
-                        (email, name, generate_password_hash(password)),
-                    )
-                    db.commit()
+                    sess.add(User(
+                        email=email,
+                        display_name=name,
+                        password_hash=generate_password_hash(password),
+                        role="user",
+                    ))
+                    sess.commit()
                     success = "Account created! You can now log in."
 
     return render_template("login.html", error=error, success=success, mode="register")

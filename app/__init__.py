@@ -23,7 +23,7 @@ from sqlalchemy import create_engine, inspect
 
 from . import profile as _profile
 from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
-from .db import DB_PATH, close_db, close_session, get_secret_key, init_db
+from .db import DB_PATH, close_session, get_secret_key
 from .logging_config import configure_logging
 from .middleware import init_request_middleware
 from .models import Base
@@ -33,7 +33,6 @@ LOG = logging.getLogger("tasktrack.app")
 
 __all__ = [
     "create_app",
-    "init_db",
     "limiter",
     # legacy import surface for telegram_bot.py / email_intake.py
     "ALLOWED_TABLES",
@@ -86,7 +85,6 @@ def create_app(db_path=None) -> Flask:
 
     _check_schema_matches_models(app.config["DB_PATH"])
 
-    app.teardown_appcontext(close_db)
     app.teardown_appcontext(close_session)
     init_request_middleware(app)
     limiter.init_app(app)
@@ -133,8 +131,9 @@ def create_app(db_path=None) -> Flask:
         from .routes.calendar import bp as calendar_bp
         app.register_blueprint(calendar_bp)
 
-    from .cli import init_db_command
+    from .cli import db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)
+    app.cli.add_command(db_upgrade_command)
 
     return app
 
