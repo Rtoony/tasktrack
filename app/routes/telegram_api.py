@@ -15,11 +15,12 @@ ships in Phase 3 RBAC.
 from datetime import datetime
 
 from flask import Blueprint, g, jsonify, request
+from sqlalchemy import select
 
 from ..config import ALLOWED_TABLES
-from ..db import get_db
-from ..services.audit import log_activity
-from ..services.tickets import create_direct_record
+from ..db import get_session
+from ..models import AppSetting, TelegramChatAccess, to_dict
+from ..services.tickets import TABLE_MODELS, create_direct_record
 from ..tokens import check_scoped_token
 
 bp = Blueprint("telegram_api", __name__)
@@ -29,19 +30,15 @@ def _require_bot():
     return check_scoped_token("bot")
 
 
-def _chat_status(db, chat_id: int) -> dict:
-    row = db.execute(
-        "SELECT chat_id, user_id, is_active, display_name, username "
-        "FROM telegram_chat_access WHERE chat_id = ?",
-        (chat_id,),
-    ).fetchone()
-    if not row:
+def _chat_status(sess, chat_id: int) -> dict:
+    chat = sess.get(TelegramChatAccess, chat_id)
+    if chat is None:
         return {"paired": False, "user_id": None}
     return {
-        "paired": bool(row["is_active"]),
-        "user_id": row["user_id"],
-        "display_name": row["display_name"] or "",
-        "username": row["username"] or "",
+        "paired": bool(chat.is_active),
+        "user_id": chat.user_id,
+        "display_name": chat.display_name or "",
+        "username": chat.username or "",
     }
 
 
@@ -60,27 +57,32 @@ def telegram_pair():
         return jsonify({"error": "chat_id (int) and code required",
                         "request_id": g.get("request_id", "-")}), 400
 
-    db = get_db()
-    expected = db.execute(
-        "SELECT value FROM app_settings WHERE key = 'telegram_link_code'"
-    ).fetchone()
-    if not expected or code != expected["value"].upper():
+    sess = get_session()
+    expected_code = sess.scalar(
+        select(AppSetting.value).where(AppSetting.key == "telegram_link_code")
+    )
+    if not expected_code or code != expected_code.upper():
         return jsonify({"error": "invalid link code",
                         "paired": False,
                         "request_id": g.get("request_id", "-")}), 401
 
-    db.execute(
-        "INSERT INTO telegram_chat_access (chat_id, username, display_name, is_active) "
-        "VALUES (?, ?, ?, 1) "
-        "ON CONFLICT(chat_id) DO UPDATE SET "
-        "  username = excluded.username, "
-        "  display_name = excluded.display_name, "
-        "  is_active = 1, "
-        "  last_seen_at = CURRENT_TIMESTAMP",
-        (chat_id, username, display_name),
-    )
-    db.commit()
-    return jsonify({"ok": True, **_chat_status(db, chat_id)}), 200
+    chat = sess.get(TelegramChatAccess, chat_id)
+    now = datetime.utcnow()
+    if chat is None:
+        chat = TelegramChatAccess(
+            chat_id=chat_id,
+            username=username,
+            display_name=display_name,
+            is_active=1,
+        )
+        sess.add(chat)
+    else:
+        chat.username = username
+        chat.display_name = display_name
+        chat.is_active = 1
+        chat.last_seen_at = now
+    sess.commit()
+    return jsonify({"ok": True, **_chat_status(sess, chat_id)}), 200
 
 
 @bp.route("/api/v1/telegram/touch", methods=["POST"])
@@ -97,17 +99,16 @@ def telegram_touch():
         return jsonify({"error": "chat_id (int) required",
                         "request_id": g.get("request_id", "-")}), 400
 
-    db = get_db()
-    db.execute(
-        "UPDATE telegram_chat_access SET "
-        "  last_seen_at = CURRENT_TIMESTAMP, "
-        "  username = COALESCE(NULLIF(?, ''), username), "
-        "  display_name = COALESCE(NULLIF(?, ''), display_name) "
-        "WHERE chat_id = ?",
-        (username, display_name, chat_id),
-    )
-    db.commit()
-    return jsonify(_chat_status(db, chat_id))
+    sess = get_session()
+    chat = sess.get(TelegramChatAccess, chat_id)
+    if chat is not None:
+        chat.last_seen_at = datetime.utcnow()
+        if username:
+            chat.username = username
+        if display_name:
+            chat.display_name = display_name
+        sess.commit()
+    return jsonify(_chat_status(sess, chat_id))
 
 
 @bp.route("/api/v1/telegram/tickets", methods=["POST"])
@@ -130,23 +131,19 @@ def telegram_create_ticket():
         return jsonify({"error": "payload must be an object",
                         "request_id": g.get("request_id", "-")}), 400
 
-    db = get_db()
-    chat = db.execute(
-        "SELECT chat_id, user_id, is_active, display_name "
-        "FROM telegram_chat_access WHERE chat_id = ?",
-        (chat_id,),
-    ).fetchone()
-    if not chat or not chat["is_active"]:
+    sess = get_session()
+    chat = sess.get(TelegramChatAccess, chat_id)
+    if chat is None or not chat.is_active:
         return jsonify({"error": "chat is not paired — send /link CODE first",
                         "request_id": g.get("request_id", "-")}), 403
 
     # Attribute ticket to the chat's bound user (when set) and tag the
     # creator name so the audit log shows the Telegram origin.
     payload = dict(payload)  # don't mutate caller's dict
-    payload["created_by_user_id"] = chat["user_id"]
+    payload["created_by_user_id"] = chat.user_id
     payload["created_by_name"] = (
-        f"Telegram ({chat['display_name'] or chat_id})" if chat["user_id"] is None
-        else (chat["display_name"] or f"Telegram #{chat_id}")
+        f"Telegram ({chat.display_name or chat_id})" if chat.user_id is None
+        else (chat.display_name or f"Telegram #{chat_id}")
     )
     if "status" not in payload or not str(payload.get("status", "")).strip():
         payload["status"] = ALLOWED_TABLES[table]["status_flow"][0]
@@ -155,7 +152,7 @@ def telegram_create_ticket():
     payload["source"] = payload.get("source") or "telegram"
 
     new_id, error = create_direct_record(
-        db,
+        sess,
         table,
         payload,
         "Telegram bot",
@@ -163,9 +160,10 @@ def telegram_create_ticket():
         action_detail=f"Telegram chat {chat_id}",
     )
     if error:
-        db.rollback()
+        sess.rollback()
         return jsonify({"error": error,
                         "request_id": g.get("request_id", "-")}), 400
-    db.commit()
-    row = db.execute(f"SELECT * FROM {table} WHERE id = ?", (new_id,)).fetchone()
-    return jsonify({"ok": True, "task": dict(row), "task_id": new_id}), 201
+    sess.commit()
+    Model = TABLE_MODELS[table]
+    row = sess.get(Model, new_id)
+    return jsonify({"ok": True, "task": to_dict(row), "task_id": new_id}), 201
