@@ -2,15 +2,33 @@
 
 Validation, status semantics, the weekly-submission row parser, and the
 common "create a record + log it" path. These are pure-data helpers that
-take a db handle and a payload — no Flask routing concerns here.
+take a db handle (raw sqlite3 OR SQLAlchemy session) and a payload —
+no Flask routing concerns here.
+
+Phase 1D-2 transitional dispatch: `create_direct_record` accepts either
+flavor of db handle. When the last raw caller is converted (1D-2j) the
+dispatch collapses to session-only.
 """
 import re
+import sqlite3
 from datetime import date, datetime
 
 from flask import session
+from sqlalchemy.orm import Session as SASession
 
 from ..config import ALLOWED_TABLES
+from ..models import (
+    PersonnelIssue, ProjectWorkTask, Suggestion, TrainingTask, WorkTask,
+)
 from .audit import log_activity
+
+TABLE_MODELS = {
+    "work_tasks": WorkTask,
+    "project_work_tasks": ProjectWorkTask,
+    "training_tasks": TrainingTask,
+    "personnel_issues": PersonnelIssue,
+    "suggestion_box": Suggestion,
+}
 
 
 def overdue_field_for_table(cfg):
@@ -139,7 +157,9 @@ def build_weekly_submission_rows(form=None, min_rows=4):
     return rows
 
 
-def create_direct_record(db, table, payload, source_name, action="submitted", action_detail=""):
+def create_direct_record(db_or_session, table, payload, source_name,
+                         action="submitted", action_detail=""):
+    """Insert a row + write an activity log entry. Returns (record_id, error)."""
     error = validate_record_data(table, payload, creating=True)
     if error:
         return None, error
@@ -149,16 +169,34 @@ def create_direct_record(db, table, payload, source_name, action="submitted", ac
         if not str(payload.get(req, "")).strip():
             return None, f"'{req}' is required"
 
-    fields = [f for f in (cfg["fields"] + ["created_by_user_id", "created_by_name"]) if f in payload]
-    vals = [payload[f] for f in fields]
-    placeholders = ", ".join(["?"] * len(fields))
-    col_names = ", ".join(fields)
-    cur = db.execute(f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})", vals)
-    log_activity(
-        db,
-        table,
-        cur.lastrowid,
-        action,
-        new=action_detail or source_name,
+    if isinstance(db_or_session, sqlite3.Connection):
+        # Legacy raw path. Phase 1D-2j removes this branch.
+        fields = [f for f in (cfg["fields"] + ["created_by_user_id", "created_by_name"]) if f in payload]
+        vals = [payload[f] for f in fields]
+        placeholders = ", ".join(["?"] * len(fields))
+        col_names = ", ".join(fields)
+        cur = db_or_session.execute(
+            f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})", vals,
+        )
+        log_activity(db_or_session, table, cur.lastrowid, action,
+                     new=action_detail or source_name)
+        return cur.lastrowid, None
+
+    if isinstance(db_or_session, SASession):
+        Model = TABLE_MODELS.get(table)
+        if Model is None:
+            return None, f"unknown ticket table: {table}"
+        # Filter payload to columns the model actually has.
+        valid_cols = {c.name for c in Model.__table__.columns}
+        kwargs = {k: v for k, v in payload.items() if k in valid_cols}
+        record = Model(**kwargs)
+        db_or_session.add(record)
+        db_or_session.flush()  # populate record.id without committing
+        log_activity(db_or_session, table, record.id, action,
+                     new=action_detail or source_name)
+        return record.id, None
+
+    raise TypeError(
+        f"create_direct_record expects sqlite3.Connection or sqlalchemy Session, "
+        f"got {type(db_or_session).__name__}"
     )
-    return cur.lastrowid, None
