@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""TaskTrack Telegram bot worker."""
+"""TaskTrack Telegram bot worker.
+
+The bot is a regular HTTP client of TaskTrack — no `from app import …`,
+no direct sqlite3 access. Pairing, activity tracking, and ticket
+creation all flow through /api/v1/telegram/* with the bot-scoped
+TASKTRACK_TOKEN_BOT (legacy TASKTRACK_TOKEN still works during
+the transition; server logs a deprecation each time it's used).
+"""
 
 from __future__ import annotations
 
 import logging
 import os
-import sqlite3
 import time
 from datetime import date, datetime, timedelta
 
 import requests
-
-from app import ALLOWED_TABLES, DB_PATH, validate_record_data
 
 
 LOG = logging.getLogger("tasktrack.telegram_bot")
@@ -21,6 +25,8 @@ logging.basicConfig(
 )
 
 
+# Telegram Bot API token — for talking to api.telegram.org. Distinct
+# from the TaskTrack scoped bot token below.
 BOT_TOKEN = (
     os.environ.get("TASKTRACK_TELEGRAM_TOKEN")
     or os.environ.get("MYTRACK_TELEGRAM_TOKEN")
@@ -29,10 +35,37 @@ BOT_TOKEN = (
 if not BOT_TOKEN:
     raise SystemExit("Telegram bot token not found in environment")
 
+# TaskTrack API base + bot-scoped token — for talking to /api/v1/telegram/*.
+TASKTRACK_API = os.environ.get("TASKTRACK_API_BASE", "http://127.0.0.1:5050").rstrip("/")
+TASKTRACK_BOT_TOKEN = (
+    os.environ.get("TASKTRACK_TOKEN_BOT")
+    or os.environ.get("TASKTRACK_TOKEN")  # legacy; server logs deprecation
+)
+if not TASKTRACK_BOT_TOKEN:
+    raise SystemExit("TASKTRACK_TOKEN_BOT (or legacy TASKTRACK_TOKEN) required")
+
 API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 POLL_TIMEOUT = 45
 REQUEST_TIMEOUT = 60
 SESSIONS: dict[int, dict] = {}
+
+
+def tasktrack_call(method: str, path: str, json_body: dict | None = None) -> dict:
+    """Call /api/v1/telegram/* with the bot-scoped token. Returns {status, body}."""
+    url = f"{TASKTRACK_API}{path}"
+    headers = {"X-Token": TASKTRACK_BOT_TOKEN}
+    try:
+        response = requests.request(method, url, json=json_body, headers=headers, timeout=30)
+    except requests.RequestException as exc:
+        LOG.error("TaskTrack %s %s failed: %s", method, path, exc)
+        return {"status": 0, "body": {"error": str(exc)}}
+    try:
+        data = response.json()
+    except ValueError:
+        data = {"error": f"non-json {response.status_code}"}
+    if response.status_code >= 400:
+        LOG.warning("TaskTrack %s %s -> %s %s", method, path, response.status_code, data)
+    return {"status": response.status_code, "body": data}
 
 
 GUIDED_FLOWS = {
@@ -98,12 +131,6 @@ CATEGORY_BUTTONS = [
 ]
 
 
-def db_connect():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def telegram_api(method: str, payload: dict | None = None, timeout: int = REQUEST_TIMEOUT):
     response = requests.post(f"{API_BASE}/{method}", json=payload or {}, timeout=timeout)
     response.raise_for_status()
@@ -130,48 +157,30 @@ def parse_allowed_chat_ids():
 ENV_ALLOWED_CHAT_IDS = parse_allowed_chat_ids()
 
 
-def load_link_code():
-    conn = db_connect()
-    row = conn.execute("SELECT value FROM app_settings WHERE key = 'telegram_link_code'").fetchone()
-    conn.close()
-    return row["value"] if row else ""
-
-
-def is_authorized(chat_id: int):
+def is_authorized(chat_id: int) -> bool:
     if chat_id in ENV_ALLOWED_CHAT_IDS:
         return True
-    conn = db_connect()
-    row = conn.execute(
-        "SELECT 1 FROM telegram_chat_access WHERE chat_id = ? AND is_active = 1",
-        (chat_id,),
-    ).fetchone()
-    conn.close()
-    return bool(row)
+    res = tasktrack_call("POST", "/api/v1/telegram/touch", {"chat_id": chat_id})
+    return bool(res.get("body", {}).get("paired"))
 
 
-def upsert_linked_chat(user, chat):
-    username = user.get("username", "") or ""
-    display_name = display_name_for_user(user)
-    conn = db_connect()
-    conn.execute(
-        "INSERT INTO telegram_chat_access (chat_id, username, display_name, linked_at, last_seen_at, is_active) "
-        "VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1) "
-        "ON CONFLICT(chat_id) DO UPDATE SET "
-        "username = excluded.username, display_name = excluded.display_name, last_seen_at = CURRENT_TIMESTAMP, is_active = 1",
-        (chat["id"], username, display_name),
-    )
-    conn.commit()
-    conn.close()
+def pair_chat(user: dict, chat: dict, code: str) -> bool:
+    """Pair a chat to TaskTrack using the global link code. Returns True on success."""
+    res = tasktrack_call("POST", "/api/v1/telegram/pair", {
+        "chat_id": chat["id"],
+        "code": code.strip().upper(),
+        "username": user.get("username", "") or "",
+        "display_name": display_name_for_user(user),
+    })
+    return res.get("status") == 200
 
 
-def touch_chat(chat_id: int, user):
-    conn = db_connect()
-    conn.execute(
-        "UPDATE telegram_chat_access SET username = ?, display_name = ?, last_seen_at = CURRENT_TIMESTAMP WHERE chat_id = ?",
-        (user.get("username", "") or "", display_name_for_user(user), chat_id),
-    )
-    conn.commit()
-    conn.close()
+def touch_chat(chat_id: int, user: dict) -> None:
+    tasktrack_call("POST", "/api/v1/telegram/touch", {
+        "chat_id": chat_id,
+        "username": user.get("username", "") or "",
+        "display_name": display_name_for_user(user),
+    })
 
 
 def display_name_for_user(user: dict):
@@ -420,34 +429,23 @@ def build_payload_for_quick_mode(table_name: str, text: str, actor_name: str):
     raise ValueError("Unsupported quick mode")
 
 
-def create_record(table_name: str, payload: dict, actor_name: str):
-    validation_payload = dict(payload)
-    error = validate_record_data(table_name, validation_payload, creating=True)
-    if error:
-        return None, error
+def create_record(table_name: str, payload: dict, actor_name: str, chat_id: int):
+    """Create a ticket via /api/v1/telegram/tickets. Server attributes the row.
 
-    cfg = ALLOWED_TABLES[table_name]
-    for req in cfg["required"]:
-        if not str(validation_payload.get(req, "")).strip():
-            return None, f"{req} is required"
-
-    fields = [f for f in (cfg["fields"] + ["created_by_user_id", "created_by_name"]) if f in validation_payload]
-    values = [validation_payload[f] for f in fields]
-    placeholders = ", ".join(["?"] * len(fields))
-    conn = db_connect()
-    cur = conn.execute(
-        f"INSERT INTO {table_name} ({', '.join(fields)}) VALUES ({placeholders})",
-        values,
-    )
-    record_id = cur.lastrowid
-    title = validation_payload.get("title") or validation_payload.get("person_name") or ""
-    conn.execute(
-        "INSERT INTO activity_log (table_name, record_id, action, field_name, old_value, new_value, user_name) VALUES (?, ?, ?, '', '', ?, ?)",
-        (table_name, record_id, "telegram_created", title, f"Telegram: {actor_name}"),
-    )
-    conn.commit()
-    conn.close()
-    return record_id, None
+    `actor_name` is unused on the bot side now (the server resolves the
+    creator from telegram_chat_access.user_id or falls back to the chat
+    display name). It's kept in the signature so call sites don't have
+    to change.
+    """
+    res = tasktrack_call("POST", "/api/v1/telegram/tickets", {
+        "chat_id": chat_id,
+        "table": table_name,
+        "payload": dict(payload),
+    })
+    body = res.get("body") or {}
+    if res.get("status") in (200, 201):
+        return body.get("task_id"), None
+    return None, body.get("error") or f"server error {res.get('status')}"
 
 
 def start_guided_flow(chat_id: int, table_name: str):
@@ -509,7 +507,7 @@ def finalize_guided_flow(chat_id: int):
     elif table_name == "suggestion_box":
         data.setdefault("review_notes", "Created from Telegram bot.")
 
-    record_id, error = create_record(table_name, data, actor_name)
+    record_id, error = create_record(table_name, data, actor_name, chat_id)
     if error:
         send_message(chat_id, f"I couldn't save that yet: {error}\n\nSend /menu to start over.", main_menu_markup())
     else:
@@ -567,7 +565,7 @@ def handle_quick_input(chat_id: int, user: dict, text: str):
         return False
     actor_name = display_name_for_user(user)
     payload = build_payload_for_quick_mode(session["table"], text, actor_name)
-    record_id, error = create_record(session["table"], payload, actor_name)
+    record_id, error = create_record(session["table"], payload, actor_name, chat_id)
     if error:
         send_message(chat_id, f"I couldn't save that quick capture: {error}", main_menu_markup())
     else:
@@ -588,10 +586,8 @@ def handle_text_message(message: dict):
         return
 
     if text.lower().startswith("/link "):
-        code = text.split(" ", 1)[1].strip().upper()
-        expected = load_link_code().strip().upper()
-        if code and expected and code == expected:
-            upsert_linked_chat(user, chat)
+        code = text.split(" ", 1)[1].strip()
+        if code and pair_chat(user, chat, code):
             send_message(chat_id, "This chat is now linked to TaskTrack. Use the buttons below.", main_menu_markup())
         else:
             send_message(chat_id, "That pairing code did not match. Check the admin page and try again.")
@@ -679,7 +675,7 @@ def smart_capture_save(chat_id: int) -> None:
         send_message(chat_id, "Nothing to save — start with Smart Capture.", main_menu_markup())
         return
     cat, payload = smart_payload_to_record(parsed, actor_name)
-    record_id, error = create_record(cat, payload, actor_name)
+    record_id, error = create_record(cat, payload, actor_name, chat_id)
     if error:
         send_message(chat_id, f"Save failed: {error}", main_menu_markup())
     else:

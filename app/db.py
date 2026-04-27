@@ -234,6 +234,9 @@ def init_db(db_path=None):
     for table_name in ALLOWED_TABLES:
         ensure_column(db, table_name, "created_by_user_id", "INTEGER DEFAULT NULL")
         ensure_column(db, table_name, "created_by_name", "TEXT DEFAULT ''")
+    # Phase 1C-b: telegram chat -> user binding. NULL until admin assigns
+    # or the per-user pairing flow lands (Phase 3 RBAC).
+    ensure_column(db, "telegram_chat_access", "user_id", "INTEGER DEFAULT NULL")
     normalize_ticket_tables(db)
 
     row = db.execute("SELECT value FROM app_settings WHERE key = 'secret_key'").fetchone()

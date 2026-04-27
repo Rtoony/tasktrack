@@ -105,6 +105,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.api import bp as api_bp
     from .routes.admin import bp as admin_bp
     from .routes.maximus import bp as maximus_bp
+    from .routes.telegram_api import bp as telegram_api_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -112,6 +113,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(maximus_bp)
+    app.register_blueprint(telegram_api_bp)
 
     # Feature-flagged blueprints. AI Intake is experimental and currently
     # not part of the company release (decision 2026-04-27); the calendar
