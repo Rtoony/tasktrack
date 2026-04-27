@@ -1,0 +1,32 @@
+[Unit]
+Description=BR Task Tracker (gunicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SERVICE_USER__
+Group=__SERVICE_USER__
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=/etc/tasktrack/tasktrack.env
+ExecStart=__APP_DIR__/.venv/bin/gunicorn -c __APP_DIR__/gunicorn.conf.py wsgi:app
+
+# Run pending Alembic migrations before starting (idempotent on a
+# DB that's already at HEAD).
+ExecStartPre=__APP_DIR__/.venv/bin/python -m flask --app wsgi db-upgrade
+
+# Lifecycle.
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+
+# Hardening — modest, since the prototype runs as a non-privileged user
+# inside a single-purpose VM. Bump these once the deploy matures.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=__DATA_DIR__ /var/log/tasktrack
+
+[Install]
+WantedBy=multi-user.target

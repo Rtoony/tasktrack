@@ -53,7 +53,15 @@ limiter = Limiter(
 
 
 def create_app(db_path=None) -> Flask:
-    """Build a configured Flask app instance."""
+    """Build a configured Flask app instance.
+
+    DB path resolution order:
+      1. `db_path` argument (used by tests and internal callers).
+      2. `DB_PATH` environment variable (used by the production
+         systemd unit + manual `flask` CLI invocations).
+      3. The module-level DB_PATH constant (project-root tracker.db,
+         the dev default).
+    """
     # Configure logging first so subsequent import-time logs go through
     # our formatter. Re-running it on each create_app() is idempotent
     # (dictConfig overwrites the root config).
@@ -64,7 +72,7 @@ def create_app(db_path=None) -> Flask:
         __name__,
         template_folder=os.path.join(project_root, "templates"),
     )
-    app.config["DB_PATH"] = db_path or DB_PATH
+    app.config["DB_PATH"] = db_path or os.environ.get("DB_PATH") or DB_PATH
     app.secret_key = get_secret_key(app.config["DB_PATH"])
     app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
     app.config["SESSION_COOKIE_SECURE"] = _profile.SESSION_COOKIE_SECURE

@@ -1,166 +1,129 @@
-# TaskTrack
+# BR Task Tracker
 
-Internal task and workflow tracker for:
+Internal service-desk / ticket tracker for a civil engineering firm.
+Replaces a mix of email, sticky notes, and "did you do that thing?"
+hallway conversations with five tracked queues:
 
-- `Project Work`
-- `CAD Development`
-- `Training`
-- `Capability Tracking`
-- `Suggestion Box`
+- **Project Work** — billable execution work tied to project numbers.
+- **CAD Development** — discretionary CAD changes, fixes, follow-ups.
+- **Training** — coaching and training requests as planned work.
+- **Capability Tracking** — long-running observations of CAD skill
+  gaps (manager-restricted; HR-adjacent).
+- **Suggestion Box** — ideas that may become assigned work later.
 
-It also includes:
+Plus per-row comments, an activity audit log, full-text search across
+trackers, CSV export, and a public submission-form surface for
+employees who'd rather not open the dashboard.
 
-- auth-gated dashboard
-- admin user/email management
-- isolated admin workflow pages
-- public submission forms
-- Telegram bot capture via `@BR_Task_Admin_Bot`
+## Stack
 
-## Main Files
+Plain, conservative, easy to deploy.
 
-- `app.py`
-  Flask app, SQLite schema, routes, admin APIs, submission forms
-- `templates/index.html`
-  Main dashboard UI and standalone workflow views
-- `templates/admin.html`
-  Admin UI, workflow shortcuts, Telegram pairing controls
-- `templates/weekly_submit.html`
-  Multi-row weekly `Project Work` submission form
-- `templates/simple_submit.html`
-  Shared simple form template for other submission pages
-- `templates/submit_hub.html`
-  Public submission-form hub
-- `telegram_bot.py`
-  Telegram bot worker for mobile task capture
-- `telegram_bot_launcher.sh`
-  Pulls bot token from Vaultwarden item `BR_TRACK_BOT` and starts the bot
-- `tracker.db`
-  SQLite database
+- **Runtime**: Flask + gunicorn behind a Linux systemd unit.
+- **DB**: SQLite (single file, served by SQLAlchemy + Alembic).
+- **Frontend**: Server-rendered Jinja templates + vanilla JS in one
+  big `index.html`. No build step.
+- **Auth**: Local DB-backed (email + werkzeug password hash). LAN
+  access control sits in front for the prototype.
+- **Two deployment profiles**:
+  - `personal` — Josh's local dev install on Nexus (calendar widget,
+    AI Intake experiment, Telegram capture bot).
+  - `company` — the BR rollout (above features off, intake forms
+    require login, structured JSON logs, "BR Task Tracker" branding).
 
-## Runtime
+## Quick start (company VM)
 
-Current app service:
+See **[DEPLOY.md](DEPLOY.md)** for the full runbook. TL;DR:
 
-- user systemd unit: `~/.config/systemd/user/collab-tracker.service`
-- bind: `0.0.0.0:5050`
+```bash
+git clone https://github.com/Rtoony/BR_Tasktrack.git
+cd BR_Tasktrack
+sudo ./scripts/install.sh
+cd /opt/tasktrack
+sudo -u patheal env DB_PATH=/var/lib/tasktrack/tracker.db \
+    ./.venv/bin/python -m flask --app wsgi create-admin \
+        --email you@brengineering.com --name "Your Name"
+curl http://127.0.0.1:5050/healthz   # -> ok
+```
 
-Current Telegram bot service:
+Open `http://<vm-ip>:5050/login` from any LAN workstation, log in with
+the admin email/password you just set, and you're running.
 
-- user systemd unit: `~/.config/systemd/user/tasktrack-telegram-bot.service`
+## Local development
 
-## Current Routes
+```bash
+git clone https://github.com/Rtoony/BR_Tasktrack.git
+cd BR_Tasktrack
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements-dev.txt
+flask --app wsgi db-upgrade            # builds tracker.db at the project root
+flask --app wsgi create-admin --email me@example.com --name "Me"
+make run-dev                            # gunicorn on :5050
+make test                               # pytest (13 in-process + smoke)
+make smoke                              # HTTP smoke against the running service
+```
 
-Dashboard and admin:
+## Architecture in one screen
 
-- `/`
-- `/admin`
-- `/admin/workflow/project`
-- `/admin/workflow/work`
-- `/admin/workflow/training`
-- `/admin/workflow/personnel`
-- `/admin/workflow/suggestions`
+```
+app/
+├── __init__.py        create_app() factory + middleware wiring
+├── config.py          ALLOWED_TABLES / SIMPLE_SUBMISSION_CONFIGS / ADMIN_WORKFLOW_VIEWS
+├── profile.py         TASKTRACK_PROFILE personal|company + feature flags
+├── db.py              SQLAlchemy engine + per-request session
+├── models.py          Declarative models for all 12 tables + to_dict
+├── auth.py            login_required / admin_required decorators
+├── tokens.py          Scoped API tokens (triage / personal / bot)
+├── logging_config.py  text + JSON formatters with request_id field
+├── middleware.py      X-Request-Id round-trip + structured access log
+├── cli.py             flask db-upgrade / init-db / create-admin
+├── services/
+│   ├── audit.py       log_activity (writes to activity_log)
+│   ├── tickets.py     validate / extra fields / create_direct_record
+│   ├── triage.py      AI Intake (LiteLLM) — disabled in company profile
+│   └── calendar.py    Radicale .ics reader — disabled in company profile
+└── routes/
+    ├── auth.py        /login /register /logout
+    ├── main.py        / /healthz
+    ├── intake.py      /intake/* (renamed from /submit/*)
+    ├── api.py         /api/v1/{dashboard,search,<table>/...}
+    ├── admin.py       /admin /api/v1/admin/*
+    ├── triage.py      /api/v1/triage (feature-flagged)
+    ├── maximus.py     /api/v1/maximus/* (feature-flagged)
+    ├── calendar.py    /api/v1/calendar/upcoming (feature-flagged)
+    └── telegram_api.py /api/v1/telegram/{pair,touch,tickets}
 
-Submission forms:
+deploy/
+├── tasktrack.env.template      → /etc/tasktrack/tasktrack.env
+└── tasktrack.service.template  → /etc/systemd/system/tasktrack.service
 
-- `/submit`
-- `/submit/project-work`
-- `/submit/cad-development`
-- `/submit/training`
-- `/submit/capability`
-- `/submit/suggestion-box`
+migrations/                  Alembic baseline + future revisions
+scripts/
+├── install.sh               System install / upgrade (idempotent)
+└── smoke.sh                 HTTP-level smoke against a running instance
+templates/                   Jinja templates (index / admin / login / intake)
+tests/                       pytest — HTTP smoke + in-process Flask test client
+wsgi.py                      Gunicorn entrypoint
+gunicorn.conf.py             Workers / timeout / log routing
+alembic.ini                  Alembic config
+```
 
-## Telegram Bot
+## Long-form planning history
 
-Bot username:
+`SERVICE_DESK_RESTRUCTURE.md` is the canonical record of phased
+implementation decisions: deployment profiles, RBAC vocabulary,
+hierarchical teams, the AI-set-aside decision, etc. Read it if you
+care about the *why* behind the structure.
 
-- `@BR_Task_Admin_Bot`
+## Status
 
-How it works:
+**Phase 1 complete (2026-04-27).** The codebase has been carved from a
+single 2,500-line `app.py` into a proper Flask package, moved from
+ad-hoc runtime schema mutation to Alembic-managed migrations, and
+hardened with structured logs / request IDs / rate limits / scoped
+API tokens. Phase 2 (Postgres) and Phase 3 (RBAC) are the next major
+deliverables.
 
-- admin page shows a pairing code
-- send `/link CODE` to the bot
-- linked chats can create tasks
-- supported modes:
-  - guided `New Task`
-  - `Quick CAD`
-  - `Quick Suggestion`
+## License
 
-## Secrets
-
-Do not create `.env` files.
-
-Current bot startup behavior:
-
-- `telegram_bot_launcher.sh` reads the token from Vaultwarden item `BR_TRACK_BOT`
-- expected custom field name inside that vault item:
-  - `TELEGRAM_BOT_TOKEN`
-
-The web app currently relies on the existing local environment and system setup.
-
-## Migration Notes
-
-For a same-day move to another Linux VM, the minimum copy set is:
-
-- this whole folder: `projects/collab-tracker`
-- user service files:
-  - `~/.config/systemd/user/collab-tracker.service`
-  - `~/.config/systemd/user/tasktrack-telegram-bot.service`
-
-On the target machine:
-
-1. Copy the project folder.
-2. Ensure Python, Flask, Gunicorn, and `requests` are available.
-3. Ensure `bw`, `jq`, and Vaultwarden session access are available if Telegram bot is needed.
-4. Reload systemd:
-   - `systemctl --user daemon-reload`
-5. Enable/start services:
-   - `systemctl --user enable --now collab-tracker.service`
-   - `systemctl --user enable --now tasktrack-telegram-bot.service`
-6. Verify:
-   - `curl http://127.0.0.1:5050/healthz`
-   - `systemctl --user status collab-tracker.service`
-   - `systemctl --user status tasktrack-telegram-bot.service`
-
-## Recommendation For Office Codex
-
-Yes, put the project where the office Codex can read it directly.
-
-Best practical options:
-
-1. Copy the project folder to the office VM.
-2. Keep this `README.md` with it.
-3. Optionally initialize a git repo or push to GitHub later.
-
-GitHub is helpful, but not required for today.
-
-If you need this live quickly, the priority order is:
-
-1. copy project
-2. copy service files
-3. verify dependencies
-4. start services
-5. test login, forms, and Telegram bot
-
-## Recommendation About Git
-
-You are not overthinking it, but GitHub is optional for the immediate move.
-
-Short term:
-
-- local copy or `rsync` is enough
-
-Medium term:
-
-- put this in git
-- keep a remote backup
-- use that as the source of truth for future Codex sessions and VM rebuilds
-
-## Recommended Next Structural Step
-
-If this grows further, add:
-
-- `assigned_to_user_id`
-- `assigned_to_name`
-- restricted `My Work` views for subusers
-
-That is the clean next step toward a simple internal service-desk model.
+(unset — internal firm tool)
