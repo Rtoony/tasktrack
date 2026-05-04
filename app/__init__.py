@@ -109,6 +109,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.admin import bp as admin_bp
     from .routes.telegram_api import bp as telegram_api_bp
     from .routes.attachments import bp as attachments_bp
+    from .routes.links import bp as links_bp
     from .routes.triage import bp as triage_bp
     from .routes.calendar import bp as calendar_bp
     from .routes.maximus import bp as maximus_bp
@@ -120,6 +121,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(telegram_api_bp)
     app.register_blueprint(attachments_bp)
+    app.register_blueprint(links_bp)
     app.register_blueprint(triage_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(maximus_bp)

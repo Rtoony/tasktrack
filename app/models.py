@@ -253,6 +253,24 @@ class Attachment(Base):
     )
 
 
+class Link(Base):
+    __tablename__ = "links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    record_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    source_kind: Mapped[str] = mapped_column(Text, server_default=text("'generic'"))
+    added_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    added_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_links_table_record", "table_name", "record_id"),
+    )
+
+
 class TelegramChatAccess(Base):
     __tablename__ = "telegram_chat_access"
 
@@ -299,6 +317,6 @@ __all__ = [
     "WorkTask", "ProjectWorkTask", "TrainingTask",
     "PersonnelIssue", "Suggestion", "PersonalTask",
     "ActivityLog", "Comment", "TelegramChatAccess",
-    "Attachment",
+    "Attachment", "Link",
     "to_dict",
 ]

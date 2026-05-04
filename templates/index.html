@@ -244,6 +244,30 @@
   .att-upload input[type=file] { font-size:0.74rem; flex:1; }
   .att-status { font-size:0.72rem; color:var(--text-muted); margin-top:0.35rem; min-height:1em; }
   .att-status.error { color:#b91c1c; }
+
+  /* ── Links widget ──────────────────────── */
+  .lnk-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.6rem 0.7rem; background:var(--surface); }
+  .lnk-list { display:flex; flex-direction:column; gap:0.3rem; margin:0; padding:0; list-style:none; }
+  .lnk-row { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); font-size:0.78rem; }
+  .lnk-row .lnk-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lnk-row a { color:var(--accent); text-decoration:none; }
+  .lnk-row a:hover { text-decoration:underline; }
+  .lnk-row .lnk-kind { font-size:0.66rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.04em; padding:0.1rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); white-space:nowrap; }
+  .lnk-row .lnk-kind.paperless { color:#0e7490; border-color:#0e7490; }
+  .lnk-row .lnk-kind.calendar { color:#7c3aed; border-color:#7c3aed; }
+  .lnk-row .lnk-kind.portal { color:#2563eb; border-color:#2563eb; }
+  .lnk-row .lnk-kind.github_pr,
+  .lnk-row .lnk-kind.github_issue,
+  .lnk-row .lnk-kind.github_repo { color:#111827; border-color:#111827; }
+  .lnk-row .lnk-kind.telegram { color:#0284c7; border-color:#0284c7; }
+  .lnk-row button.lnk-del { background:transparent; border:1px solid var(--border-light); color:var(--text-muted); border-radius:var(--radius); padding:0.15rem 0.45rem; font-size:0.72rem; cursor:pointer; }
+  .lnk-row button.lnk-del:hover { color:#b91c1c; border-color:#b91c1c; }
+  .lnk-empty { font-size:0.76rem; color:var(--text-muted); padding:0.3rem 0.1rem; }
+  .lnk-add { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border-light); }
+  .lnk-add input { font-size:0.74rem; flex:1; padding:0.3rem 0.5rem; }
+  .lnk-status { font-size:0.72rem; color:var(--text-muted); margin-top:0.35rem; min-height:1em; }
+  .lnk-status.error { color:#b91c1c; }
+
   .record-meta { border:1px solid var(--border-light); border-radius:var(--radius); background:color-mix(in srgb, var(--surface) 82%, var(--bg)); padding:0.8rem 0.9rem; margin-bottom:0.8rem; }
   .record-meta-title { font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem; }
   .record-meta-copy { font-size:0.78rem; color:var(--text-muted); }
@@ -1349,7 +1373,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future CAD-related links — coming soon.'},
+    {key:'links',label:'Links',type:'links'},
   ],
   project:[
     {key:'project_name',label:'Project Name',type:'text',required:true},
@@ -1361,7 +1385,7 @@ const FORMS = {
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
     {key:'notes',label:'Notes',type:'textarea'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future project links — coming soon.'},
+    {key:'links',label:'Links',type:'links'},
   ],
   training:[
     {key:'title',label:'Title',type:'text',required:true},
@@ -1374,7 +1398,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future training-related links — coming soon.'},
+    {key:'links',label:'Links',type:'links'},
   ],
   personnel:[
     {key:'person_name',label:'Staff Member',type:'text',required:true},
@@ -1388,7 +1412,7 @@ const FORMS = {
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future links to examples, standards, or external training references.'},
+    {key:'links',label:'Links',type:'links'},
   ],
   suggestions:[
     {key:'title',label:'Suggestion Title',type:'text',required:true},
@@ -1401,7 +1425,7 @@ const FORMS = {
     {key:'review_notes',label:'Review Notes / Management Notes',type:'textarea',placeholder:'Use this for internal review notes before promotion.'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future reference links, examples, or related automation resources.'},
+    {key:'links',label:'Links',type:'links'},
   ],
 };
 
@@ -1429,6 +1453,18 @@ function renderField(f,value) {
     if (!editingId) {
       const note=document.createElement('div'); note.className='att-empty';
       note.textContent='Save the record once before uploading attachments.';
+      panel.appendChild(note);
+    } else {
+      panel.dataset.loading='1';
+    }
+    wrap.appendChild(panel);
+    return wrap;
+  } else if (f.type==='links') {
+    const panel=document.createElement('div'); panel.className='lnk-panel';
+    panel.id='lnk-panel';
+    if (!editingId) {
+      const note=document.createElement('div'); note.className='lnk-empty';
+      note.textContent='Save the record once before adding links.';
       panel.appendChild(note);
     } else {
       panel.dataset.loading='1';
@@ -1569,7 +1605,7 @@ function getFormData(table) {
   const data={};
   FORMS[table]
     .flatMap(f=>f.key==='_row'?f.fields:[f])
-    .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments')
+    .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments' && f.type!=='links')
     .forEach(f=>{const el=document.getElementById('f-'+f.key);if(el)data[f.key]=el.value;});
   return data;
 }
@@ -1704,6 +1740,81 @@ async function loadAttachments(table, recordId) {
   panel.appendChild(upload); panel.appendChild(status);
 }
 
+/* ── Links ────────────────────────────────── */
+async function loadLinks(table, recordId) {
+  const panel = document.getElementById('lnk-panel');
+  if (!panel) return;
+  const apiTable = API_MAP[table];
+  let items = [];
+  try {
+    const res = await fetch('/api/v1/links/' + apiTable + '/' + recordId);
+    if (res.status === 401) { window.location='/login'; return; }
+    items = await res.json();
+    if (!Array.isArray(items)) items = [];
+  } catch (e) { items = []; }
+
+  panel.replaceChildren();
+  if (items.length === 0) {
+    const empty = document.createElement('div'); empty.className='lnk-empty';
+    empty.textContent='No links yet.';
+    panel.appendChild(empty);
+  } else {
+    const list = document.createElement('ul'); list.className='lnk-list';
+    items.forEach(l => {
+      const li = document.createElement('li'); li.className='lnk-row';
+      const link = document.createElement('a');
+      link.href = l.url; link.target='_blank'; link.rel='noopener';
+      link.textContent = l.label || l.url; link.className='lnk-name';
+      const kind = document.createElement('span'); kind.className='lnk-kind ' + (l.source_kind || 'generic');
+      kind.textContent = (l.source_kind || 'link').replace(/_/g, ' ');
+      const del = document.createElement('button'); del.type='button'; del.className='lnk-del'; del.textContent='Remove';
+      del.addEventListener('click', async () => {
+        if (!confirm('Remove ' + (l.label || l.url) + '?')) return;
+        const r = await fetch('/api/v1/links/' + l.id, {method:'DELETE'});
+        if (r.status === 401) { window.location='/login'; return; }
+        loadLinks(table, recordId);
+      });
+      li.appendChild(link); li.appendChild(kind); li.appendChild(del);
+      list.appendChild(li);
+    });
+    panel.appendChild(list);
+  }
+
+  const add = document.createElement('div'); add.className='lnk-add';
+  const url = document.createElement('input'); url.type='url'; url.placeholder='https://… (label auto-detected for Nexus apps)';
+  const btn = document.createElement('button'); btn.type='button'; btn.textContent='Add';
+  const status = document.createElement('div'); status.className='lnk-status';
+
+  btn.addEventListener('click', async () => {
+    const u = (url.value || '').trim();
+    if (!u) { status.className='lnk-status error'; status.textContent='Paste a URL first.'; return; }
+    status.className='lnk-status'; status.textContent='Adding…';
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/v1/links/' + apiTable + '/' + recordId, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({url: u}),
+      });
+      if (res.status === 401) { window.location='/login'; return; }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        status.className='lnk-status error';
+        status.textContent = body.error || ('Add failed (' + res.status + ').');
+      } else {
+        url.value=''; status.textContent='';
+        loadLinks(table, recordId);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  url.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+
+  add.appendChild(url); add.appendChild(btn);
+  panel.appendChild(add); panel.appendChild(status);
+}
+
 /* ── Modal open/close ──────────────────────── */
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
@@ -1719,6 +1830,7 @@ function openModal(table,data) {
     body.appendChild(cs);
     loadComments(table,editingId,cs);
     loadAttachments(table,editingId);
+    loadLinks(table,editingId);
   }
 
   document.getElementById('modal-overlay').classList.add('open');
