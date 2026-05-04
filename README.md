@@ -75,7 +75,7 @@ app/
     ├── api.py         /api/v1/{dashboard,search,<table>/...}
     ├── admin.py       /admin /api/v1/admin/*
     ├── triage.py      /api/v1/triage
-    ├── maximus.py     /api/v1/maximus/*
+    ├── inbox.py       /api/v1/inbox  (unified capture surface)
     ├── calendar.py    /api/v1/calendar/upcoming
     ├── telegram_api.py /api/v1/telegram/{pair,touch,tickets}
     └── attachments.py /api/v1/attachments/...

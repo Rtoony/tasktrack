@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from ..config import ALLOWED_TABLES
 from ..models import (
-    PersonnelIssue, ProjectWorkTask, Suggestion, TrainingTask, WorkTask,
+    InboxItem, PersonnelIssue, ProjectWorkTask, Suggestion, TrainingTask, WorkTask,
 )
 from .audit import log_activity
 
@@ -22,6 +22,7 @@ TABLE_MODELS = {
     "training_tasks": TrainingTask,
     "personnel_issues": PersonnelIssue,
     "suggestion_box": Suggestion,
+    "inbox_items": InboxItem,
 }
 
 
@@ -40,6 +41,8 @@ def done_statuses_for_table(table_name):
         return {"Closed"}
     if table_name == "suggestion_box":
         return {"Promoted to CAD", "Declined"}
+    if table_name == "inbox_items":
+        return {"Done", "Archived"}
     return {"Complete"}
 
 

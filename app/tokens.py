@@ -1,13 +1,13 @@
 """Scoped API tokens.
 
 Three scopes:
-- `triage`   — used by /api/v1/triage and /api/v1/<table>/<id>/confirm
-- `personal` — used by /api/v1/maximus/* (Maximus quick-capture)
-- `bot`      — used by Telegram bot (Phase 1C-b, once it becomes a
-               REST client and stops doing direct sqlite3 writes)
+- `triage` — used by /api/v1/triage and /api/v1/<table>/<id>/confirm
+- `bot`    — used by Telegram bot (REST client)
+- `inbox`  — used by /api/v1/inbox capture endpoint (any source: bots,
+             paperless bridge, voice memos, etc.)
 
 Each scope has its own env var (TASKTRACK_TOKEN_TRIAGE,
-TASKTRACK_TOKEN_PERSONAL, TASKTRACK_TOKEN_BOT). For backward
+TASKTRACK_TOKEN_BOT, TASKTRACK_TOKEN_INBOX). For backward
 compatibility, a legacy single-secret TASKTRACK_TOKEN is accepted
 across all scopes; using it logs a deprecation warning so we can
 remove it once the systemd unit + vault item have been updated.
@@ -25,8 +25,8 @@ LOG = logging.getLogger("tasktrack.tokens")
 LEGACY_TOKEN = os.environ.get("TASKTRACK_TOKEN", "")
 SCOPED_TOKENS = {
     "triage": os.environ.get("TASKTRACK_TOKEN_TRIAGE", ""),
-    "personal": os.environ.get("TASKTRACK_TOKEN_PERSONAL", ""),
     "bot": os.environ.get("TASKTRACK_TOKEN_BOT", ""),
+    "inbox": os.environ.get("TASKTRACK_TOKEN_INBOX", ""),
 }
 
 

@@ -18,8 +18,11 @@ may be added alongside them later.
 - AI Intake (LiteLLM) with cloud fallback.
 - Calendar widget reading Radicale `.ics` files.
 - Telegram capture bot (`@MyTrack_Tasks_Bot`).
-- Maximus quick-capture API (`/api/v1/maximus/*`).
-- Scoped API tokens (triage / personal / bot).
+- Unified inbox capture (`/api/v1/inbox`) — single surface for
+  Telegram, paperless, voice memos, and any other Nexus app to
+  drop items into TaskTrack, with optional direct-route into one
+  of the five trackers.
+- Scoped API tokens (triage / bot / inbox).
 - Structured logging with per-request request_id.
 - Rate-limited intake forms.
 - **Attachments via MinIO** (2026-05-04). 50 MB cap, extension
@@ -51,7 +54,5 @@ To be decided after the post-cleanup regroup. Candidates:
 
 - Whether to keep the AI Intake LiteLLM cloud fallback or restrict to
   a local model.
-- Whether the existing `personal_tasks` table (Maximus quick-capture)
-  should stay in TaskTrack or move into its own service.
 - Whether to rename any of the five tracker tables now that the
   firm-shop framing is no longer load-bearing.

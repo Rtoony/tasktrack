@@ -109,6 +109,22 @@ ALLOWED_TABLES = {
         "label": "Suggestion",
         "status_flow": ["New", "Under Review", "Approved", "Promoted to CAD", "Declined"],
     },
+    "inbox_items": {
+        "fields": [
+            "title",
+            "body",
+            "source",
+            "source_ref",
+            "status",
+            "priority",
+            "due_date",
+            "promoted_to_table",
+            "promoted_to_id",
+        ],
+        "required": ["title"],
+        "label": "Inbox Item",
+        "status_flow": ["New", "In Progress", "Done", "Archived"],
+    },
 }
 
 SIMPLE_SUBMISSION_CONFIGS = {
@@ -203,5 +219,9 @@ ADMIN_WORKFLOW_VIEWS = {
     "suggestions": {
         "title": "Suggestion Box",
         "subtitle": "Collect ideas for training, standards, templates, tooling, automation, and process improvements before deciding whether they should become assigned CAD work.",
+    },
+    "inbox": {
+        "title": "Inbox",
+        "subtitle": "Quick captures from Telegram, voice memos, paperless, or any Nexus app — triage from here into the right tracker, or leave as a personal todo.",
     },
 }

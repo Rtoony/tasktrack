@@ -182,27 +182,34 @@ class Suggestion(Base):
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
-class PersonalTask(Base):
-    """Maximus quick-capture. Phase 7 will REMOVE or spin out into its own service."""
-    __tablename__ = "personal_tasks"
+class InboxItem(Base):
+    """Unified capture surface for the Nexus suite.
+
+    Lives forever as a personal todo OR gets promoted into one of the
+    five trackers via /api/v1/inbox/<id>/promote (which records where
+    it went via promoted_to_table / promoted_to_id).
+    """
+    __tablename__ = "inbox_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    category: Mapped[str] = mapped_column(Text, server_default=text("'Personal'"))
+    body: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
+    source_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    status: Mapped[str] = mapped_column(Text, server_default=text("'New'"))
     priority: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))
-    status: Mapped[str] = mapped_column(Text, server_default=text("'Not Started'"))
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    recurrence: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    source: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    promoted_to_table: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    promoted_to_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
-        Index("idx_personal_tasks_status", "status"),
-        Index("idx_personal_tasks_completed", "completed_at"),
+        Index("idx_inbox_items_status", "status"),
+        Index("idx_inbox_items_source_ref", "source", "source_ref"),
     )
 
 
@@ -315,7 +322,7 @@ __all__ = [
     "Base",
     "User", "ApprovedEmail", "AppSetting",
     "WorkTask", "ProjectWorkTask", "TrainingTask",
-    "PersonnelIssue", "Suggestion", "PersonalTask",
+    "PersonnelIssue", "Suggestion", "InboxItem",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
     "to_dict",
