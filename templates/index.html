@@ -229,6 +229,21 @@
   .placeholder-panel { border:1px dashed var(--border); border-radius:var(--radius); padding:0.8rem 0.9rem; background:color-mix(in srgb, var(--surface) 82%, var(--bg)); }
   .placeholder-title { font-size:0.78rem; font-weight:600; color:var(--text); margin-bottom:0.25rem; }
   .placeholder-copy { font-size:0.76rem; color:var(--text-muted); }
+
+  /* ── Attachments widget ─────────────────── */
+  .att-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.6rem 0.7rem; background:var(--surface); }
+  .att-list { display:flex; flex-direction:column; gap:0.3rem; margin:0; padding:0; list-style:none; }
+  .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); font-size:0.78rem; }
+  .att-row .att-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .att-row .att-meta { color:var(--text-muted); font-size:0.7rem; }
+  .att-row a { color:var(--accent); text-decoration:none; }
+  .att-row button.att-del { background:transparent; border:1px solid var(--border-light); color:var(--text-muted); border-radius:var(--radius); padding:0.15rem 0.45rem; font-size:0.72rem; cursor:pointer; }
+  .att-row button.att-del:hover { color:#b91c1c; border-color:#b91c1c; }
+  .att-empty { font-size:0.76rem; color:var(--text-muted); padding:0.3rem 0.1rem; }
+  .att-upload { display:flex; align-items:center; gap:0.5rem; margin-top:0.5rem; padding-top:0.5rem; border-top:1px solid var(--border-light); }
+  .att-upload input[type=file] { font-size:0.74rem; flex:1; }
+  .att-status { font-size:0.72rem; color:var(--text-muted); margin-top:0.35rem; min-height:1em; }
+  .att-status.error { color:#b91c1c; }
   .record-meta { border:1px solid var(--border-light); border-radius:var(--radius); background:color-mix(in srgb, var(--surface) 82%, var(--bg)); padding:0.8rem 0.9rem; margin-bottom:0.8rem; }
   .record-meta-title { font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.35rem; }
   .record-meta-copy { font-size:0.78rem; color:var(--text-muted); }
@@ -1335,7 +1350,8 @@ const FORMS = {
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
-    {key:'attachments_placeholder',label:'Attachments',type:'placeholder-panel',copy:'Placeholder for future CAD-related file attachments linked into your eventual production database and local Linux VM deployment.'},
+    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future CAD-related links and references tied into your company systems.'},
   ],
   project:[
@@ -1347,7 +1363,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
     {key:'notes',label:'Notes',type:'textarea'},
-    {key:'attachments_placeholder',label:'Attachments',type:'placeholder-panel',copy:'Placeholder for future file attachments linked into your eventual production database and local Linux VM deployment.'},
+    {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future project links and references tied into your company systems.'},
   ],
   training:[
@@ -1359,7 +1375,8 @@ const FORMS = {
     {key:'additional_context',label:'Additional Context',type:'textarea'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
-    {key:'attachments_placeholder',label:'Attachments',type:'placeholder-panel',copy:'Placeholder for future training-related file attachments linked into your eventual production database and local Linux VM deployment.'},
+    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future training-related links and references tied into your company systems.'},
   ],
   personnel:[
@@ -1372,7 +1389,8 @@ const FORMS = {
     {key:'_row',fields:[{key:'severity',label:'Impact',type:'select',options:['Low','Medium','High','Critical']},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
     {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
-    {key:'attachments_placeholder',label:'Attachments',type:'placeholder-panel',copy:'Placeholder for future capability-tracking attachments linked into your eventual production database and local Linux VM deployment.'},
+    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future links to examples, standards, or external training references.'},
   ],
   suggestions:[
@@ -1384,7 +1402,8 @@ const FORMS = {
     {key:'expected_value',label:'Why This Would Help',type:'textarea',placeholder:'What pain point would it reduce or what value would it add?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['New','Under Review','Approved','Promoted to CAD','Declined']}]},
     {key:'review_notes',label:'Review Notes / Management Notes',type:'textarea',placeholder:'Use this for internal review notes before promotion.'},
-    {key:'attachments_placeholder',label:'Attachments',type:'placeholder-panel',copy:'Placeholder for future screenshots, examples, or supporting files linked into your eventual production database and local Linux VM deployment.'},
+    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future reference links, examples, or related automation resources.'},
   ],
 };
@@ -1407,6 +1426,18 @@ function renderField(f,value) {
     panel.appendChild(copy);
     wrap.replaceChildren(panel);
     return wrap;
+  } else if (f.type==='attachments') {
+    const panel=document.createElement('div'); panel.className='att-panel';
+    panel.id='att-panel';
+    if (!editingId) {
+      const note=document.createElement('div'); note.className='att-empty';
+      note.textContent='Save the record once before uploading attachments.';
+      panel.appendChild(note);
+    } else {
+      panel.dataset.loading='1';
+    }
+    wrap.appendChild(panel);
+    return wrap;
   } else if (f.type==='date') {
     input=document.createElement('input'); input.type='date'; input.id='f-'+f.key; input.value=value?value.split('T')[0]:'';
   } else if (f.type==='datetime-local') {
@@ -1416,9 +1447,11 @@ function renderField(f,value) {
     if (f.key==='project_number') {
       input.inputMode='numeric';
       input.maxLength=7;
-      input.minLength=7;
-      input.pattern='\\d{4}\\.\\d{2}';
       input.title='Use format ####.##';
+      if (f.required) {
+        input.minLength=7;
+        input.pattern='\\d{4}\\.\\d{2}';
+      }
       input.addEventListener('input', () => {
         let digits = input.value.replace(/\D/g, '').slice(0, 6);
         if (digits.length > 4) digits = digits.slice(0, 4) + '.' + digits.slice(4);
@@ -1539,7 +1572,7 @@ function getFormData(table) {
   const data={};
   FORMS[table]
     .flatMap(f=>f.key==='_row'?f.fields:[f])
-    .filter(f=>f.type!=='placeholder-panel')
+    .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments')
     .forEach(f=>{const el=document.getElementById('f-'+f.key);if(el)data[f.key]=el.value;});
   return data;
 }
@@ -1589,6 +1622,91 @@ async function loadComments(table,recordId,container) {
   container.appendChild(addRow);
 }
 
+/* ── Attachments ──────────────────────────── */
+const ATT_MAX_BYTES = {{ attachment_max_bytes|default(52428800) }};
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+  return (n/(1024*1024)).toFixed(1) + ' MB';
+}
+
+async function loadAttachments(table, recordId) {
+  const panel = document.getElementById('att-panel');
+  if (!panel) return;
+  const apiTable = API_MAP[table];
+  let items = [];
+  try {
+    const res = await fetch('/api/v1/attachments/' + apiTable + '/' + recordId);
+    if (res.status === 401) { window.location='/login'; return; }
+    items = await res.json();
+    if (!Array.isArray(items)) items = [];
+  } catch (e) { items = []; }
+
+  panel.replaceChildren();
+  if (items.length === 0) {
+    const empty = document.createElement('div'); empty.className='att-empty';
+    empty.textContent='No attachments yet.';
+    panel.appendChild(empty);
+  } else {
+    const list = document.createElement('ul'); list.className='att-list';
+    items.forEach(a => {
+      const li = document.createElement('li'); li.className='att-row';
+      const link = document.createElement('a');
+      link.href = a.download_url; link.target='_blank'; link.rel='noopener';
+      link.textContent = a.filename; link.className='att-name';
+      const meta = document.createElement('span'); meta.className='att-meta';
+      meta.textContent = fmtBytes(a.size_bytes) + ' \u2022 ' + (a.uploaded_by_name || 'Unknown');
+      const del = document.createElement('button'); del.type='button'; del.className='att-del'; del.textContent='Delete';
+      del.addEventListener('click', async () => {
+        if (!confirm('Delete ' + a.filename + '?')) return;
+        const r = await fetch('/api/v1/attachments/' + a.id, {method:'DELETE'});
+        if (r.status === 401) { window.location='/login'; return; }
+        loadAttachments(table, recordId);
+      });
+      li.appendChild(link); li.appendChild(meta); li.appendChild(del);
+      list.appendChild(li);
+    });
+    panel.appendChild(list);
+  }
+
+  const upload = document.createElement('div'); upload.className='att-upload';
+  const file = document.createElement('input'); file.type='file'; file.id='att-file';
+  file.accept='.pdf,.dwg,.dxf,.png,.jpg,.jpeg,.xlsx,.docx';
+  const btn = document.createElement('button'); btn.type='button'; btn.textContent='Upload';
+  const status = document.createElement('div'); status.className='att-status'; status.id='att-status';
+
+  btn.addEventListener('click', async () => {
+    const f = file.files && file.files[0];
+    if (!f) { status.className='att-status error'; status.textContent='Pick a file first.'; return; }
+    if (f.size > ATT_MAX_BYTES) {
+      status.className='att-status error';
+      status.textContent='File exceeds the ' + Math.round(ATT_MAX_BYTES/1024/1024) + ' MB limit.';
+      return;
+    }
+    status.className='att-status'; status.textContent='Uploading\u2026';
+    btn.disabled = true;
+    try {
+      const fd = new FormData(); fd.append('file', f);
+      const res = await fetch('/api/v1/attachments/' + apiTable + '/' + recordId, {method:'POST', body:fd});
+      if (res.status === 401) { window.location='/login'; return; }
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        status.className='att-status error';
+        status.textContent = body.error || ('Upload failed (' + res.status + ').');
+      } else {
+        file.value=''; status.textContent='';
+        loadAttachments(table, recordId);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  upload.appendChild(file); upload.appendChild(btn);
+  panel.appendChild(upload); panel.appendChild(status);
+}
+
 /* ── Modal open/close ──────────────────────── */
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
@@ -1603,6 +1721,7 @@ function openModal(table,data) {
     const cs = document.createElement('div'); cs.className='comments-section';
     body.appendChild(cs);
     loadComments(table,editingId,cs);
+    loadAttachments(table,editingId);
   }
 
   document.getElementById('modal-overlay').classList.add('open');

@@ -78,6 +78,16 @@ def create_app(db_path=None) -> Flask:
     app.config["SESSION_COOKIE_SECURE"] = _profile.SESSION_COOKIE_SECURE
     app.config["SESSION_COOKIE_HTTPONLY"] = True
 
+    # Hard upload cap (Werkzeug rejects multipart bodies past this with
+    # a 413 before any request handler runs). Service layer enforces the
+    # same limit again while streaming, so this is only the outer gate.
+    try:
+        app.config["MAX_CONTENT_LENGTH"] = int(
+            os.environ.get("ATTACHMENT_MAX_BYTES", str(50 * 1024 * 1024))
+        )
+    except ValueError:
+        app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+
     # Profile + feature flags into app.config so route handlers and
     # templates can read them via current_app.config[...].
     for key, value in _profile.summary().items():
@@ -108,6 +118,7 @@ def create_app(db_path=None) -> Flask:
             "calendar_enabled": _profile.ENABLE_CALENDAR_WIDGET,
             "brand_name": _profile.BRAND_NAME,
             "tasktrack_profile": _profile.PROFILE,
+            "attachment_max_bytes": app.config["MAX_CONTENT_LENGTH"],
         }
 
     # Always-on blueprints.
@@ -117,6 +128,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.api import bp as api_bp
     from .routes.admin import bp as admin_bp
     from .routes.telegram_api import bp as telegram_api_bp
+    from .routes.attachments import bp as attachments_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -124,6 +136,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(telegram_api_bp)
+    app.register_blueprint(attachments_bp)
 
     # Feature-flagged blueprints.
     # - AI Intake: experimental; off in the initial company release

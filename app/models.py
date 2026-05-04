@@ -87,6 +87,7 @@ class WorkTask(Base):
     source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
     ai_raw_input: Mapped[str] = mapped_column(Text, server_default=text("''"))
     ai_model: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class ProjectWorkTask(Base):
@@ -135,6 +136,7 @@ class TrainingTask(Base):
     source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
     ai_raw_input: Mapped[str] = mapped_column(Text, server_default=text("''"))
     ai_model: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class PersonnelIssue(Base):
@@ -156,6 +158,7 @@ class PersonnelIssue(Base):
     created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class Suggestion(Base):
@@ -176,6 +179,7 @@ class Suggestion(Base):
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class PersonalTask(Base):
@@ -229,6 +233,26 @@ class Comment(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 
+class Attachment(Base):
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    table_name: Mapped[str] = mapped_column(Text, nullable=False)
+    record_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    object_key: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    filename: Mapped[str] = mapped_column(Text, nullable=False)
+    content_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    uploaded_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    uploaded_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    uploaded_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_attachments_table_record", "table_name", "record_id"),
+    )
+
+
 class TelegramChatAccess(Base):
     __tablename__ = "telegram_chat_access"
 
@@ -275,5 +299,6 @@ __all__ = [
     "WorkTask", "ProjectWorkTask", "TrainingTask",
     "PersonnelIssue", "Suggestion", "PersonalTask",
     "ActivityLog", "Comment", "TelegramChatAccess",
+    "Attachment",
     "to_dict",
 ]

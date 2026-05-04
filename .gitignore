@@ -12,3 +12,4 @@ tracker.db
 htmlcov/
 
 .DS_Store
+deploy/minio.env
