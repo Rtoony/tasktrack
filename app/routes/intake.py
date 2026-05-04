@@ -1,29 +1,21 @@
 """Internal request intake forms.
 
-Routes live at /intake/* (renamed from /submit/* in Phase 1C-a). The
-legacy /submit/* paths still resolve via a 308 redirect installed in
-app/__init__.py.
+Routes live at /intake/* (renamed from /submit/*). The legacy /submit/*
+paths still resolve via a 308 redirect installed in app/__init__.py.
 
-When INTAKE_FORM_AUTH=required (company profile default), every intake
-route gates on an active session — anonymous submissions are not
-allowed. In personal profile (INTAKE_FORM_AUTH=none) intake stays open
-to anyone with the URL, matching prior behavior.
-
-Capability submissions have been REMOVED from the intake surface
-entirely, regardless of profile. HR-adjacent observations land via
-the authenticated dashboard only (Phase 4 will give them their own
-restricted module).
+Capability submissions are not part of the intake surface — they land
+via the authenticated dashboard only.
 
 Per-route rate limits run off INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP
-(60/hr personal, 10/hr company). Limits apply per-IP and only on
-POST submissions; GETs stay browseable.
+(default 60/hr per IP). Limits apply only on POST submissions; GETs
+stay browseable.
 """
 import secrets
 from datetime import date, datetime
 from functools import wraps
 
 from flask import (
-    Blueprint, current_app, g, jsonify, redirect, render_template,
+    Blueprint, g, jsonify, redirect, render_template,
     request, session, url_for,
 )
 
@@ -41,18 +33,11 @@ def _intake_post_limit():
 
 
 def intake_auth_required(f):
-    """Apply session auth only when INTAKE_FORM_AUTH=required (company profile)."""
+    """No-op decorator — intake is open. Kept as a seam in case the personal
+    install ever fronts intake URLs publicly and Josh wants to flip it."""
 
     @wraps(f)
     def decorated(*args, **kwargs):
-        if current_app.config.get("INTAKE_FORM_AUTH") == "required":
-            if "user_id" not in session:
-                if request.is_json or request.path.startswith("/api/"):
-                    return jsonify({
-                        "error": "Unauthorized",
-                        "request_id": g.get("request_id", "-"),
-                    }), 401
-                return redirect(url_for("auth.login"))
         return f(*args, **kwargs)
     return decorated
 

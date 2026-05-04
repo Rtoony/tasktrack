@@ -1,8 +1,8 @@
 """Logging configuration.
 
-Two formats, picked by `LOG_FORMAT` (from the deployment profile):
-- `text` — human-readable single-line records (personal default)
-- `structured` — JSON per record (company default; greppable / shipper-friendly)
+Two formats, picked by `LOG_FORMAT`:
+- `text` — human-readable single-line records (default)
+- `structured` — JSON per record (greppable / shipper-friendly)
 
 Every record carries a `request_id` field, populated by the request-ID
 middleware (see app/middleware.py). Records logged outside a request

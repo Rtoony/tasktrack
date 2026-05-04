@@ -1,15 +1,13 @@
-"""TaskTrack — collaborative task tracker (app factory).
+"""TaskTrack — single-user task tracker (app factory).
 
-create_app() builds a fresh Flask instance, registers blueprints
-(some of them gated by deployment-profile feature flags), wires the
-SQLite teardown, configures structured/text logging, the request-ID
+create_app() builds a fresh Flask instance, registers all blueprints,
+wires the SQLite teardown, configures logging, the request-ID
 middleware, error handlers, and the intake-form rate limiter, and
 adds the `flask init-db` CLI command.
 
 Module-level re-exports preserve the legacy import surface:
   from app import ALLOWED_TABLES, DB_PATH, validate_record_data
-which telegram_bot.py and email_intake.py rely on. Phase 1C will
-replace those imports with REST calls and let us drop the re-exports.
+which telegram_bot.py and email_intake.py rely on.
 """
 import logging
 import os
@@ -57,14 +55,9 @@ def create_app(db_path=None) -> Flask:
 
     DB path resolution order:
       1. `db_path` argument (used by tests and internal callers).
-      2. `DB_PATH` environment variable (used by the production
-         systemd unit + manual `flask` CLI invocations).
-      3. The module-level DB_PATH constant (project-root tracker.db,
-         the dev default).
+      2. `DB_PATH` environment variable.
+      3. The module-level DB_PATH constant (project-root tracker.db).
     """
-    # Configure logging first so subsequent import-time logs go through
-    # our formatter. Re-running it on each create_app() is idempotent
-    # (dictConfig overwrites the root config).
     configure_logging(log_format=_profile.LOG_FORMAT)
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -88,18 +81,11 @@ def create_app(db_path=None) -> Flask:
     except ValueError:
         app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
-    # Profile + feature flags into app.config so route handlers and
-    # templates can read them via current_app.config[...].
     for key, value in _profile.summary().items():
         app.config[key] = value
 
-    LOG.info("starting profile=%s ai_intake=%s calendar=%s brand=%r log=%s",
-             _profile.PROFILE, _profile.ENABLE_AI_INTAKE,
-             _profile.ENABLE_CALENDAR_WIDGET, _profile.BRAND_NAME,
-             _profile.LOG_FORMAT)
-    for key, default, override in _profile.overrides():
-        LOG.warning("profile=%s override: %s default=%r env=%r",
-                    _profile.PROFILE, key, default, override)
+    LOG.info("starting brand=%r log=%s bind=%s",
+             _profile.BRAND_NAME, _profile.LOG_FORMAT, _profile.BIND_HOST)
 
     _check_schema_matches_models(app.config["DB_PATH"])
 
@@ -109,19 +95,13 @@ def create_app(db_path=None) -> Flask:
     _register_error_handlers(app)
     _register_legacy_api_redirect(app)
 
-    # Inject feature flags + branding into every Jinja render so templates
-    # can gate UI without route-by-route context plumbing.
     @app.context_processor
-    def _inject_profile_context():
+    def _inject_template_context():
         return {
-            "ai_intake_enabled": _profile.ENABLE_AI_INTAKE,
-            "calendar_enabled": _profile.ENABLE_CALENDAR_WIDGET,
             "brand_name": _profile.BRAND_NAME,
-            "tasktrack_profile": _profile.PROFILE,
             "attachment_max_bytes": app.config["MAX_CONTENT_LENGTH"],
         }
 
-    # Always-on blueprints.
     from .routes.auth import bp as auth_bp
     from .routes.main import bp as main_bp
     from .routes.intake import bp as intake_bp
@@ -129,6 +109,9 @@ def create_app(db_path=None) -> Flask:
     from .routes.admin import bp as admin_bp
     from .routes.telegram_api import bp as telegram_api_bp
     from .routes.attachments import bp as attachments_bp
+    from .routes.triage import bp as triage_bp
+    from .routes.calendar import bp as calendar_bp
+    from .routes.maximus import bp as maximus_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -137,26 +120,9 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(admin_bp)
     app.register_blueprint(telegram_api_bp)
     app.register_blueprint(attachments_bp)
-
-    # Feature-flagged blueprints.
-    # - AI Intake: experimental; off in the initial company release
-    #   (decision 2026-04-27).
-    # - Calendar widget: Nexus-specific Radicale integration; replaced
-    #   by Outlook in Phase 8 for the company product.
-    # - Maximus API: built for Josh's personal AI assistant on Nexus;
-    #   off in the company release (the company VM has nothing calling
-    #   /api/v1/maximus/*). Phase 7 will remove or spin out entirely.
-    if _profile.ENABLE_AI_INTAKE:
-        from .routes.triage import bp as triage_bp
-        app.register_blueprint(triage_bp)
-
-    if _profile.ENABLE_CALENDAR_WIDGET:
-        from .routes.calendar import bp as calendar_bp
-        app.register_blueprint(calendar_bp)
-
-    if _profile.ENABLE_MAXIMUS_API:
-        from .routes.maximus import bp as maximus_bp
-        app.register_blueprint(maximus_bp)
+    app.register_blueprint(triage_bp)
+    app.register_blueprint(calendar_bp)
+    app.register_blueprint(maximus_bp)
 
     from .cli import create_admin_command, db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)
@@ -169,14 +135,10 @@ def create_app(db_path=None) -> Flask:
 def _check_schema_matches_models(db_path: str) -> None:
     """Refuse to start if the live SQLite has drifted from the model definitions.
 
-    Phase 1D-1 ships models alongside the existing raw-sqlite3 routes;
-    this guard catches the case where the DB has been mutated outside
-    of Alembic since the baseline was stamped. Phase 1D-2's blueprint
-    conversion relies on the live DB matching what models claim.
-
-    The check is permissive about EXTRA columns the live DB has (some
-    historical artifacts) but strict about MISSING columns and tables
-    that the models expect.
+    The schema is owned by Alembic; this guard catches the case where
+    the DB has been mutated outside of Alembic since the baseline was
+    stamped. Permissive about EXTRA columns the live DB has but strict
+    about MISSING columns and tables that the models expect.
     """
     engine = create_engine(f"sqlite:///{db_path}")
     insp = inspect(engine)
@@ -206,10 +168,6 @@ def _register_legacy_api_redirect(app: Flask) -> None:
 
     The 308 status preserves the request method (so POST/PUT/DELETE
     aren't downgraded to GET) and tells caches the move is permanent.
-    Active SPA + email_intake.py + scripts/smoke.sh have all been
-    updated to /api/v1/* directly; this catch-all only matters for
-    external clients that still hit the legacy paths (the Telegram
-    bot until 1C-b lands, and any hand-typed curls).
     """
     from flask import redirect
 

@@ -1,9 +1,7 @@
 """Read-only calendar widget — reads Radicale .ics files from disk.
 
-Phase 1B `TASKTRACK_PROFILE=company` will set
-`ENABLE_CALENDAR_WIDGET=false` and the route will short-circuit. Phase
-8 replaces this with an Outlook (Microsoft Graph API) integration for
-the company product.
+Reads ~/.var/lib/radicale/collections by default; override with
+RADICALE_COLLECTIONS_ROOT.
 """
 import os
 from pathlib import Path

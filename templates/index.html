@@ -296,7 +296,7 @@
       {% if not standalone_tab %}
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        {% if ai_intake_enabled %}<button class="tab-btn" data-tab="intake">AI Intake</button>{% endif %}
+        <button class="tab-btn" data-tab="intake">AI Intake</button>
         <button class="tab-btn" data-tab="project">Project Work <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Development <span class="tab-count" id="count-work">0</span></button>
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
@@ -377,19 +377,17 @@
         <div class="dash-card-header">Recent Activity</div>
         <div class="dash-card-body" id="dash-activity"><div class="empty-card">No activity yet</div></div>
       </div>
-      {% if calendar_enabled %}
-      <div class="dash-card">
+            <div class="dash-card">
         <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;">
           <span>&#128197; Upcoming — Nexus Calendar</span>
           <a href="https://portal.roonytoony.dev/calendar" target="_blank" rel="noopener" style="font-size:0.72rem;font-weight:500;color:var(--muted);text-decoration:none;">Open &#8599;</a>
         </div>
         <div class="dash-card-body" id="dash-calendar"><div class="empty-card">Loading…</div></div>
       </div>
-      {% endif %}
     </div>
   </section>
 
-  {% if ai_intake_enabled %}
+  
   <!-- ── AI INTAKE ─────────────────────────── -->
   <section id="sec-intake" class="section">
     <div class="filter-bar">
@@ -541,7 +539,6 @@
       </div>
     </div>
   </section>
-  {% endif %}{# /ai_intake_enabled #}
 
   <!-- ── WORK TASKS ─────────────────────────── -->
   <section id="sec-work" class="section">
@@ -1352,7 +1349,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future CAD-related links and references tied into your company systems.'},
+    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future CAD-related links — coming soon.'},
   ],
   project:[
     {key:'project_name',label:'Project Name',type:'text',required:true},
@@ -1364,7 +1361,7 @@ const FORMS = {
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
     {key:'notes',label:'Notes',type:'textarea'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future project links and references tied into your company systems.'},
+    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future project links — coming soon.'},
   ],
   training:[
     {key:'title',label:'Title',type:'text',required:true},
@@ -1377,7 +1374,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future training-related links and references tied into your company systems.'},
+    {key:'hyperlinks_placeholder',label:'Hyperlinks',type:'placeholder-panel',copy:'Placeholder for future training-related links — coming soon.'},
   ],
   personnel:[
     {key:'person_name',label:'Staff Member',type:'text',required:true},
@@ -2061,7 +2058,7 @@ document.getElementById('confirm-overlay').addEventListener('click',e=>{if(e.tar
 
 /* ── Init ──────────────────────────────────── */
 initTheme();
-{% if ai_intake_enabled %}initIntake();{% endif %}
+initIntake();
 if (STANDALONE_TAB) {
   currentTab = STANDALONE_TAB;
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
