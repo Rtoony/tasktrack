@@ -61,11 +61,6 @@ def submit_hub():
             "copy": "Submit coaching and training needs as planned work items.",
             "href": "/intake/training",
         },
-        {
-            "title": "Suggestion Box",
-            "copy": "Collect ideas for training, templates, standards, automation, and process improvements.",
-            "href": "/intake/suggestion-box",
-        },
     ]
     return render_template("submit_hub.html", forms=forms)
 
@@ -213,13 +208,6 @@ def submit_cad_development():
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_training():
     return _render_simple_submission("training")
-
-
-@bp.route("/intake/suggestion-box", methods=["GET", "POST"])
-@intake_auth_required
-@limiter.limit(_intake_post_limit, methods=["POST"])
-def submit_suggestion_box():
-    return _render_simple_submission("suggestion-box")
 
 
 # Capability submissions have been REMOVED from the intake surface

@@ -26,7 +26,7 @@ ALLOWED_TABLES = {
             "project_number",
         ],
         "required": ["title"],
-        "label": "CAD Development Task",
+        "label": "CAD Dev Task",
         "status_flow": ["Not Started", "In Progress", "On Hold", "Complete"],
     },
     "project_work_tasks": {
@@ -47,7 +47,7 @@ ALLOWED_TABLES = {
             "ai_model",
         ],
         "required": ["project_name", "title", "project_number", "task_description"],
-        "label": "Project Work Task",
+        "label": "Project Task",
         "status_flow": ["Not Started", "In Progress", "On Hold", "Complete"],
     },
     "training_tasks": {
@@ -88,26 +88,8 @@ ALLOWED_TABLES = {
             "project_number",
         ],
         "required": ["person_name", "issue_description"],
-        "label": "Capability Tracking Entry",
+        "label": "Capability Entry",
         "status_flow": ["Observed", "Coaching Planned", "Training Scheduled", "Monitoring", "Closed"],
-    },
-    "suggestion_box": {
-        "fields": [
-            "title",
-            "suggestion_type",
-            "submitted_by",
-            "submitted_for",
-            "summary",
-            "expected_value",
-            "priority",
-            "status",
-            "review_notes",
-            "promoted_work_task_id",
-            "project_number",
-        ],
-        "required": ["title", "summary"],
-        "label": "Suggestion",
-        "status_flow": ["New", "Under Review", "Approved", "Promoted to CAD", "Declined"],
     },
     "inbox_items": {
         "fields": [
@@ -122,10 +104,27 @@ ALLOWED_TABLES = {
             "promoted_to_id",
         ],
         "required": ["title"],
-        "label": "Inbox Item",
+        "label": "Triage Item",
+        "status_flow": ["New", "In Progress", "Done", "Archived"],
+    },
+    "personal_items": {
+        "fields": [
+            "title",
+            "category",
+            "body",
+            "priority",
+            "status",
+            "due_date",
+            "source",
+            "source_ref",
+        ],
+        "required": ["title", "category"],
+        "label": "Personal Item",
         "status_flow": ["New", "In Progress", "Done", "Archived"],
     },
 }
+
+PERSONAL_CATEGORIES = ["Husband", "Father", "House", "Cars"]
 
 SIMPLE_SUBMISSION_CONFIGS = {
     "cad-development": {
@@ -180,32 +179,15 @@ SIMPLE_SUBMISSION_CONFIGS = {
             {"name": "recommended_training", "label": "Recommended Training / Follow-Up", "type": "textarea", "placeholder": "What coaching or training would help?"},
         ],
     },
-    "suggestion-box": {
-        "table": "suggestion_box",
-        "source_name": "Suggestion Box Form",
-        "page_title": "Suggestion Box Submission",
-        "heading": "Submit a Suggestion",
-        "intro": "Use this form to suggest training ideas, standards, templates, automation opportunities, or other useful improvements worth reviewing.",
-        "submit_label": "Submit Suggestion",
-        "success_noun": "suggestion",
-        "fields": [
-            {"name": "title", "label": "Suggestion Title", "type": "text", "required": True, "placeholder": "Short name for the idea"},
-            {"name": "submitted_by", "label": "Your Name", "type": "text", "required": True, "placeholder": "Jane Smith"},
-            {"name": "submitted_for", "label": "For Review By", "type": "select", "options": ["Management", "CAD Team", "Training Leads", "Myself", "General Review"]},
-            {"name": "suggestion_type", "label": "Suggestion Type", "type": "select", "options": ["Training Idea", "CAD Standard", "Template", "Automation", "Process Improvement", "Tooling", "Other"]},
-            {"name": "summary", "label": "Suggestion Summary", "type": "textarea", "required": True, "placeholder": "What is the idea?"},
-            {"name": "expected_value", "label": "Why This Would Help", "type": "textarea", "placeholder": "What problem would it solve or improve?"},
-        ],
-    },
 }
 
 ADMIN_WORKFLOW_VIEWS = {
     "project": {
-        "title": "Project Work",
+        "title": "Project Tasks",
         "subtitle": "Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.",
     },
     "work": {
-        "title": "CAD Development",
+        "title": "CAD Dev",
         "subtitle": "Track requested CAD changes, the discipline involved, and the follow-up context behind the work.",
     },
     "training": {
@@ -213,15 +195,27 @@ ADMIN_WORKFLOW_VIEWS = {
         "subtitle": "Plan and track targeted training work by staff member, skill area, goals, and follow-up context.",
     },
     "personnel": {
-        "title": "Capability Tracking",
+        "title": "Capabilities",
         "subtitle": "Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.",
     },
-    "suggestions": {
-        "title": "Suggestion Box",
-        "subtitle": "Collect ideas for training, standards, templates, tooling, automation, and process improvements before deciding whether they should become assigned CAD work.",
-    },
-    "inbox": {
-        "title": "Inbox",
+    "triage": {
+        "title": "Triage",
         "subtitle": "Quick captures from Telegram, voice memos, paperless, or any Nexus app — triage from here into the right tracker, or leave as a personal todo.",
+    },
+    "personal_husband": {
+        "title": "Husband",
+        "subtitle": "Personal items in the Husband category — relationship, anniversaries, partner-shared logistics.",
+    },
+    "personal_father": {
+        "title": "Father",
+        "subtitle": "Personal items in the Father category — kids, school, family logistics.",
+    },
+    "personal_house": {
+        "title": "House",
+        "subtitle": "Personal items in the House category — home maintenance, projects, household logistics.",
+    },
+    "personal_cars": {
+        "title": "Cars",
+        "subtitle": "Personal items in the Cars category — vehicle maintenance, modifications, registration, repairs.",
     },
 }

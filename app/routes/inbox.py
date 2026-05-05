@@ -216,8 +216,8 @@ def promote(item_id):
 
     # Carry body into whichever long-text field the target tracker has.
     if item.body:
-        for body_field in ("description", "task_description", "issue_description",
-                           "summary", "training_goals", "notes"):
+        for body_field in ("body", "description", "task_description",
+                           "issue_description", "training_goals", "notes"):
             if body_field in cfg["fields"]:
                 payload[body_field] = item.body
                 break

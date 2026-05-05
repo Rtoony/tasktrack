@@ -10,9 +10,9 @@ from datetime import date, datetime
 from flask import session
 from sqlalchemy.orm import Session
 
-from ..config import ALLOWED_TABLES
+from ..config import ALLOWED_TABLES, PERSONAL_CATEGORIES
 from ..models import (
-    InboxItem, PersonnelIssue, ProjectWorkTask, Suggestion, TrainingTask, WorkTask,
+    InboxItem, PersonalItem, PersonnelIssue, ProjectWorkTask, TrainingTask, WorkTask,
 )
 from .audit import log_activity
 
@@ -21,8 +21,8 @@ TABLE_MODELS = {
     "project_work_tasks": ProjectWorkTask,
     "training_tasks": TrainingTask,
     "personnel_issues": PersonnelIssue,
-    "suggestion_box": Suggestion,
     "inbox_items": InboxItem,
+    "personal_items": PersonalItem,
 }
 
 
@@ -39,9 +39,7 @@ def overdue_field_for_table(cfg):
 def done_statuses_for_table(table_name):
     if table_name == "personnel_issues":
         return {"Closed"}
-    if table_name == "suggestion_box":
-        return {"Promoted to CAD", "Declined"}
-    if table_name == "inbox_items":
+    if table_name in ("inbox_items", "personal_items"):
         return {"Done", "Archived"}
     return {"Complete"}
 
@@ -63,10 +61,14 @@ def is_overdue_value(raw_value):
 
 
 def validate_record_data(table, data, creating=False):
-    if table == "suggestion_box":
-        for key in ("title", "suggestion_type", "submitted_by", "submitted_for", "summary", "expected_value", "review_notes"):
-            if key in data and data.get(key) is not None:
-                data[key] = str(data.get(key) or "").strip()
+    if table == "personal_items":
+        if creating or "category" in data:
+            category = str(data.get("category") or "").strip()
+            if not category:
+                return "'category' is required"
+            if category not in PERSONAL_CATEGORIES:
+                return f"category must be one of: {', '.join(PERSONAL_CATEGORIES)}"
+            data["category"] = category
         return None
 
     if table != "project_work_tasks":

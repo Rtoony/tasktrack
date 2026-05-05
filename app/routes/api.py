@@ -14,10 +14,10 @@ from sqlalchemy import desc, select, text
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, Comment, Suggestion, WorkTask, to_dict
+from ..models import ActivityLog, Comment, to_dict
 from ..services.audit import log_activity
 from ..services.tickets import (
-    TABLE_MODELS, create_direct_record, done_statuses_for_table,
+    TABLE_MODELS, done_statuses_for_table,
     extra_create_fields, is_overdue_value, overdue_field_for_table,
     validate_record_data,
 )
@@ -104,13 +104,6 @@ _SEARCH_SQLS = (
         "WHERE person_name LIKE :p OR observed_by LIKE :p OR cad_skill_area LIKE :p "
         "OR issue_description LIKE :p OR incident_context LIKE :p "
         "OR recommended_training LIKE :p OR resolution_notes LIKE :p"
-    ),
-    text(
-        "SELECT id, 'suggestion_box' as source, title as label, summary as detail, "
-        "priority, status, '' as due_date FROM suggestion_box "
-        "WHERE title LIKE :p OR suggestion_type LIKE :p OR submitted_by LIKE :p "
-        "OR submitted_for LIKE :p OR summary LIKE :p OR expected_value LIKE :p "
-        "OR review_notes LIKE :p"
     ),
 )
 
@@ -356,64 +349,3 @@ def delete_record(table, record_id):
     return jsonify({"deleted": record_id})
 
 
-# ── Suggestion Promotion ───────────────────────────────────────────────────
-
-@bp.route("/api/v1/suggestion_box/<int:record_id>/promote-to-cad", methods=["POST"])
-@login_required
-def promote_suggestion_to_cad(record_id):
-    sess = get_session()
-    suggestion = sess.get(Suggestion, record_id)
-    if suggestion is None:
-        return jsonify({"error": "Suggestion not found"}), 404
-    if suggestion.promoted_work_task_id:
-        return jsonify({"error": "Suggestion already promoted"}), 400
-
-    title = (suggestion.title or "").strip()
-    summary = (suggestion.summary or "").strip()
-    expected_value = (suggestion.expected_value or "").strip()
-    submitted_by = (suggestion.submitted_by or "").strip()
-    suggestion_type = (suggestion.suggestion_type or "").strip()
-
-    payload = {
-        "title": title,
-        "cad_skill_area": suggestion_type,
-        "description": summary,
-        "requested_by": submitted_by,
-        "request_reference": (
-            f"Promoted from Suggestion Box #{record_id}\n"
-            f"For review by: {suggestion.submitted_for or 'General Review'}\n"
-            f"Why this would help: {expected_value}"
-        ).strip(),
-        "priority": suggestion.priority or "Medium",
-        "status": "Not Started",
-        "created_by_user_id": session.get("user_id"),
-        "created_by_name": session.get("user_name", ""),
-    }
-    new_id, error = create_direct_record(
-        sess,
-        "work_tasks",
-        payload,
-        "Suggestion Promotion",
-        action="created",
-        action_detail=title,
-    )
-    if error:
-        sess.rollback()
-        return jsonify({"error": error}), 400
-
-    review_notes = (suggestion.review_notes or "").strip()
-    if review_notes:
-        review_notes += "\n\n"
-    review_notes += (
-        f"Promoted to CAD Development task #{new_id} on "
-        f"{datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} "
-        f"by {session.get('user_name', 'Unknown')}."
-    )
-    suggestion.status = "Promoted to CAD"
-    suggestion.promoted_work_task_id = new_id
-    suggestion.review_notes = review_notes
-    suggestion.updated_at = datetime.utcnow()
-    log_activity(sess, "suggestion_box", record_id, "promoted", new=f"CAD task #{new_id}")
-    sess.commit()
-    sess.refresh(suggestion)
-    return jsonify({"suggestion": to_dict(suggestion), "work_task_id": new_id})

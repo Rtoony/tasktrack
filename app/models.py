@@ -61,7 +61,7 @@ class AppSetting(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
-# ── Trackers (Project Work / CAD Dev / Training / Capability / Suggestion) ─
+# ── Trackers (Project Tasks / CAD Dev / Training / Capabilities / Personal) ─
 
 class WorkTask(Base):
     __tablename__ = "work_tasks"
@@ -161,25 +161,34 @@ class PersonnelIssue(Base):
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
-class Suggestion(Base):
-    __tablename__ = "suggestion_box"
+class PersonalItem(Base):
+    """Personal-life items, categorized into Husband/Father/House/Cars.
+
+    One table, one schema — the UI presents four filtered tabs (one per
+    category). Triage items can promote into this table with a category
+    override; the promote endpoint already plumbs that through.
+    """
+    __tablename__ = "personal_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
-    suggestion_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    submitted_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    submitted_for: Mapped[str] = mapped_column(Text, server_default=text("'Management'"))
-    summary: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    expected_value: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, server_default=text("''"))
     priority: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))
     status: Mapped[str] = mapped_column(Text, server_default=text("'New'"))
-    review_notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    promoted_work_task_id: Mapped[Optional[int]] = mapped_column(Integer)
+    due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
+    source_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+
+    __table_args__ = (
+        Index("idx_personal_items_category", "category"),
+        Index("idx_personal_items_status", "status"),
+    )
 
 
 class InboxItem(Base):
@@ -322,7 +331,7 @@ __all__ = [
     "Base",
     "User", "ApprovedEmail", "AppSetting",
     "WorkTask", "ProjectWorkTask", "TrainingTask",
-    "PersonnelIssue", "Suggestion", "InboxItem",
+    "PersonnelIssue", "PersonalItem", "InboxItem",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
     "to_dict",
