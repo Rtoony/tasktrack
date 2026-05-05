@@ -4,6 +4,9 @@ __pycache__/
 *.pyd
 
 tracker.db
+tracker.db-shm
+tracker.db-wal
+tracker.db.before-*
 *.bak
 *.bak-*
 
