@@ -6,18 +6,11 @@
 <title>{{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Dark-only palette. The light/dark toggle was removed in favor of a
+     single deliberate dark identity for TaskTrack. --accent is swapped
+     per active tab via the body:has() selectors below, giving each
+     tab a recognizable color without restyling everything. */
   :root {
-    --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-light: #eef0f3;
-    --text: #1a1d23; --text-muted: #6b7280; --text-light: #9ca3af;
-    --accent: #2563eb; --accent-hover: #1d4ed8; --accent-light: #eff6ff;
-    --danger: #dc2626; --danger-hover: #b91c1c; --danger-light: #fef2f2;
-    --warn: #f59e0b; --warn-light: #fffbeb;
-    --success: #059669; --success-light: #ecfdf5;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-    --shadow-lg: 0 12px 32px rgba(0,0,0,0.12);
-    --radius: 8px; --radius-lg: 12px;
-  }
-  [data-theme="dark"] {
     --bg: #11161d; --surface: #18212b; --border: #2a3643; --border-light: #22303c;
     --text: #ecf2f8; --text-muted: #a5b2bf; --text-light: #7f91a3;
     --accent: #60a5fa; --accent-hover: #3b82f6; --accent-light: #182c45;
@@ -26,7 +19,27 @@
     --success: #34d399; --success-light: #15372f;
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.35); --shadow-md: 0 6px 20px rgba(0,0,0,0.35);
     --shadow-lg: 0 16px 40px rgba(0,0,0,0.45);
+    --radius: 8px; --radius-lg: 12px;
   }
+
+  /* Per-tab accent colors. The :has() selector tints --accent based on
+     which tab is currently active. Keeps the rest of the dark palette
+     stable so only intentionally accent-tinted UI (tab indicator,
+     primary button, focus rings, stat-card values, section heading
+     bar) shifts color when you switch tabs. */
+  body:has(.tab-btn.active[data-tab="triage"])           { --accent:#fbbf24; --accent-hover:#f59e0b; --accent-light:#3a2a05; }
+  body:has(.tab-btn.active[data-tab="project"])          { --accent:#818cf8; --accent-hover:#6366f1; --accent-light:#1e1f4a; }
+  body:has(.tab-btn.active[data-tab="work"])             { --accent:#22d3ee; --accent-hover:#06b6d4; --accent-light:#062f3d; }
+  body:has(.tab-btn.active[data-tab="training"])         { --accent:#34d399; --accent-hover:#10b981; --accent-light:#0a3a2a; }
+  body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#facc15; --accent-hover:#eab308; --accent-light:#3a3008; }
+  body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#fb7185; --accent-hover:#f43f5e; --accent-light:#3a121d; }
+  body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#a78bfa; --accent-hover:#8b5cf6; --accent-light:#251a3d; }
+  body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#fb923c; --accent-hover:#f97316; --accent-light:#3a1d08; }
+  body:has(.tab-btn.active[data-tab="personal_cars"])    { --accent:#94a3b8; --accent-hover:#64748b; --accent-light:#1f2730; }
+  /* Section heading colored bar — sits left of every section title to
+     anchor the per-tab color in the content area. */
+  .section-heading { position:relative; padding-left:0.85rem; }
+  .section-heading::before { content:''; position:absolute; left:0; top:0.2rem; bottom:0.2rem; width:3px; background:var(--accent); border-radius:2px; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; min-height:100vh; }
 
@@ -41,8 +54,6 @@
   .user-name { font-size:0.8rem; color:var(--text-muted); }
   .btn-logout,.btn-admin-link { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; }
   .btn-logout:hover,.btn-admin-link:hover { background:var(--bg); color:var(--text); }
-  .theme-toggle { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; }
-  .theme-toggle:hover { background:var(--bg); color:var(--text); }
   .context-badge { font-size:0.72rem; color:var(--text-muted); font-weight:500; margin-left:0.5rem; }
 
   /* ── Search ──────────────────────────────── */
@@ -160,8 +171,7 @@
   .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:0.68rem; font-weight:600; letter-spacing:0.02em; white-space:nowrap; cursor:default; }
   .badge-clickable { cursor:pointer; transition:all 0.1s; }
   .badge-clickable:hover { filter:brightness(0.92); transform:scale(1.04); }
-  .badge-ai-review { background:#fef3c7; color:#92400e; border:1px solid #fde68a; margin-left:6px; }
-  [data-theme="dark"] .badge-ai-review { background:#3a3214; color:#fde68a; border-color:#78350f; }
+  .badge-ai-review { background:#3a3214; color:#fde68a; border:1px solid #78350f; margin-left:6px; }
   tr.ai-review td { box-shadow:inset 3px 0 0 var(--warn); }
   .badge-high,.badge-critical { background:#fef2f2; color:#b91c1c; }
   .badge-medium { background:#fffbeb; color:#b45309; }
@@ -373,7 +383,6 @@
       <a href="/intake" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
       <a href="https://portal.roonytoony.dev/calendar" class="btn-admin-link" target="_blank" rel="noopener" title="Open the Nexus calendar in a new tab">&#128197; Calendar</a>
       {% endif %}
-      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Toggle color theme">Dark Mode</button>
       <span class="user-name">{{ user_name }}</span>
       {% if user_role == 'admin' %}<a href="/admin" class="btn-admin-link">Admin</a>{% endif %}
       <a href="/logout" class="btn-logout">Sign out</a>
@@ -1153,34 +1162,11 @@ let tableCache = {
   work:[], project:[], training:[], personnel:[],
   triage:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
 };
-const THEME_KEY = 'tasktrack-theme';
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
 function today() { return new Date().toISOString().split('T')[0]; }
-
-function preferredTheme() {
-  const stored = localStorage.getItem(THEME_KEY);
-  if (stored === 'light' || stored === 'dark') return stored;
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
-
-function applyTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  const btn = document.getElementById('theme-toggle');
-  if (btn) btn.textContent = theme === 'dark' ? 'Light Mode' : 'Dark Mode';
-}
-
-function initTheme() {
-  applyTheme(preferredTheme());
-  const btn = document.getElementById('theme-toggle');
-  btn.addEventListener('click', () => {
-    const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
-    localStorage.setItem(THEME_KEY, next);
-    applyTheme(next);
-  });
-}
 
 function isOverdue(r) {
   const d = r.due_at || r.due_date || r.reported_date || '';
@@ -2546,7 +2532,6 @@ function closeConfirm() { document.getElementById('confirm-overlay').classList.r
 document.getElementById('confirm-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeConfirm();});
 
 /* ── Init ──────────────────────────────────── */
-initTheme();
 initIntake();
 if (STANDALONE_TAB) {
   currentTab = STANDALONE_TAB;
