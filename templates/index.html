@@ -72,6 +72,11 @@
   .section { display:none; }
   .section.active { display:block; }
 
+  /* Inbox has more columns than any other tab; let it use the extra room
+     on wide monitors without affecting the other tabs' layout. */
+  body:has(#sec-inbox.active) .container,
+  body:has(#sec-inbox.active) .header-inner { max-width:1700px; }
+
   /* ── Dashboard ───────────────────────────── */
   .dash-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem; }
   .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:1.1rem 1.25rem; box-shadow:var(--shadow-sm); }
@@ -218,6 +223,20 @@
   .preset-title { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.55rem; }
   .priority-lock-tag { display:inline-block; margin-left:0.4rem; font-size:0.62rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--warn); background:var(--warn-light); padding:1px 6px; border-radius:4px; }
 
+  /* Capture & triage card on the dashboard (was the AI Intake tab) */
+  .capture-card .capture-body { padding:1rem 1.1rem 1.1rem; }
+  .capture-card .intake-card { border:none; padding:0; box-shadow:none; background:transparent; }
+  .capture-card .intake-card h3 { display:none; }
+  .capture-card .intake-card .intake-sub { margin-bottom:0.7rem; }
+  .capture-textarea { min-height:96px !important; }
+  .intake-options-toggle-row { margin-top:0.7rem; }
+  .intake-options-toggle { background:none; border:none; font-family:inherit; font-size:0.74rem; font-weight:600; color:var(--text-muted); cursor:pointer; padding:0.25rem 0; display:inline-flex; align-items:center; gap:0.35rem; }
+  .intake-options-toggle:hover { color:var(--text); }
+  .intake-options-toggle .caret { display:inline-block; transition:transform 0.15s; font-size:0.7rem; }
+  .intake-options-toggle[aria-expanded="true"] .caret { transform:rotate(90deg); }
+  .intake-options-collapsible { display:none; margin-top:0.85rem; }
+  .intake-options-collapsible.open { display:block; }
+
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
   .field label { display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
@@ -320,7 +339,7 @@
       {% if not standalone_tab %}
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="intake">AI Intake</button>
+        <button class="tab-btn" data-tab="inbox">Inbox <span class="tab-count" id="count-inbox">0</span></button>
         <button class="tab-btn" data-tab="project">Project Work <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Development <span class="tab-count" id="count-work">0</span></button>
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
@@ -364,11 +383,175 @@
 
   <!-- ── DASHBOARD ──────────────────────────── -->
   <section id="sec-dashboard" class="section active">
+
+    <!-- Capture & triage card (was the standalone AI Intake tab) -->
+    <div class="dash-card capture-card" style="margin-bottom:1.25rem;">
+      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <span>Capture &amp; triage</span>
+        <button class="btn btn-sm btn-export" type="button" onclick="openModal('inbox')">+ Add Inbox Item</button>
+      </div>
+      <div class="capture-body">
+        <div class="intake-layout">
+          <div class="intake-card">
+            <h3>Raw Input</h3>
+            <div class="intake-sub">Paste a messy note, forwarded email, or voice transcript &mdash; the AI will draft a structured task. For a quick personal todo without triage, use <strong>+ Add Inbox Item</strong> instead.</div>
+            <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
+            <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
+
+            <div class="preset-panel" id="intake-preset-panel">
+              <div class="preset-title">Presets (lock values before triage runs)</div>
+              <div class="field-row">
+                <div class="field">
+                  <label>Target table</label>
+                  <select id="preset-target">
+                    <option value="work_tasks" selected>CAD Development</option>
+                    <option value="project_work_tasks">Project Work</option>
+                    <option value="training_tasks">Training</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Priority lock</label>
+                  <select id="preset-priority">
+                    <option value="">Auto (let AI decide)</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Source</label>
+                  <select id="preset-source">
+                    <option value="paste" selected>Paste</option>
+                    <option value="voice">Voice note</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="phone">Phone call</option>
+                    <option value="contractor">Contractor</option>
+                    <option value="email">Email (manual)</option>
+                    <option value="inbox">Inbox capture</option>
+                  </select>
+                </div>
+              </div>
+              <div class="intake-options-toggle-row">
+                <button type="button" class="intake-options-toggle" id="intake-options-toggle" aria-expanded="false">
+                  <span class="caret">&#9656;</span> <span class="label">Show more options</span>
+                </button>
+              </div>
+              <div class="intake-options-collapsible" id="intake-options-collapsible">
+                <div class="field-row">
+                  <div class="field" id="preset-skill-wrap">
+                    <label id="preset-skill-label">CAD Skill Area</label>
+                    <input type="text" id="preset-skill" placeholder="Grading, detailing, standards, markup&hellip;">
+                  </div>
+                  <div class="field">
+                    <label>Requested By</label>
+                    <input type="text" id="preset-requested-by" placeholder="Who's asking?">
+                  </div>
+                  <div class="field" id="preset-due-date-wrap">
+                    <label>Due Date</label>
+                    <input type="date" id="preset-due-date">
+                  </div>
+                  <div class="field" id="preset-due-at-wrap" style="display:none">
+                    <label>Due Date &amp; Time</label>
+                    <input type="datetime-local" id="preset-due-at">
+                  </div>
+                </div>
+
+                <!-- Project Work extra fields -->
+                <div id="preset-project-extras" style="display:none">
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Project Number (####.##)</label>
+                      <input type="text" id="preset-project-number" placeholder="2301.04" inputmode="numeric" maxlength="7">
+                      <div class="intake-hint" id="preset-project-number-hint">Auto-detected from raw text when possible.</div>
+                    </div>
+                    <div class="field">
+                      <label>Billing Phase (##)</label>
+                      <input type="text" id="preset-billing-phase" placeholder="03" inputmode="numeric" maxlength="2">
+                    </div>
+                  </div>
+                  <div class="field-row">
+                    <div class="field">
+                      <label>Project Name</label>
+                      <input type="text" id="preset-project-name" placeholder="Falls back to the triage gist">
+                    </div>
+                    <div class="field">
+                      <label>Engineer</label>
+                      <input type="text" id="preset-engineer" placeholder="Falls back to Requested By">
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Training extra fields -->
+                <div id="preset-training-extras" style="display:none">
+                  <div class="field">
+                    <label>Trainees</label>
+                    <input type="text" id="preset-trainees" placeholder="Comma-separated. Falls back to Requested By.">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="intake-row">
+              <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
+              <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
+              <span class="intake-status" id="intake-status"></span>
+            </div>
+          </div>
+          <div class="intake-card" id="intake-preview-card" style="display:none">
+            <h3>Preview &mdash; edit before confirm</h3>
+            <div class="intake-meta" id="intake-preview-meta"></div>
+            <div class="field">
+              <label>Title (gist)</label>
+              <input type="text" id="intake-field-title">
+            </div>
+            <div class="starter-block" id="intake-starter-wrap" style="display:none">
+              <div class="starter-label">Start here &rarr;</div>
+              <div class="field" style="margin-bottom:0">
+                <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
+              </div>
+            </div>
+            <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
+              <div class="clarify-label">Questions to resolve</div>
+              <div class="field" style="margin-bottom:0">
+                <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
+              </div>
+            </div>
+            <div class="field">
+              <label id="intake-field-description-label">Checklist (markdown)</label>
+              <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
+              <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
+            </div>
+            <div class="field">
+              <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
+              <select id="intake-field-priority">
+                <option value="Low">Low</option>
+                <option value="Medium" selected>Medium</option>
+                <option value="High">High</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Software / Tools</label>
+              <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
+              <div class="intake-hint">Comma-separated. Applies to CAD Development tasks; folded into context for Project/Training.</div>
+            </div>
+            <div class="intake-row">
+              <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
+              <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="dash-grid" id="dash-stats"></div>
     {% if user_role == 'admin' %}
     <div class="dash-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header">Admin Workflow Shortcuts</div>
       <div class="shortcut-grid">
+        <a class="shortcut-link" href="/admin/workflow/inbox">
+          <div class="shortcut-title">Inbox</div>
+          <div class="shortcut-copy">Triage external captures into the right tracker.</div>
+        </a>
         <a class="shortcut-link" href="/admin/workflow/project">
           <div class="shortcut-title">Project Work</div>
           <div class="shortcut-copy">Open the project-only manager view.</div>
@@ -411,155 +594,41 @@
     </div>
   </section>
 
-  
-  <!-- ── AI INTAKE ─────────────────────────── -->
-  <section id="sec-intake" class="section">
+  <!-- ── INBOX ─────────────────────────────── -->
+  <section id="sec-inbox" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">AI Intake</h2>
-        <div class="section-subtitle">Paste a messy note, forwarded email, or voice transcript. Pre-set anything the AI shouldn&rsquo;t guess, then preview and confirm.</div>
+        <h2 class="section-title">Inbox</h2>
+        <div class="section-subtitle">Quick captures from Telegram, voice memos, paperless, or any Nexus app. Triage from here into the right tracker, or leave as a personal todo.</div>
       </div>
+      <select class="filter-select" id="filter-inbox-status" onchange="loadTable('inbox')">
+        <option value="">All Statuses</option>
+        <option value="New">New</option>
+        <option value="In Progress">In Progress</option>
+        <option value="Done">Done</option>
+        <option value="Archived">Archived</option>
+      </select>
+      <select class="filter-select" id="filter-inbox-priority" onchange="loadTable('inbox')">
+        <option value="">All Priorities</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+      </select>
+      <a class="btn btn-sm btn-export" href="/api/v1/inbox_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('inbox')">+ Add Inbox Item</button>
     </div>
-    <div class="intake-layout">
-      <div class="intake-card">
-        <h3>Raw Input</h3>
-        <div class="intake-sub">Dump anything &mdash; the more context the better.</div>
-        <textarea id="intake-input" class="intake-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
-        <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
-
-        <div class="preset-panel" id="intake-preset-panel">
-          <div class="preset-title">Presets (lock values before triage runs)</div>
-          <div class="field-row">
-            <div class="field">
-              <label>Target table</label>
-              <select id="preset-target">
-                <option value="work_tasks" selected>CAD Development</option>
-                <option value="project_work_tasks">Project Work</option>
-                <option value="training_tasks">Training</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Priority lock</label>
-              <select id="preset-priority">
-                <option value="">Auto (let AI decide)</option>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Source</label>
-              <select id="preset-source">
-                <option value="paste" selected>Paste</option>
-                <option value="voice">Voice note</option>
-                <option value="meeting">Meeting</option>
-                <option value="phone">Phone call</option>
-                <option value="contractor">Contractor</option>
-                <option value="email">Email (manual)</option>
-                <option value="inbox">Inbox capture</option>
-              </select>
-            </div>
-          </div>
-          <div class="field-row">
-            <div class="field" id="preset-skill-wrap">
-              <label id="preset-skill-label">CAD Skill Area</label>
-              <input type="text" id="preset-skill" placeholder="Grading, detailing, standards, markup&hellip;">
-            </div>
-            <div class="field">
-              <label>Requested By</label>
-              <input type="text" id="preset-requested-by" placeholder="Who's asking?">
-            </div>
-            <div class="field" id="preset-due-date-wrap">
-              <label>Due Date</label>
-              <input type="date" id="preset-due-date">
-            </div>
-            <div class="field" id="preset-due-at-wrap" style="display:none">
-              <label>Due Date &amp; Time</label>
-              <input type="datetime-local" id="preset-due-at">
-            </div>
-          </div>
-
-          <!-- Project Work extra fields -->
-          <div id="preset-project-extras" style="display:none">
-            <div class="field-row">
-              <div class="field">
-                <label>Project Number (####.##)</label>
-                <input type="text" id="preset-project-number" placeholder="2301.04" inputmode="numeric" maxlength="7">
-                <div class="intake-hint" id="preset-project-number-hint">Auto-detected from raw text when possible.</div>
-              </div>
-              <div class="field">
-                <label>Billing Phase (##)</label>
-                <input type="text" id="preset-billing-phase" placeholder="03" inputmode="numeric" maxlength="2">
-              </div>
-            </div>
-            <div class="field-row">
-              <div class="field">
-                <label>Project Name</label>
-                <input type="text" id="preset-project-name" placeholder="Falls back to the triage gist">
-              </div>
-              <div class="field">
-                <label>Engineer</label>
-                <input type="text" id="preset-engineer" placeholder="Falls back to Requested By">
-              </div>
-            </div>
-          </div>
-
-          <!-- Training extra fields -->
-          <div id="preset-training-extras" style="display:none">
-            <div class="field">
-              <label>Trainees</label>
-              <input type="text" id="preset-trainees" placeholder="Comma-separated. Falls back to Requested By.">
-            </div>
-          </div>
-        </div>
-
-        <div class="intake-row">
-          <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
-          <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
-          <span class="intake-status" id="intake-status"></span>
-        </div>
-      </div>
-      <div class="intake-card" id="intake-preview-card" style="display:none">
-        <h3>Preview &mdash; edit before confirm</h3>
-        <div class="intake-meta" id="intake-preview-meta"></div>
-        <div class="field">
-          <label>Title (gist)</label>
-          <input type="text" id="intake-field-title">
-        </div>
-        <div class="starter-block" id="intake-starter-wrap" style="display:none">
-          <div class="starter-label">Start here &rarr;</div>
-          <div class="field" style="margin-bottom:0">
-            <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
-          </div>
-        </div>
-        <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
-          <div class="clarify-label">Questions to resolve</div>
-          <div class="field" style="margin-bottom:0">
-            <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
-          </div>
-        </div>
-        <div class="field">
-          <label id="intake-field-description-label">Checklist (markdown)</label>
-          <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
-          <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
-        </div>
-        <div class="field">
-          <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
-          <select id="intake-field-priority">
-            <option value="Low">Low</option>
-            <option value="Medium" selected>Medium</option>
-            <option value="High">High</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Software / Tools</label>
-          <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
-          <div class="intake-hint">Comma-separated. Applies to CAD Development tasks; folded into context for Project/Training.</div>
-        </div>
-        <div class="intake-row">
-          <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
-          <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
-        </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th data-col="title" data-table="inbox">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="source" data-table="inbox">Source <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="inbox">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="inbox">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="inbox">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="inbox">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th data-col="promoted_to_table" data-table="inbox">Promoted <span class="sort-arrow">&#9650;</span></th>
+        <th></th>
+      </tr></thead><tbody id="tbody-inbox"></tbody></table>
+      <div class="empty-state" id="empty-inbox" style="display:none">
+        <div class="empty-title">Inbox is empty</div>
+        <p class="empty-copy">When external apps capture items they&rsquo;ll show up here. You can also <strong>+ Add Inbox Item</strong> manually for a quick personal todo, then promote it into a tracker later if it grows into real work.</p>
       </div>
     </div>
   </section>
@@ -786,12 +855,38 @@
   </div>
 </div>
 
+<!-- ── Inbox Promote Modal ───────────────────── -->
+<div class="modal-overlay" id="promote-overlay">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <h3>Promote to tracker</h3>
+      <button class="modal-close" onclick="closeInboxPromote()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.85rem">
+        Send <strong id="promote-title" style="color:var(--text)"></strong> to:
+      </p>
+      <div class="field">
+        <label>Target tracker</label>
+        <select id="promote-target"></select>
+      </div>
+      <p style="font-size:0.75rem;color:var(--text-light);margin-top:0.85rem">
+        The inbox item will be archived and a new record created in the chosen tracker. Body, priority, and due date are carried over where the target supports them.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeInboxPromote()">Cancel</button>
+      <button class="btn btn-primary" id="promote-go-btn">Promote</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 /* All user values are escaped via DOM textContent or the esc() helper. */
 
-const API_MAP = { work:'work_tasks', project:'project_work_tasks', training:'training_tasks', personnel:'personnel_issues', suggestions:'suggestion_box' };
+const API_MAP = { work:'work_tasks', project:'project_work_tasks', training:'training_tasks', personnel:'personnel_issues', suggestions:'suggestion_box', inbox:'inbox_items' };
 
 /* ── Markdown (tiny renderer; DOM-only, no innerHTML) ────────────────── */
 function appendInlineMd(parent, str) {
@@ -890,10 +985,10 @@ function parseJsonList(raw) {
 }
 function listToLines(raw) { return parseJsonList(raw).join('\n'); }
 function listToCsv(raw) { return parseJsonList(raw).join(', '); }
-const TABLE_LABELS = { work_tasks:'CAD Development', project_work_tasks:'Project Work', training_tasks:'Training', personnel_issues:'Capability Tracking', suggestion_box:'Suggestion Box' };
-const sortState = { work:{col:'id',order:'asc'}, project:{col:'id',order:'asc'}, training:{col:'id',order:'asc'}, personnel:{col:'id',order:'asc'}, suggestions:{col:'id',order:'asc'} };
+const TABLE_LABELS = { work_tasks:'CAD Development', project_work_tasks:'Project Work', training_tasks:'Training', personnel_issues:'Capability Tracking', suggestion_box:'Suggestion Box', inbox_items:'Inbox' };
+const sortState = { work:{col:'id',order:'asc'}, project:{col:'id',order:'asc'}, training:{col:'id',order:'asc'}, personnel:{col:'id',order:'asc'}, suggestions:{col:'id',order:'asc'}, inbox:{col:'created_at',order:'desc'} };
 let currentTab = 'dashboard', editingId = null, editingTable = null;
-let tableCache = { work:[], project:[], training:[], personnel:[], suggestions:[] };
+let tableCache = { work:[], project:[], training:[], personnel:[], suggestions:[], inbox:[] };
 const THEME_KEY = 'tasktrack-theme';
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 
@@ -1180,7 +1275,16 @@ async function loadTable(table) {
 
   const tbody = document.getElementById('tbody-'+table);
   const empty = document.getElementById('empty-'+table);
-  document.getElementById('count-'+table).textContent = data.length;
+  const countEl = document.getElementById('count-'+table);
+  if (countEl) {
+    // Inbox count = the active queue (New + In Progress) regardless of which
+    // status filter the user has selected. Other tables show total rows.
+    if (table === 'inbox') {
+      countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
+    } else {
+      countEl.textContent = data.length;
+    }
+  }
 
   tbody.replaceChildren();
   if (!filtered.length) { empty.style.display='block'; return; }
@@ -1230,6 +1334,15 @@ async function loadTable(table) {
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeCell(r.promoted_work_task_id ? ('CAD #'+r.promoted_work_task_id) : '—','cell-supporting'));
       tr.appendChild(makeSuggestionActions(r));
+    } else if (table==='inbox') {
+      tr.appendChild(makeCell(r.title,'cell-title'));
+      tr.appendChild(makeCell(r.source,'cell-supporting'));
+      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickableStatus(table,r));
+      tr.appendChild(makeDateCell(r.due_date));
+      tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
+      tr.appendChild(makeCell(formatPromotedTarget(r),'cell-supporting'));
+      tr.appendChild(makeInboxActions(r));
     } else {
       tr.appendChild(makeCell(r.person_name,'cell-title'));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
@@ -1272,6 +1385,7 @@ function itemLabel(table) {
     training: 'training task',
     personnel: 'capability note',
     suggestions: 'suggestion',
+    inbox: 'inbox item',
   }[table] || 'record';
 }
 
@@ -1328,6 +1442,73 @@ function makeSuggestionActions(r) {
   td.appendChild(del);
   return td;
 }
+
+/* ── Inbox-specific helpers ──────────────────────────────────────────── */
+
+const INBOX_PROMOTE_TARGETS = [
+  { table: 'project_work_tasks', label: 'Project Work', tab: 'project' },
+  { table: 'work_tasks',         label: 'CAD Development', tab: 'work' },
+  { table: 'training_tasks',     label: 'Training', tab: 'training' },
+  { table: 'suggestion_box',     label: 'Suggestion Box', tab: 'suggestions' },
+];
+
+function formatPromotedTarget(r) {
+  if (!r.promoted_to_table || !r.promoted_to_id) return '—';
+  const meta = INBOX_PROMOTE_TARGETS.find(t => t.table === r.promoted_to_table);
+  const label = meta ? meta.label : (TABLE_LABELS[r.promoted_to_table] || r.promoted_to_table);
+  return label + ' #' + r.promoted_to_id;
+}
+
+function makeInboxActions(r) {
+  const td = document.createElement('td'); td.className='cell-actions';
+  const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.textContent='Edit';
+  edit.addEventListener('click',()=>editRecord('inbox',r.id));
+  td.appendChild(edit);
+
+  const promote = document.createElement('button');
+  const promoted = !!r.promoted_to_id;
+  promote.className = promoted ? 'btn btn-cancel' : 'btn btn-ghost';
+  promote.textContent = promoted ? 'Promoted' : 'Promote';
+  promote.disabled = promoted;
+  if (!promoted) {
+    promote.addEventListener('click',()=>openInboxPromote(r));
+  }
+  td.appendChild(promote);
+
+  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.textContent='Del';
+  del.addEventListener('click',()=>confirmDelete('inbox',r.id,r.title));
+  td.appendChild(del);
+  return td;
+}
+
+function openInboxPromote(r) {
+  const overlay = document.getElementById('promote-overlay');
+  document.getElementById('promote-title').textContent = r.title || '';
+  const sel = document.getElementById('promote-target');
+  sel.replaceChildren();
+  INBOX_PROMOTE_TARGETS.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.table;
+    opt.textContent = t.label;
+    sel.appendChild(opt);
+  });
+  document.getElementById('promote-go-btn').onclick = async () => {
+    const targetTable = sel.value;
+    const res = await api('POST','/api/v1/inbox/'+r.id+'/promote',{ target_table: targetTable });
+    if (res && !res.error) {
+      const meta = INBOX_PROMOTE_TARGETS.find(t => t.table === targetTable);
+      toast('promoted to ' + (meta ? meta.label : targetTable));
+      closeInboxPromote();
+      loadTable('inbox');
+      if (meta) loadTable(meta.tab);
+      loadDashboard();
+    } else if (res?.error) {
+      toast(res.error);
+    }
+  };
+  overlay.classList.add('open');
+}
+function closeInboxPromote() { document.getElementById('promote-overlay').classList.remove('open'); }
 
 function formatDateTime(d) {
   try {
@@ -1426,6 +1607,12 @@ const FORMS = {
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
+  ],
+  inbox:[
+    {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
+    {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
+    {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
+    {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
   ],
 };
 
@@ -1818,7 +2005,7 @@ async function loadLinks(table, recordId) {
 /* ── Modal open/close ──────────────────────── */
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
-  const labels={work:'CAD Development Task',project:'Project Work Task',training:'Training Task',personnel:'Capability Tracking Entry',suggestions:'Suggestion'};
+  const labels={work:'CAD Development Task',project:'Project Work Task',training:'Training Task',personnel:'Capability Tracking Entry',suggestions:'Suggestion',inbox:'Inbox Item'};
   document.getElementById('modal-title').textContent=(editingId?'Edit ':'Add ')+labels[table];
   const body=document.getElementById('modal-body');
   body.replaceChildren();
@@ -2134,6 +2321,18 @@ function intakeClear() {
   intakeSetStatus('');
 }
 
+const INTAKE_OPTIONS_KEY = 'tasktrack-intake-options-open';
+
+function setIntakeOptions(open) {
+  const btn = document.getElementById('intake-options-toggle');
+  const panel = document.getElementById('intake-options-collapsible');
+  if (!btn || !panel) return;
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  panel.classList.toggle('open', open);
+  btn.querySelector('.label').textContent = open ? 'Hide options' : 'Show more options';
+  try { localStorage.setItem(INTAKE_OPTIONS_KEY, open ? '1' : '0'); } catch {}
+}
+
 function initIntake() {
   const pv = document.getElementById('intake-preview-btn');
   if (!pv) return;
@@ -2142,6 +2341,17 @@ function initIntake() {
   document.getElementById('intake-regen-btn').addEventListener('click', intakeRunPreview);
   document.getElementById('intake-confirm-btn').addEventListener('click', intakeConfirm);
   document.getElementById('preset-target').addEventListener('change', intakeApplyTargetLayout);
+  // Show/hide the preset panel below the always-visible target/priority/source row.
+  const toggleBtn = document.getElementById('intake-options-toggle');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      const isOpen = toggleBtn.getAttribute('aria-expanded') === 'true';
+      setIntakeOptions(!isOpen);
+    });
+    let openInitial = false;
+    try { openInitial = localStorage.getItem(INTAKE_OPTIONS_KEY) === '1'; } catch {}
+    setIntakeOptions(openInitial);
+  }
   // Normalize numeric preset inputs.
   const pn = document.getElementById('preset-project-number');
   if (pn) pn.addEventListener('input', () => {
@@ -2178,7 +2388,7 @@ if (STANDALONE_TAB) {
   loadTable(STANDALONE_TAB);
 } else {
   loadDashboard();
-  loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel'); loadTable('suggestions');
+  loadTable('inbox'); loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel'); loadTable('suggestions');
 }
 </script>
 </body>
