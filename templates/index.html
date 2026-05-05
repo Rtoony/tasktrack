@@ -72,10 +72,15 @@
   .section { display:none; }
   .section.active { display:block; }
 
-  /* Inbox has more columns than any other tab; let it use the extra room
+  /* Triage has more columns than any other tab; let it use the extra room
      on wide monitors without affecting the other tabs' layout. */
-  body:has(#sec-inbox.active) .container,
-  body:has(#sec-inbox.active) .header-inner { max-width:1700px; }
+  body:has(#sec-triage.active) .container,
+  body:has(#sec-triage.active) .header-inner { max-width:1700px; }
+
+  /* ── Tab dividers (Work / Personal section labels in the tab bar) ── */
+  .tab-divider { display:inline-flex; align-items:center; padding:0 0.5rem 0 0.65rem; height:56px; position:relative; }
+  .tab-divider::before { content:''; position:absolute; left:0; top:18px; bottom:18px; width:1px; background:var(--border); }
+  .tab-divider-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.08em; padding-left:0.4rem; }
 
   /* ── Dashboard ───────────────────────────── */
   .dash-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem; }
@@ -339,12 +344,17 @@
       {% if not standalone_tab %}
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="inbox">Inbox <span class="tab-count" id="count-inbox">0</span></button>
-        <button class="tab-btn" data-tab="project">Project Work <span class="tab-count" id="count-project">0</span></button>
-        <button class="tab-btn" data-tab="work">CAD Development <span class="tab-count" id="count-work">0</span></button>
+        <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
+        <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
+        <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
+        <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
-        <button class="tab-btn" data-tab="personnel">Capability Tracking <span class="tab-count" id="count-personnel">0</span></button>
-        <button class="tab-btn" data-tab="suggestions">Suggestion Box <span class="tab-count" id="count-suggestions">0</span></button>
+        <button class="tab-btn" data-tab="personnel">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
+        <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Personal</span></span>
+        <button class="tab-btn" data-tab="personal_husband">Husband <span class="tab-count" id="count-personal_husband">0</span></button>
+        <button class="tab-btn" data-tab="personal_father">Father <span class="tab-count" id="count-personal_father">0</span></button>
+        <button class="tab-btn" data-tab="personal_house">House <span class="tab-count" id="count-personal_house">0</span></button>
+        <button class="tab-btn" data-tab="personal_cars">Cars <span class="tab-count" id="count-personal_cars">0</span></button>
       </nav>
       {% endif %}
     </div>
@@ -388,13 +398,13 @@
     <div class="dash-card capture-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Capture &amp; triage</span>
-        <button class="btn btn-sm btn-export" type="button" onclick="openModal('inbox')">+ Add Inbox Item</button>
+        <button class="btn btn-sm btn-export" type="button" onclick="openModal('triage')">+ Add Triage Item</button>
       </div>
       <div class="capture-body">
         <div class="intake-layout">
           <div class="intake-card">
             <h3>Raw Input</h3>
-            <div class="intake-sub">Paste a messy note, forwarded email, or voice transcript &mdash; the AI will draft a structured task. For a quick personal todo without triage, use <strong>+ Add Inbox Item</strong> instead.</div>
+            <div class="intake-sub">Paste a messy note, forwarded email, or voice transcript &mdash; the AI will draft a structured task. For a quick personal todo without triage, use <strong>+ Add Triage Item</strong> instead.</div>
             <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
             <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
 
@@ -404,8 +414,8 @@
                 <div class="field">
                   <label>Target table</label>
                   <select id="preset-target">
-                    <option value="work_tasks" selected>CAD Development</option>
-                    <option value="project_work_tasks">Project Work</option>
+                    <option value="work_tasks" selected>CAD Dev</option>
+                    <option value="project_work_tasks">Project Tasks</option>
                     <option value="training_tasks">Training</option>
                   </select>
                 </div>
@@ -427,7 +437,7 @@
                     <option value="phone">Phone call</option>
                     <option value="contractor">Contractor</option>
                     <option value="email">Email (manual)</option>
-                    <option value="inbox">Inbox capture</option>
+                    <option value="triage">Triage capture</option>
                   </select>
                 </div>
               </div>
@@ -456,7 +466,7 @@
                   </div>
                 </div>
 
-                <!-- Project Work extra fields -->
+                <!-- Project Tasks extra fields -->
                 <div id="preset-project-extras" style="display:none">
                   <div class="field-row">
                     <div class="field">
@@ -532,7 +542,7 @@
             <div class="field">
               <label>Software / Tools</label>
               <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
-              <div class="intake-hint">Comma-separated. Applies to CAD Development tasks; folded into context for Project/Training.</div>
+              <div class="intake-hint">Comma-separated. Applies to CAD Dev tasks; folded into context for Project/Training.</div>
             </div>
             <div class="intake-row">
               <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
@@ -548,16 +558,16 @@
     <div class="dash-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header">Admin Workflow Shortcuts</div>
       <div class="shortcut-grid">
-        <a class="shortcut-link" href="/admin/workflow/inbox">
-          <div class="shortcut-title">Inbox</div>
-          <div class="shortcut-copy">Triage external captures into the right tracker.</div>
+        <a class="shortcut-link" href="/admin/workflow/triage">
+          <div class="shortcut-title">Triage</div>
+          <div class="shortcut-copy">Sort external captures into the right tracker.</div>
         </a>
         <a class="shortcut-link" href="/admin/workflow/project">
-          <div class="shortcut-title">Project Work</div>
+          <div class="shortcut-title">Project Tasks</div>
           <div class="shortcut-copy">Open the project-only manager view.</div>
         </a>
         <a class="shortcut-link" href="/admin/workflow/work">
-          <div class="shortcut-title">CAD Development</div>
+          <div class="shortcut-title">CAD Dev</div>
           <div class="shortcut-copy">Open the CAD-only manager view.</div>
         </a>
         <a class="shortcut-link" href="/admin/workflow/training">
@@ -565,12 +575,24 @@
           <div class="shortcut-copy">Open the training-only manager view.</div>
         </a>
         <a class="shortcut-link" href="/admin/workflow/personnel">
-          <div class="shortcut-title">Capability Tracking</div>
+          <div class="shortcut-title">Capabilities</div>
           <div class="shortcut-copy">Open the capability-only manager view.</div>
         </a>
-        <a class="shortcut-link" href="/admin/workflow/suggestions">
-          <div class="shortcut-title">Suggestion Box</div>
-          <div class="shortcut-copy">Open the suggestions-only manager view.</div>
+        <a class="shortcut-link" href="/admin/workflow/personal_husband">
+          <div class="shortcut-title">Husband</div>
+          <div class="shortcut-copy">Open the Husband personal-items view.</div>
+        </a>
+        <a class="shortcut-link" href="/admin/workflow/personal_father">
+          <div class="shortcut-title">Father</div>
+          <div class="shortcut-copy">Open the Father personal-items view.</div>
+        </a>
+        <a class="shortcut-link" href="/admin/workflow/personal_house">
+          <div class="shortcut-title">House</div>
+          <div class="shortcut-copy">Open the House personal-items view.</div>
+        </a>
+        <a class="shortcut-link" href="/admin/workflow/personal_cars">
+          <div class="shortcut-title">Cars</div>
+          <div class="shortcut-copy">Open the Cars personal-items view.</div>
         </a>
       </div>
     </div>
@@ -595,40 +617,40 @@
   </section>
 
   <!-- ── INBOX ─────────────────────────────── -->
-  <section id="sec-inbox" class="section">
+  <section id="sec-triage" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Inbox</h2>
+        <h2 class="section-title">Triage</h2>
         <div class="section-subtitle">Quick captures from Telegram, voice memos, paperless, or any Nexus app. Triage from here into the right tracker, or leave as a personal todo.</div>
       </div>
-      <select class="filter-select" id="filter-inbox-status" onchange="loadTable('inbox')">
+      <select class="filter-select" id="filter-triage-status" onchange="loadTable('triage')">
         <option value="">All Statuses</option>
         <option value="New">New</option>
         <option value="In Progress">In Progress</option>
         <option value="Done">Done</option>
         <option value="Archived">Archived</option>
       </select>
-      <select class="filter-select" id="filter-inbox-priority" onchange="loadTable('inbox')">
+      <select class="filter-select" id="filter-triage-priority" onchange="loadTable('triage')">
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <a class="btn btn-sm btn-export" href="/api/v1/inbox_items/export.csv">CSV</a>
-      <button class="btn btn-primary" onclick="openModal('inbox')">+ Add Inbox Item</button>
+      <button class="btn btn-primary" onclick="openModal('triage')">+ Add Triage Item</button>
     </div>
     <div class="table-wrap">
       <table><thead><tr>
-        <th data-col="title" data-table="inbox">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="source" data-table="inbox">Source <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="inbox">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="inbox">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="inbox">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="inbox">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th data-col="promoted_to_table" data-table="inbox">Promoted <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="title" data-table="triage">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="source" data-table="triage">Source <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="triage">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="triage">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="triage">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="triage">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th data-col="promoted_to_table" data-table="triage">Promoted <span class="sort-arrow">&#9650;</span></th>
         <th></th>
-      </tr></thead><tbody id="tbody-inbox"></tbody></table>
-      <div class="empty-state" id="empty-inbox" style="display:none">
-        <div class="empty-title">Inbox is empty</div>
-        <p class="empty-copy">When external apps capture items they&rsquo;ll show up here. You can also <strong>+ Add Inbox Item</strong> manually for a quick personal todo, then promote it into a tracker later if it grows into real work.</p>
+      </tr></thead><tbody id="tbody-triage"></tbody></table>
+      <div class="empty-state" id="empty-triage" style="display:none">
+        <div class="empty-title">Triage is empty</div>
+        <p class="empty-copy">When external apps capture items into Triage they&rsquo;ll show up here. You can also <strong>+ Add Triage Item</strong> manually for a quick personal todo, then promote it into a tracker later if it grows into real work.</p>
       </div>
     </div>
   </section>
@@ -637,7 +659,7 @@
   <section id="sec-work" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">CAD Development</h2>
+        <h2 class="section-title">CAD Dev</h2>
         <div class="section-subtitle">Track requested CAD changes, the discipline involved, and the follow-up context behind the work.</div>
       </div>
       <select class="filter-select" id="filter-work-status" onchange="loadTable('work')">
@@ -676,7 +698,7 @@
   <section id="sec-project" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Project Work</h2>
+        <h2 class="section-title">Project Tasks</h2>
         <div class="section-subtitle">Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.</div>
       </div>
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
@@ -716,7 +738,7 @@
   <section id="sec-training" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Training Tasks</h2>
+        <h2 class="section-title">Training</h2>
         <div class="section-subtitle">Plan and track targeted training work by staff member, skill area, goals, and follow-up context.</div>
       </div>
       <select class="filter-select" id="filter-training-status" onchange="loadTable('training')">
@@ -755,7 +777,7 @@
   <section id="sec-personnel" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Capability Tracking</h2>
+        <h2 class="section-title">Capabilities</h2>
         <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
       </div>
       <select class="filter-select" id="filter-personnel-status" onchange="loadTable('personnel')">
@@ -787,41 +809,142 @@
     </div>
   </section>
 
-  <!-- ── SUGGESTION BOX ────────────────────── -->
-  <section id="sec-suggestions" class="section">
+  <!-- ── PERSONAL — Husband ─────────────────── -->
+  <section id="sec-personal_husband" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Suggestion Box</h2>
-        <div class="section-subtitle">Collect ideas for training, standards, templates, tooling, automation, and process improvements before deciding whether they should become assigned CAD work.</div>
+        <h2 class="section-title">Husband</h2>
+        <div class="section-subtitle">Personal items in the Husband category — relationship, anniversaries, partner-shared logistics.</div>
       </div>
-      <select class="filter-select" id="filter-suggestions-status" onchange="loadTable('suggestions')">
+      <select class="filter-select" id="filter-personal_husband-status" onchange="loadTable('personal_husband')">
         <option value="">All Statuses</option>
-        <option value="New">New</option><option value="Under Review">Under Review</option>
-        <option value="Approved">Approved</option><option value="Promoted to CAD">Promoted to CAD</option>
-        <option value="Declined">Declined</option>
+        <option value="New">New</option><option value="In Progress">In Progress</option>
+        <option value="Done">Done</option><option value="Archived">Archived</option>
       </select>
-      <select class="filter-select" id="filter-suggestions-priority" onchange="loadTable('suggestions')">
+      <select class="filter-select" id="filter-personal_husband-priority" onchange="loadTable('personal_husband')">
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
-      <a class="btn btn-sm btn-export" href="/intake/suggestion-box" target="_blank" rel="noopener">Submit Form</a>
-      <a class="btn btn-sm btn-export" href="/api/v1/suggestion_box/export.csv">CSV</a>
-      <button class="btn btn-primary" onclick="openModal('suggestions')">+ Add Suggestion</button>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal_husband')">+ Add Husband Item</button>
     </div>
     <div class="table-wrap">
       <table><thead><tr>
-        <th data-col="title" data-table="suggestions">Suggestion <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="suggestion_type" data-table="suggestions">Type <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="submitted_by" data-table="suggestions">Submitted By <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="submitted_for" data-table="suggestions">For Review By <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="suggestions">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="suggestions">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="promoted_work_task_id" data-table="suggestions">Promoted <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="title" data-table="personal_husband">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal_husband">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal_husband">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal_husband">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal_husband">Captured <span class="sort-arrow">&#9660;</span></th>
         <th></th>
-      </tr></thead><tbody id="tbody-suggestions"></tbody></table>
-      <div class="empty-state" id="empty-suggestions" style="display:none">
-        <div class="empty-title">No suggestions yet</div>
-        <p class="empty-copy">Use this section to collect worthwhile ideas before they become assigned work. Good ideas can be reviewed here and then promoted directly into <strong>CAD Development</strong> when they are ready to be acted on.</p>
+      </tr></thead><tbody id="tbody-personal_husband"></tbody></table>
+      <div class="empty-state" id="empty-personal_husband" style="display:none">
+        <div class="empty-title">Nothing in Husband yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Husband Item</strong> to capture something that belongs in this category.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PERSONAL — Father ──────────────────── -->
+  <section id="sec-personal_father" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">Father</h2>
+        <div class="section-subtitle">Personal items in the Father category — kids, school, family logistics.</div>
+      </div>
+      <select class="filter-select" id="filter-personal_father-status" onchange="loadTable('personal_father')">
+        <option value="">All Statuses</option>
+        <option value="New">New</option><option value="In Progress">In Progress</option>
+        <option value="Done">Done</option><option value="Archived">Archived</option>
+      </select>
+      <select class="filter-select" id="filter-personal_father-priority" onchange="loadTable('personal_father')">
+        <option value="">All Priorities</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+      </select>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal_father')">+ Add Father Item</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th data-col="title" data-table="personal_father">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal_father">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal_father">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal_father">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal_father">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th></th>
+      </tr></thead><tbody id="tbody-personal_father"></tbody></table>
+      <div class="empty-state" id="empty-personal_father" style="display:none">
+        <div class="empty-title">Nothing in Father yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Father Item</strong> to capture something that belongs in this category.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PERSONAL — House ───────────────────── -->
+  <section id="sec-personal_house" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">House</h2>
+        <div class="section-subtitle">Personal items in the House category — home maintenance, projects, household logistics.</div>
+      </div>
+      <select class="filter-select" id="filter-personal_house-status" onchange="loadTable('personal_house')">
+        <option value="">All Statuses</option>
+        <option value="New">New</option><option value="In Progress">In Progress</option>
+        <option value="Done">Done</option><option value="Archived">Archived</option>
+      </select>
+      <select class="filter-select" id="filter-personal_house-priority" onchange="loadTable('personal_house')">
+        <option value="">All Priorities</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+      </select>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal_house')">+ Add House Item</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th data-col="title" data-table="personal_house">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal_house">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal_house">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal_house">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal_house">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th></th>
+      </tr></thead><tbody id="tbody-personal_house"></tbody></table>
+      <div class="empty-state" id="empty-personal_house" style="display:none">
+        <div class="empty-title">Nothing in House yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add House Item</strong> to capture something that belongs in this category.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── PERSONAL — Cars ────────────────────── -->
+  <section id="sec-personal_cars" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">Cars</h2>
+        <div class="section-subtitle">Personal items in the Cars category — vehicle maintenance, modifications, registration, repairs.</div>
+      </div>
+      <select class="filter-select" id="filter-personal_cars-status" onchange="loadTable('personal_cars')">
+        <option value="">All Statuses</option>
+        <option value="New">New</option><option value="In Progress">In Progress</option>
+        <option value="Done">Done</option><option value="Archived">Archived</option>
+      </select>
+      <select class="filter-select" id="filter-personal_cars-priority" onchange="loadTable('personal_cars')">
+        <option value="">All Priorities</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+      </select>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal_cars')">+ Add Cars Item</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th data-col="title" data-table="personal_cars">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal_cars">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal_cars">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal_cars">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal_cars">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th></th>
+      </tr></thead><tbody id="tbody-personal_cars"></tbody></table>
+      <div class="empty-state" id="empty-personal_cars" style="display:none">
+        <div class="empty-title">Nothing in Cars yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Cars Item</strong> to capture something that belongs in this category.</p>
       </div>
     </div>
   </section>
@@ -855,12 +978,12 @@
   </div>
 </div>
 
-<!-- ── Inbox Promote Modal ───────────────────── -->
+<!-- ── Triage Promote Modal ───────────────────── -->
 <div class="modal-overlay" id="promote-overlay">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
       <h3>Promote to tracker</h3>
-      <button class="modal-close" onclick="closeInboxPromote()">&times;</button>
+      <button class="modal-close" onclick="closeTriagePromote()">&times;</button>
     </div>
     <div class="modal-body">
       <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.85rem">
@@ -871,11 +994,11 @@
         <select id="promote-target"></select>
       </div>
       <p style="font-size:0.75rem;color:var(--text-light);margin-top:0.85rem">
-        The inbox item will be archived and a new record created in the chosen tracker. Body, priority, and due date are carried over where the target supports them.
+        The triage item will be archived and a new record created in the chosen tracker. Body, priority, and due date are carried over where the target supports them.
       </p>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-cancel" onclick="closeInboxPromote()">Cancel</button>
+      <button class="btn btn-cancel" onclick="closeTriagePromote()">Cancel</button>
       <button class="btn btn-primary" id="promote-go-btn">Promote</button>
     </div>
   </div>
@@ -886,7 +1009,28 @@
 <script>
 /* All user values are escaped via DOM textContent or the esc() helper. */
 
-const API_MAP = { work:'work_tasks', project:'project_work_tasks', training:'training_tasks', personnel:'personnel_issues', suggestions:'suggestion_box', inbox:'inbox_items' };
+const API_MAP = {
+  work:'work_tasks',
+  project:'project_work_tasks',
+  training:'training_tasks',
+  personnel:'personnel_issues',
+  triage:'inbox_items',
+  personal_husband:'personal_items',
+  personal_father:'personal_items',
+  personal_house:'personal_items',
+  personal_cars:'personal_items',
+};
+
+// Tab keys for the four personal-pillar views — all backed by personal_items
+// with a category filter. The category JSON below is also used to (a) preset
+// the category when adding from a personal tab and (b) inject category on save.
+const PERSONAL_TABS = ['personal_husband','personal_father','personal_house','personal_cars'];
+const PERSONAL_CATEGORIES = {
+  personal_husband:'Husband',
+  personal_father:'Father',
+  personal_house:'House',
+  personal_cars:'Cars',
+};
 
 /* ── Markdown (tiny renderer; DOM-only, no innerHTML) ────────────────── */
 function appendInlineMd(parent, str) {
@@ -985,10 +1129,30 @@ function parseJsonList(raw) {
 }
 function listToLines(raw) { return parseJsonList(raw).join('\n'); }
 function listToCsv(raw) { return parseJsonList(raw).join(', '); }
-const TABLE_LABELS = { work_tasks:'CAD Development', project_work_tasks:'Project Work', training_tasks:'Training', personnel_issues:'Capability Tracking', suggestion_box:'Suggestion Box', inbox_items:'Inbox' };
-const sortState = { work:{col:'id',order:'asc'}, project:{col:'id',order:'asc'}, training:{col:'id',order:'asc'}, personnel:{col:'id',order:'asc'}, suggestions:{col:'id',order:'asc'}, inbox:{col:'created_at',order:'desc'} };
+const TABLE_LABELS = {
+  work_tasks:'CAD Dev',
+  project_work_tasks:'Project Tasks',
+  training_tasks:'Training',
+  personnel_issues:'Capabilities',
+  inbox_items:'Triage',
+  personal_items:'Personal',
+};
+const sortState = {
+  work:{col:'id',order:'asc'},
+  project:{col:'id',order:'asc'},
+  training:{col:'id',order:'asc'},
+  personnel:{col:'id',order:'asc'},
+  triage:{col:'created_at',order:'desc'},
+  personal_husband:{col:'created_at',order:'desc'},
+  personal_father:{col:'created_at',order:'desc'},
+  personal_house:{col:'created_at',order:'desc'},
+  personal_cars:{col:'created_at',order:'desc'},
+};
 let currentTab = 'dashboard', editingId = null, editingTable = null;
-let tableCache = { work:[], project:[], training:[], personnel:[], suggestions:[], inbox:[] };
+let tableCache = {
+  work:[], project:[], training:[], personnel:[],
+  triage:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
+};
 const THEME_KEY = 'tasktrack-theme';
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 
@@ -1088,7 +1252,7 @@ if (searchInput && searchResults) {
         div.addEventListener('click', () => {
           searchResults.classList.remove('open');
           searchInput.value = '';
-          const tabKey = {work_tasks:'work',project_work_tasks:'project',training_tasks:'training',personnel_issues:'personnel',suggestion_box:'suggestions'}[r.source];
+          const tabKey = {work_tasks:'work',project_work_tasks:'project',training_tasks:'training',personnel_issues:'personnel'}[r.source];
           document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
           setTimeout(() => editRecord(tabKey, r.id), 200);
         });
@@ -1105,10 +1269,10 @@ async function loadDashboard() {
   const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
   const s = data.stats;
-  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.suggestion_box?.active||0);
-  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.suggestion_box?.overdue||0);
-  const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.suggestion_box?.by_status?.['Promoted to CAD']||0);
-  const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.suggestion_box?.by_priority?.High||0);
+  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0);
+  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0);
+  const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0);
+  const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.personal_items?.by_priority?.High||0);
 
   const statsEl = document.getElementById('dash-stats');
   statsEl.replaceChildren();
@@ -1125,11 +1289,11 @@ async function loadDashboard() {
   // Overdue list
   const overdueEl = document.getElementById('dash-overdue');
   const allOverdue = [
-    ...(s.work_tasks?.overdue_items||[]).map(r=>({...r,_src:'CAD Development'})),
-    ...(s.project_work_tasks?.overdue_items||[]).map(r=>({...r,_src:'Project Work'})),
+    ...(s.work_tasks?.overdue_items||[]).map(r=>({...r,_src:'CAD Dev'})),
+    ...(s.project_work_tasks?.overdue_items||[]).map(r=>({...r,_src:'Project Tasks'})),
     ...(s.training_tasks?.overdue_items||[]).map(r=>({...r,_src:'Training'})),
-    ...(s.personnel_issues?.overdue_items||[]).map(r=>({...r,_src:'Capability Tracking'})),
-    ...(s.suggestion_box?.overdue_items||[]).map(r=>({...r,_src:'Suggestion Box'})),
+    ...(s.personnel_issues?.overdue_items||[]).map(r=>({...r,_src:'Capabilities'})),
+    ...(s.personal_items?.overdue_items||[]).map(r=>({...r,_src:'Personal'})),
   ];
   overdueEl.replaceChildren();
   if (!allOverdue.length) { overdueEl.innerHTML='<div class="empty-card">Nothing overdue</div>'; }
@@ -1268,6 +1432,10 @@ async function loadTable(table) {
   const overdueFilter = document.getElementById('filter-'+table+'-overdue')?.checked || false;
 
   let filtered = data;
+  // Personal tabs all share the personal_items table; filter to this tab's category.
+  if (PERSONAL_TABS.includes(table)) {
+    filtered = filtered.filter(r => r.category === PERSONAL_CATEGORIES[table]);
+  }
   if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
@@ -1277,10 +1445,17 @@ async function loadTable(table) {
   const empty = document.getElementById('empty-'+table);
   const countEl = document.getElementById('count-'+table);
   if (countEl) {
-    // Inbox count = the active queue (New + In Progress) regardless of which
-    // status filter the user has selected. Other tables show total rows.
-    if (table === 'inbox') {
+    // Triage count = the active queue (New + In Progress) regardless of which
+    // status filter the user has selected.
+    // Personal-tab counts = active queue (New + In Progress) within the
+    // tab's category (since the table is shared across tabs).
+    if (table === 'triage') {
       countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
+    } else if (PERSONAL_TABS.includes(table)) {
+      const cat = PERSONAL_CATEGORIES[table];
+      countEl.textContent = data.filter(r =>
+        r.category === cat && (r.status === 'New' || r.status === 'In Progress')
+      ).length;
     } else {
       countEl.textContent = data.length;
     }
@@ -1325,16 +1500,7 @@ async function loadTable(table) {
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeActions(table,r.id,r.title));
-    } else if (table==='suggestions') {
-      tr.appendChild(makeCell(r.title,'cell-title'));
-      tr.appendChild(makeCell(r.suggestion_type,'cell-supporting'));
-      tr.appendChild(makeCell(r.submitted_by,'cell-supporting'));
-      tr.appendChild(makeCell(r.submitted_for,'cell-supporting'));
-      tr.appendChild(makeStatusBadge(r.priority));
-      tr.appendChild(makeClickableStatus(table,r));
-      tr.appendChild(makeCell(r.promoted_work_task_id ? ('CAD #'+r.promoted_work_task_id) : '—','cell-supporting'));
-      tr.appendChild(makeSuggestionActions(r));
-    } else if (table==='inbox') {
+    } else if (table==='triage') {
       tr.appendChild(makeCell(r.title,'cell-title'));
       tr.appendChild(makeCell(r.source,'cell-supporting'));
       tr.appendChild(makeStatusBadge(r.priority));
@@ -1342,8 +1508,15 @@ async function loadTable(table) {
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
       tr.appendChild(makeCell(formatPromotedTarget(r),'cell-supporting'));
-      tr.appendChild(makeInboxActions(r));
-    } else {
+      tr.appendChild(makeTriageActions(r));
+    } else if (PERSONAL_TABS.includes(table)) {
+      tr.appendChild(makeCell(r.title,'cell-title'));
+      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickableStatus(table,r));
+      tr.appendChild(makeDateCell(r.due_date));
+      tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
+      tr.appendChild(makeActions(table,r.id,r.title));
+    } else if (table==='personnel') {
       tr.appendChild(makeCell(r.person_name,'cell-title'));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
       tr.appendChild(makeStatusBadge(r.severity));
@@ -1384,8 +1557,11 @@ function itemLabel(table) {
     project: 'project task',
     training: 'training task',
     personnel: 'capability note',
-    suggestions: 'suggestion',
-    inbox: 'inbox item',
+    triage: 'triage item',
+    personal_husband: 'Husband item',
+    personal_father: 'Father item',
+    personal_house: 'House item',
+    personal_cars: 'Cars item',
   }[table] || 'record';
 }
 
@@ -1411,58 +1587,31 @@ function makeDateCell(d) {
   return td;
 }
 
-function makeSuggestionActions(r) {
-  const td = document.createElement('td'); td.className='cell-actions';
-  const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.textContent='Edit';
-  edit.addEventListener('click',()=>editRecord('suggestions',r.id));
-  td.appendChild(edit);
+/* ── Triage-specific helpers ──────────────────────────────────────────── */
 
-  const promote = document.createElement('button');
-  const promoted = !!r.promoted_work_task_id || r.status === 'Promoted to CAD';
-  promote.className = promoted ? 'btn btn-cancel' : 'btn btn-ghost';
-  promote.textContent = promoted ? 'Promoted' : 'Promote';
-  promote.disabled = promoted;
-  if (!promoted) {
-    promote.addEventListener('click', async () => {
-      const res = await api('POST','/api/v1/suggestion_box/'+r.id+'/promote-to-cad',{});
-      if (res && !res.error) {
-        toast('suggestion promoted to CAD Development');
-        loadTable('suggestions');
-        loadTable('work');
-        loadDashboard();
-      } else if (res?.error) {
-        toast(res.error);
-      }
-    });
-  }
-  td.appendChild(promote);
-
-  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.textContent='Del';
-  del.addEventListener('click',()=>confirmDelete('suggestions',r.id,r.title));
-  td.appendChild(del);
-  return td;
-}
-
-/* ── Inbox-specific helpers ──────────────────────────────────────────── */
-
-const INBOX_PROMOTE_TARGETS = [
-  { table: 'project_work_tasks', label: 'Project Work', tab: 'project' },
-  { table: 'work_tasks',         label: 'CAD Development', tab: 'work' },
-  { table: 'training_tasks',     label: 'Training', tab: 'training' },
-  { table: 'suggestion_box',     label: 'Suggestion Box', tab: 'suggestions' },
+const TRIAGE_PROMOTE_TARGETS = [
+  { table: 'project_work_tasks', label: 'Project Tasks', tab: 'project' },
+  { table: 'work_tasks',         label: 'CAD Dev',       tab: 'work' },
+  { table: 'training_tasks',     label: 'Training',      tab: 'training' },
+  { table: 'personal_items',     label: 'Husband',       tab: 'personal_husband', category: 'Husband' },
+  { table: 'personal_items',     label: 'Father',        tab: 'personal_father',  category: 'Father' },
+  { table: 'personal_items',     label: 'House',         tab: 'personal_house',   category: 'House' },
+  { table: 'personal_items',     label: 'Cars',          tab: 'personal_cars',    category: 'Cars' },
 ];
 
 function formatPromotedTarget(r) {
   if (!r.promoted_to_table || !r.promoted_to_id) return '—';
-  const meta = INBOX_PROMOTE_TARGETS.find(t => t.table === r.promoted_to_table);
-  const label = meta ? meta.label : (TABLE_LABELS[r.promoted_to_table] || r.promoted_to_table);
+  // For personal_items the underlying table is shared; if the target row has
+  // a category we'd ideally show it, but we don't fetch the row here. Show
+  // the table-level label and rely on the user to click through.
+  const label = TABLE_LABELS[r.promoted_to_table] || r.promoted_to_table;
   return label + ' #' + r.promoted_to_id;
 }
 
-function makeInboxActions(r) {
+function makeTriageActions(r) {
   const td = document.createElement('td'); td.className='cell-actions';
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.textContent='Edit';
-  edit.addEventListener('click',()=>editRecord('inbox',r.id));
+  edit.addEventListener('click',()=>editRecord('triage',r.id));
   td.appendChild(edit);
 
   const promote = document.createElement('button');
@@ -1471,36 +1620,40 @@ function makeInboxActions(r) {
   promote.textContent = promoted ? 'Promoted' : 'Promote';
   promote.disabled = promoted;
   if (!promoted) {
-    promote.addEventListener('click',()=>openInboxPromote(r));
+    promote.addEventListener('click',()=>openTriagePromote(r));
   }
   td.appendChild(promote);
 
   const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.textContent='Del';
-  del.addEventListener('click',()=>confirmDelete('inbox',r.id,r.title));
+  del.addEventListener('click',()=>confirmDelete('triage',r.id,r.title));
   td.appendChild(del);
   return td;
 }
 
-function openInboxPromote(r) {
+function openTriagePromote(r) {
   const overlay = document.getElementById('promote-overlay');
   document.getElementById('promote-title').textContent = r.title || '';
   const sel = document.getElementById('promote-target');
   sel.replaceChildren();
-  INBOX_PROMOTE_TARGETS.forEach(t => {
+  TRIAGE_PROMOTE_TARGETS.forEach((t, idx) => {
     const opt = document.createElement('option');
-    opt.value = t.table;
+    // Use the array index as the option value so we can dispatch by full
+    // target spec (table + optional category) instead of just table name.
+    opt.value = String(idx);
     opt.textContent = t.label;
     sel.appendChild(opt);
   });
   document.getElementById('promote-go-btn').onclick = async () => {
-    const targetTable = sel.value;
-    const res = await api('POST','/api/v1/inbox/'+r.id+'/promote',{ target_table: targetTable });
+    const target = TRIAGE_PROMOTE_TARGETS[Number(sel.value)];
+    if (!target) return;
+    const payload = { target_table: target.table };
+    if (target.category) payload.overrides = { category: target.category };
+    const res = await api('POST','/api/v1/inbox/'+r.id+'/promote', payload);
     if (res && !res.error) {
-      const meta = INBOX_PROMOTE_TARGETS.find(t => t.table === targetTable);
-      toast('promoted to ' + (meta ? meta.label : targetTable));
-      closeInboxPromote();
-      loadTable('inbox');
-      if (meta) loadTable(meta.tab);
+      toast('promoted to ' + target.label);
+      closeTriagePromote();
+      loadTable('triage');
+      loadTable(target.tab);
       loadDashboard();
     } else if (res?.error) {
       toast(res.error);
@@ -1508,7 +1661,7 @@ function openInboxPromote(r) {
   };
   overlay.classList.add('open');
 }
-function closeInboxPromote() { document.getElementById('promote-overlay').classList.remove('open'); }
+function closeTriagePromote() { document.getElementById('promote-overlay').classList.remove('open'); }
 
 function formatDateTime(d) {
   try {
@@ -1595,26 +1748,27 @@ const FORMS = {
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
-  suggestions:[
-    {key:'title',label:'Suggestion Title',type:'text',required:true},
-    {key:'suggestion_type',label:'Suggestion Type',type:'select',options:['Training Idea','CAD Standard','Template','Automation','Process Improvement','Tooling','Other']},
-    {key:'submitted_by',label:'Submitted By',type:'text',placeholder:'Who suggested this?'},
-    {key:'submitted_for',label:'For Review By',type:'select',options:['Management','CAD Team','Training Leads','Myself','General Review']},
-    {key:'summary',label:'Suggestion Summary',type:'textarea',required:true,placeholder:'What is the idea?'},
-    {key:'expected_value',label:'Why This Would Help',type:'textarea',placeholder:'What pain point would it reduce or what value would it add?'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['New','Under Review','Approved','Promoted to CAD','Declined']}]},
-    {key:'review_notes',label:'Review Notes / Management Notes',type:'textarea',placeholder:'Use this for internal review notes before promotion.'},
-    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
-    {key:'attachments',label:'Attachments',type:'attachments'},
-    {key:'links',label:'Links',type:'links'},
-  ],
-  inbox:[
+  triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
     {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
   ],
 };
+
+// One shared form definition used by all four personal tabs (Husband / Father /
+// House / Cars). The category is fixed by which tab opened the modal — see
+// saveRecord and openModal for the per-tab category preset/injection.
+const PERSONAL_FORM = [
+  {key:'title',label:'Title',type:'text',required:true,placeholder:'What needs to happen?'},
+  {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context.'},
+  {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
+  {key:'due_date',label:'Due Date',type:'date'},
+];
+FORMS.personal_husband = PERSONAL_FORM;
+FORMS.personal_father  = PERSONAL_FORM;
+FORMS.personal_house   = PERSONAL_FORM;
+FORMS.personal_cars    = PERSONAL_FORM;
 
 function renderField(f,value) {
   value=value||'';
@@ -2005,7 +2159,17 @@ async function loadLinks(table, recordId) {
 /* ── Modal open/close ──────────────────────── */
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
-  const labels={work:'CAD Development Task',project:'Project Work Task',training:'Training Task',personnel:'Capability Tracking Entry',suggestions:'Suggestion',inbox:'Inbox Item'};
+  const labels={
+    work:'CAD Dev Task',
+    project:'Project Task',
+    training:'Training Task',
+    personnel:'Capability Entry',
+    triage:'Triage Item',
+    personal_husband:'Husband Item',
+    personal_father:'Father Item',
+    personal_house:'House Item',
+    personal_cars:'Cars Item',
+  };
   document.getElementById('modal-title').textContent=(editingId?'Edit ':'Add ')+labels[table];
   const body=document.getElementById('modal-body');
   body.replaceChildren();
@@ -2031,6 +2195,9 @@ async function saveRecord() {
   let data=getFormData(table);
   if (!validateForm(table, data)) return;
   if (table === 'work') data = transformWorkForSave(data);
+  // Personal tabs all share the personal_items table; inject the category
+  // implied by which tab opened the modal.
+  if (PERSONAL_TABS.includes(table)) data.category = PERSONAL_CATEGORIES[table];
   if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
   else await api('POST','/api/v1/'+API_MAP[table],data);
   closeModal(); loadTable(table); toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
@@ -2040,8 +2207,8 @@ async function saveRecord() {
 let intakePreviewState = null;
 
 const INTAKE_TARGET_LABELS = {
-  work_tasks: 'CAD Development',
-  project_work_tasks: 'Project Work',
+  work_tasks: 'CAD Dev',
+  project_work_tasks: 'Project Tasks',
   training_tasks: 'Training',
 };
 
@@ -2388,7 +2555,9 @@ if (STANDALONE_TAB) {
   loadTable(STANDALONE_TAB);
 } else {
   loadDashboard();
-  loadTable('inbox'); loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel'); loadTable('suggestions');
+  loadTable('triage');
+  loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
+  loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
 }
 </script>
 </body>
