@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <style>
   /* Dark-only palette. The light/dark toggle was removed in favor of a
      single deliberate dark identity for TaskTrack. --accent is swapped
@@ -28,6 +29,7 @@
      primary button, focus rings, stat-card values, section heading
      bar) shifts color when you switch tabs. */
   body:has(.tab-btn.active[data-tab="triage"])           { --accent:#fbbf24; --accent-hover:#f59e0b; --accent-light:#3a2a05; }
+  body:has(.tab-btn.active[data-tab="map"])              { --accent:#2dd4bf; --accent-hover:#14b8a6; --accent-light:#062f2a; }
   body:has(.tab-btn.active[data-tab="project"])          { --accent:#818cf8; --accent-hover:#6366f1; --accent-light:#1e1f4a; }
   body:has(.tab-btn.active[data-tab="work"])             { --accent:#22d3ee; --accent-hover:#06b6d4; --accent-light:#062f3d; }
   body:has(.tab-btn.active[data-tab="training"])         { --accent:#34d399; --accent-hover:#10b981; --accent-light:#0a3a2a; }
@@ -356,6 +358,7 @@
       <nav class="tabs">
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
         <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
+        <button class="tab-btn" data-tab="map">Map</button>
         <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
         <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
@@ -662,6 +665,32 @@
         <div class="empty-title">Triage is empty</div>
         <p class="empty-copy">When external apps capture items into Triage they&rsquo;ll show up here. You can also <strong>+ Add Triage Item</strong> manually for a quick personal todo, then promote it into a tracker later if it grows into real work.</p>
       </div>
+    </div>
+  </section>
+
+  <!-- ── MAP (Atlas-lite) ────────────────────── -->
+  <section id="sec-map" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">Projects Map</h2>
+        <div class="section-subtitle">Active projects with a location pin. Click a pin to copy the project number. Add lat/lng on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
+      </div>
+      <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
+        <option value="">All statuses</option>
+        <option value="active">Active</option>
+        <option value="dormant">Dormant</option>
+        <option value="completed">Completed</option>
+        <option value="draft">Draft</option>
+        <option value="review">In review</option>
+      </select>
+      <button class="btn btn-sm" type="button" onclick="reloadMap(true)">Refresh / Fit</button>
+    </div>
+    <div id="map-empty" class="empty-state" style="display:none">
+      <div class="empty-title">No projects pinned yet</div>
+      <p class="empty-copy">When a project has lat/lng set in <a href="/admin/projects" style="color:var(--accent)">/admin/projects</a>, it shows up here. CSV sync from the Atlas registry is on the roadmap.</p>
+    </div>
+    <div id="map-host" style="height:calc(100vh - 220px); min-height:420px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; position:relative;">
+      <div id="map" style="height:100%; width:100%;"></div>
     </div>
   </section>
 
@@ -1016,6 +1045,15 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script>
+/* Leaflet expects its marker images at L.Icon.Default.imagePath. We vendor
+   them under /static/vendor/leaflet/images so the default Marker icon works
+   without going to the unpkg CDN. */
+if (window.L && L.Icon && L.Icon.Default) {
+  L.Icon.Default.imagePath = '/static/vendor/leaflet/images/';
+}
+</script>
 <script>
 /* All user values are escaped via DOM textContent or the esc() helper. */
 
@@ -1201,8 +1239,91 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
     document.getElementById('sec-'+currentTab).classList.add('active');
     if (currentTab === 'dashboard') loadDashboard();
+    if (currentTab === 'map') initOrRefreshMap();
   });
 });
+
+/* ── Map tab (Atlas-lite) ─────────────────────────────────────────────
+   Lazy init: only spin up Leaflet the first time the Map tab is opened.
+   Subsequent opens just reload features and invalidateSize() so the
+   tiles redraw after the section was hidden. */
+let mapInstance = null;
+let mapLayer = null;
+const STATUS_COLOR = {
+  active:    '#34d399',
+  dormant:   '#fbbf24',
+  completed: '#94a3b8',
+  draft:     '#a78bfa',
+  review:    '#22d3ee',
+};
+
+function mapStatusFilterValue() {
+  return document.getElementById('map-status-filter')?.value || '';
+}
+
+async function reloadMap(fit) {
+  if (!mapInstance) { initOrRefreshMap(); return; }
+  const status = mapStatusFilterValue();
+  const url = '/api/v1/projects/geojson' + (status ? '?display_status=' + encodeURIComponent(status) : '');
+  let geo;
+  try {
+    const res = await fetch(url);
+    if (res.status === 401) { window.location='/login'; return; }
+    geo = await res.json();
+  } catch (e) { geo = { features: [] }; }
+
+  if (mapLayer) { mapLayer.remove(); mapLayer = null; }
+  const features = (geo.features || []).filter(f =>
+    !status || f.properties.display_status === status
+  );
+
+  document.getElementById('map-empty').style.display = features.length ? 'none' : 'block';
+  document.getElementById('map-host').style.display = features.length ? 'block' : 'none';
+
+  if (!features.length) { return; }
+
+  mapLayer = L.geoJSON({ type:'FeatureCollection', features }, {
+    pointToLayer: (feat, latlng) => {
+      const status = feat.properties.display_status || 'active';
+      const color = STATUS_COLOR[status] || '#94a3b8';
+      return L.circleMarker(latlng, {
+        radius: 7, weight: 2, color: color, fillColor: color, fillOpacity: 0.7,
+      });
+    },
+    onEachFeature: (feat, layer) => {
+      const p = feat.properties;
+      const html =
+        '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.4">' +
+        '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
+        '<div style="color:#555"><code>' + escHtml(p.project_number) + '</code> &middot; ' + escHtml(p.client || '—') + '</div>' +
+        '<div style="margin-top:0.3rem"><span style="display:inline-block;padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span></div>' +
+        '</div>';
+      layer.bindPopup(html);
+    },
+  }).addTo(mapInstance);
+
+  if (fit || mapLayer.getLayers().length) {
+    try { mapInstance.fitBounds(mapLayer.getBounds(), { padding: [24, 24] }); } catch (e) {}
+  }
+  setTimeout(() => mapInstance.invalidateSize(), 50);
+}
+
+function initOrRefreshMap() {
+  if (mapInstance) { setTimeout(() => mapInstance.invalidateSize(), 50); reloadMap(true); return; }
+  if (!window.L) return; // Leaflet failed to load; map-empty will show
+  mapInstance = L.map('map', { preferCanvas: true }).setView([38.42, -122.71], 10);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  }).addTo(mapInstance);
+  reloadMap(true);
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')
+    .replaceAll('"','&quot;').replaceAll("'",'&#39;');
+}
 
 /* ── Sort ──────────────────────────────────── */
 document.querySelectorAll('th[data-col]').forEach(th => {
@@ -1698,6 +1819,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Leave blank if the project is not in the registry yet.'},
+    {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1712,6 +1834,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
     {key:'notes',label:'Notes',type:'textarea'},
+    {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1726,6 +1849,7 @@ const FORMS = {
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
+    {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1742,6 +1866,7 @@ const FORMS = {
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
     {key:'person_id',label:'Person (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK. Pairs with the Staff Member text field above.'},
+    {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1849,6 +1974,15 @@ function renderField(f,value) {
       panel.dataset.loading='1';
     }
     wrap.appendChild(panel);
+    return wrap;
+  } else if (f.type==='project-map') {
+    /* Read-only mini-map. Resolves the active record's project_id against
+       the projects list and pins it. Hidden entirely when there's no FK
+       or the project lacks lat/lng. */
+    const host=document.createElement('div');
+    host.id='project-mini-map';
+    host.style.cssText='height:200px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;display:none';
+    wrap.appendChild(host);
     return wrap;
   } else if (f.type==='date') {
     input=document.createElement('input'); input.type='date'; input.id='f-'+f.key; input.value=value?value.split('T')[0]:'';
@@ -1984,9 +2118,48 @@ function getFormData(table) {
   const data={};
   FORMS[table]
     .flatMap(f=>f.key==='_row'?f.fields:[f])
-    .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments' && f.type!=='links')
+    .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments' && f.type!=='links' && f.type!=='project-map')
     .forEach(f=>{const el=document.getElementById('f-'+f.key);if(el)data[f.key]=el.value;});
   return data;
+}
+
+/* Per-project mini-map renderer. Called by openModal after the form is in
+   the DOM. Resolves the project_id against the cached /api/v1/projects
+   list; if the project has lat/lng, drops a single Leaflet pin. All
+   user-supplied strings are passed through escHtml before reaching
+   Leaflet's popup HTML. */
+let projectMiniMap = null;
+async function renderProjectMiniMap() {
+  const host = document.getElementById('project-mini-map');
+  if (!host || !window.L) return;
+  const projectIdEl = document.getElementById('f-project_id');
+  if (!projectIdEl || !projectIdEl.value) {
+    host.style.display = 'none';
+    return;
+  }
+  const projects = await loadFkOptions('/api/v1/projects');
+  const proj = projects.find(p => String(p.id) === String(projectIdEl.value));
+  if (!proj || proj.lat == null || proj.lng == null) {
+    host.style.display = 'none';
+    return;
+  }
+  host.style.display = 'block';
+  /* Tear down any prior instance — Leaflet refuses to re-init the same
+     container. replaceChildren() is the safe innerHTML='' equivalent. */
+  if (projectMiniMap) { projectMiniMap.remove(); projectMiniMap = null; }
+  host.replaceChildren();
+  projectMiniMap = L.map(host, { preferCanvas: true, zoomControl: false, attributionControl: false })
+    .setView([proj.lat, proj.lng], 13);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+    .addTo(projectMiniMap);
+  const popupHtml = escHtml(proj.project_number) + ' &middot; ' + escHtml(proj.name || '');
+  L.circleMarker([proj.lat, proj.lng], {
+    radius: 7, weight: 2,
+    color: (STATUS_COLOR[proj.display_status] || '#34d399'),
+    fillColor: (STATUS_COLOR[proj.display_status] || '#34d399'),
+    fillOpacity: 0.7,
+  }).addTo(projectMiniMap).bindPopup(popupHtml);
+  setTimeout(() => projectMiniMap && projectMiniMap.invalidateSize(), 80);
 }
 
 function validateForm(table, data) {
@@ -2221,6 +2394,12 @@ function openModal(table,data) {
     loadAttachments(table,editingId);
     loadLinks(table,editingId);
   }
+
+  // Project mini-map (lazy — only meaningful when project_id is set).
+  renderProjectMiniMap();
+  // Re-render the mini-map whenever the FK select changes.
+  const projectIdEl = document.getElementById('f-project_id');
+  if (projectIdEl) projectIdEl.addEventListener('change', renderProjectMiniMap);
 
   document.getElementById('modal-overlay').classList.add('open');
 }

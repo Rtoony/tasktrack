@@ -49,7 +49,10 @@ def init_request_middleware(app):
             "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
-            "img-src 'self' data:; "
+            # OSM tile servers — added for the Atlas-lite map tab.
+            # `*.tile.openstreetmap.org` covers a/b/c.tile.* subdomains.
+            "img-src 'self' data: https://*.tile.openstreetmap.org "
+            "https://tile.openstreetmap.org; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'",

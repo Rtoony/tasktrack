@@ -16,9 +16,21 @@ from datetime import datetime
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy import select
 
-from ..auth import admin_required
+from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import Employee, Project, to_dict
+
+_PROJECT_DISPLAY_STATUSES = {"active", "dormant", "completed", "draft", "review"}
+
+
+def _coerce_latlng(raw):
+    """Parse a string/number latitude or longitude; return None if blank/bad."""
+    if raw is None or raw == "":
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
 
 bp = Blueprint("registry", __name__)
 
@@ -114,8 +126,13 @@ def delete_employee(emp_id):
 
 
 @bp.route("/api/v1/projects", methods=["GET"])
-@admin_required
+@login_required
 def list_projects():
+    """Read-only project list — open to every logged-in user.
+
+    The fk-select widgets in the task modals + the Map tab + the
+    per-project mini-map all rely on this. Mutations remain admin-only.
+    """
     sess = get_session()
     include_inactive = request.args.get("include_inactive") in ("1", "true", "yes")
     stmt = select(Project).order_by(Project.project_number.asc())
@@ -123,6 +140,51 @@ def list_projects():
         stmt = stmt.where(Project.active == 1)
     rows = sess.scalars(stmt).all()
     return jsonify([to_dict(r) for r in rows])
+
+
+@bp.route("/api/v1/projects/geojson", methods=["GET"])
+@login_required
+def projects_geojson():
+    """GeoJSON FeatureCollection for the Map tab.
+
+    Skips projects without lat/lng (can't pin them). Status drives color
+    on the client. `bbox` query param (west,south,east,north) optional
+    filter; defaults to all active projects.
+    """
+    sess = get_session()
+    include_inactive = request.args.get("include_inactive") in ("1", "true", "yes")
+    stmt = select(Project).where(
+        Project.lat.is_not(None), Project.lng.is_not(None),
+    )
+    if not include_inactive:
+        stmt = stmt.where(Project.active == 1)
+
+    bbox = request.args.get("bbox", "")
+    if bbox:
+        try:
+            west, south, east, north = (float(x) for x in bbox.split(","))
+            stmt = stmt.where(
+                Project.lng >= west, Project.lng <= east,
+                Project.lat >= south, Project.lat <= north,
+            )
+        except (ValueError, TypeError):
+            pass  # ignore malformed bbox; return full set
+
+    features = []
+    for p in sess.scalars(stmt).all():
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [p.lng, p.lat]},
+            "properties": {
+                "project_id": p.id,
+                "project_number": p.project_number,
+                "name": p.name,
+                "client": p.client,
+                "display_status": p.display_status,
+                "active": bool(p.active),
+            },
+        })
+    return jsonify({"type": "FeatureCollection", "features": features})
 
 
 @bp.route("/api/v1/projects", methods=["POST"])
@@ -141,6 +203,12 @@ def create_project():
         return jsonify({"error": "project_number already exists",
                         "existing_id": existing.id,
                         "request_id": _rid()}), 409
+    display_status = (data.get("display_status") or "active").strip()
+    if display_status not in _PROJECT_DISPLAY_STATUSES:
+        return jsonify({
+            "error": f"display_status must be one of: {sorted(_PROJECT_DISPLAY_STATUSES)}",
+            "request_id": _rid(),
+        }), 400
     proj = Project(
         project_number=project_number,
         name=(data.get("name") or "").strip(),
@@ -150,6 +218,9 @@ def create_project():
         external_system=(data.get("external_system") or "").strip(),
         notes=(data.get("notes") or "").strip(),
         active=1 if data.get("active", 1) else 0,
+        lat=_coerce_latlng(data.get("lat")),
+        lng=_coerce_latlng(data.get("lng")),
+        display_status=display_status,
     )
     sess.add(proj)
     sess.commit()
@@ -184,6 +255,18 @@ def update_project(proj_id):
             setattr(proj, col, val)
     if "active" in data:
         proj.active = 1 if data["active"] else 0
+    if "lat" in data:
+        proj.lat = _coerce_latlng(data["lat"])
+    if "lng" in data:
+        proj.lng = _coerce_latlng(data["lng"])
+    if "display_status" in data:
+        ds = (data["display_status"] or "").strip()
+        if ds not in _PROJECT_DISPLAY_STATUSES:
+            return jsonify({
+                "error": f"display_status must be one of: {sorted(_PROJECT_DISPLAY_STATUSES)}",
+                "request_id": _rid(),
+            }), 400
+        proj.display_status = ds
     proj.updated_at = datetime.utcnow()
     sess.commit()
     return jsonify(to_dict(proj))

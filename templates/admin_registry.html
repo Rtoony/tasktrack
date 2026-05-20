@@ -125,10 +125,21 @@
   {% if kind == 'projects' %}
   <div class="panel">
     <h2>Add Project</h2>
-    <form class="add-form" onsubmit="event.preventDefault(); addProject()">
-      <div class="field"><label>Project number * (####.##)</label><input id="add-pn" required placeholder="1234.56"></div>
+    <form class="add-form" onsubmit="event.preventDefault(); addProject()" style="grid-template-columns:repeat(7, 1fr)">
+      <div class="field"><label>Project number *</label><input id="add-pn" required placeholder="1234.56"></div>
       <div class="field"><label>Name</label><input id="add-name"></div>
       <div class="field"><label>Client</label><input id="add-client"></div>
+      <div class="field"><label>Status</label>
+        <select id="add-status" style="width:100%;padding:0.45rem 0.6rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:0.85rem">
+          <option value="active">active</option>
+          <option value="dormant">dormant</option>
+          <option value="completed">completed</option>
+          <option value="draft">draft</option>
+          <option value="review">review</option>
+        </select>
+      </div>
+      <div class="field"><label>Latitude</label><input id="add-lat" placeholder="38.4404" inputmode="decimal"></div>
+      <div class="field"><label>Longitude</label><input id="add-lng" placeholder="-122.7141" inputmode="decimal"></div>
       <div class="field"><button class="btn" type="submit">Add</button></div>
     </form>
   </div>
@@ -136,7 +147,7 @@
     <h2>Project list</h2>
     <table>
       <thead><tr>
-        <th>Number</th><th>Name</th><th>Client</th><th>Status</th><th></th>
+        <th>Number</th><th>Name</th><th>Client</th><th>Status</th><th>Location</th><th>Active</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in rows %}
@@ -144,6 +155,14 @@
           <td><code>{{ r.project_number }}</code></td>
           <td>{{ r.name }}</td>
           <td>{{ r.client }}</td>
+          <td><span class="pill ok">{{ r.display_status }}</span></td>
+          <td>
+            {% if r.lat is not none and r.lng is not none %}
+            <code style="font-size:0.72rem;color:var(--text-muted)">{{ '%.4f'|format(r.lat) }}, {{ '%.4f'|format(r.lng) }}</code>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
           <td><span class="pill {{ 'ok' if r.active else 'off' }}">{{ 'active' if r.active else 'inactive' }}</span></td>
           <td>
             {% if r.active %}
@@ -201,7 +220,12 @@ async function addProject() {
     project_number: document.getElementById('add-pn').value.trim(),
     name: document.getElementById('add-name').value.trim(),
     client: document.getElementById('add-client').value.trim(),
+    display_status: document.getElementById('add-status').value,
   };
+  const lat = document.getElementById('add-lat').value.trim();
+  const lng = document.getElementById('add-lng').value.trim();
+  if (lat) payload.lat = lat;
+  if (lng) payload.lng = lng;
   if (!payload.project_number) return toast('Project number required');
   const r = await api('POST', '/api/v1/projects', payload);
   if (r && r.error) return toast(r.error);

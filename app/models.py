@@ -25,6 +25,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     TIMESTAMP,
+    Float,
     Index,
     Integer,
     String,
@@ -359,6 +360,12 @@ class Project(Base):
     external_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
     external_system: Mapped[str] = mapped_column(Text, server_default=text("''"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Phase-0.5 (Atlas-lite): primary point location + workflow status that
+    # drives map-pin color. `active` above is the soft-delete flag and is
+    # intentionally distinct from `display_status` here.
+    lat: Mapped[float | None] = mapped_column(Float)
+    lng: Mapped[float | None] = mapped_column(Float)
+    display_status: Mapped[str] = mapped_column(Text, server_default=text("'active'"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
