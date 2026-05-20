@@ -84,13 +84,19 @@ def close_session(exc) -> None:
 #
 # Resolution order:
 #   1. TASKTRACK_SECRET_KEY env var — injected from the Nexus vault by
-#      `nexus-svc-inject` into /dev/shm/nexus-env-collab-tracker. Preferred
-#      per the Nexus zero-disk policy.
-#   2. app_settings.secret_key in the SQLite DB — historical storage,
-#      kept for backwards compatibility and as a graceful fallback during
-#      the vault rollout.
-#   3. Fresh generation, persisted to the DB so a restart without vault
-#      still uses the same key (sessions survive).
+#      `nexus-svc-inject` into /dev/shm/nexus-env-collab-tracker.
+#      THIS IS THE CANONICAL SOURCE post-2026-05-20 vault migration.
+#   2. app_settings.secret_key in the SQLite DB — DEPRECATED. Logs a
+#      WARNING when used. Kept only so a vault outage doesn't take down
+#      the app entirely; remove the row once you're confident vault
+#      injection is stable.
+#   3. Fresh generation, persisted to the DB. First-boot path for tests,
+#      fresh clones, and emergency recovery. Logs an ERROR so you notice.
+
+import logging  # noqa: E402  -- intentional in-module placement near use
+
+_SECRET_LOG = logging.getLogger("tasktrack.secret_key")
+
 
 def get_secret_key(db_path=None) -> str:
     env_key = (os.environ.get("TASKTRACK_SECRET_KEY") or "").strip()
@@ -104,10 +110,22 @@ def get_secret_key(db_path=None) -> str:
             "SELECT value FROM app_settings WHERE key = 'secret_key'"
         ).fetchone()
         if row:
+            _SECRET_LOG.warning(
+                "secret_key fell back to app_settings table — "
+                "TASKTRACK_SECRET_KEY env var was not set. Check vault "
+                "injection (nexus-svc-inject) before trusting sessions."
+            )
             return row[0]
         # First boot of a fresh DB AND no vault key — seed one. This
         # keeps fresh deploys (e.g. tests, new dev clones) working
-        # without forcing the vault round-trip.
+        # without forcing the vault round-trip. Logged loud because
+        # post-2026-05-20 vault migration this should never fire in prod.
+        _SECRET_LOG.error(
+            "minting fresh secret_key into app_settings — neither "
+            "TASKTRACK_SECRET_KEY env nor existing DB row was present. "
+            "Sessions before this restart are now invalid. Add the new "
+            "value to the Nexus - TaskTrack vault item."
+        )
         key = secrets.token_hex(32)
         db.execute(
             "INSERT INTO app_settings (key, value) VALUES ('secret_key', ?)",
