@@ -375,6 +375,51 @@ class Project(Base):
     )
 
 
+# ── Competency (Phase 1) ──────────────────────────────────────────────────
+
+class SkillCategory(Base):
+    """Skill rubric used by the Competency matrix. Slug is the stable
+    identifier safe to embed; name is the human label that shows in the
+    column header. Display_order drives left-to-right column ordering."""
+    __tablename__ = "skill_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    display_order: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_skill_categories_slug", "slug", unique=True),
+        Index("idx_skill_categories_active", "active"),
+    )
+
+
+class EmployeeSkillScore(Base):
+    """One row per (employee, category): the assertion that the employee
+    has reached `score` proficiency. Upsert-only; the polymorphic
+    activity_log keyed by (`employee_skill_scores`, score.id) carries
+    per-cell history."""
+    __tablename__ = "employee_skill_scores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("5.0"))
+    notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    updated_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_emp_skill_employee", "employee_id"),
+        Index("idx_emp_skill_category", "category_id"),
+        Index("idx_emp_skill_unique", "employee_id", "category_id", unique=True),
+    )
+
+
 def to_dict(obj) -> dict | None:
     """Serialize a SQLAlchemy model instance to a plain column-name dict.
 
@@ -411,5 +456,6 @@ __all__ = [
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
     "Employee", "Project",
+    "SkillCategory", "EmployeeSkillScore",
     "to_dict",
 ]

@@ -110,6 +110,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.attachments import bp as attachments_bp
     from .routes.auth import bp as auth_bp
     from .routes.calendar import bp as calendar_bp
+    from .routes.competency import bp as competency_bp
     from .routes.inbox import bp as inbox_bp
     from .routes.intake import bp as intake_bp
     from .routes.links import bp as links_bp
@@ -130,6 +131,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(triage_bp)
     app.register_blueprint(calendar_bp)
     app.register_blueprint(registry_bp)
+    app.register_blueprint(competency_bp)
 
     from .cli import create_admin_command, db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)

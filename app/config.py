@@ -226,3 +226,36 @@ ADMIN_WORKFLOW_VIEWS = {
         "subtitle": "Personal items in the Cars category — vehicle maintenance, modifications, registration, repairs.",
     },
 }
+
+
+# ── Competency (Phase 1) ───────────────────────────────────────────────────
+#
+# These match eng-ops's rubric (`reset_brce_demo_data.py` SKILL_CATEGORIES)
+# so a person's score can mean roughly the same thing across both tools.
+# The seed runs the first time `/api/v1/skills/categories` is hit if the
+# table is empty; admins can add / disable categories afterward without
+# re-seeding.
+
+SKILL_CATEGORY_DEFAULTS = [
+    {"slug": "project-setup",       "name": "Project Setup",
+     "description": "Kickoff, scope, baseline, drawing tree.", "display_order": 10},
+    {"slug": "cad-standards",       "name": "CAD Standards",
+     "description": "Layer + symbol + titleblock + revision discipline.", "display_order": 20},
+    {"slug": "civil-design",        "name": "Civil Design",
+     "description": "Roadway, site, grading, drainage, utility design.", "display_order": 30},
+    {"slug": "survey-coordination", "name": "Survey Coordination",
+     "description": "Survey data ingest, base sheet preparation, control.", "display_order": 40},
+    {"slug": "qa-qc-review",        "name": "QA / QC Review",
+     "description": "Cross-check, redline turnaround, deliverable QC.", "display_order": 50},
+    {"slug": "sheet-production",    "name": "Sheet Production",
+     "description": "Plotting, sheet sets, automation, output discipline.", "display_order": 60},
+    {"slug": "permitting",          "name": "Permitting & Environmental",
+     "description": "Permits, environmental, regulatory submittals.", "display_order": 70},
+    {"slug": "construction-support","name": "Construction Support",
+     "description": "RFI, submittal review, construction admin.", "display_order": 80},
+    {"slug": "client-communication","name": "Client Communication",
+     "description": "Meetings, expectation setting, deliverable narration.", "display_order": 90},
+    {"slug": "software-proficiency","name": "Software Proficiency",
+     "description": "Civil 3D, AutoCAD, Bluebeam, ArcGIS, project tooling.", "display_order": 100},
+]
+

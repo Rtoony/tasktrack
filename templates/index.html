@@ -30,6 +30,7 @@
      bar) shifts color when you switch tabs. */
   body:has(.tab-btn.active[data-tab="triage"])           { --accent:#fbbf24; --accent-hover:#f59e0b; --accent-light:#3a2a05; }
   body:has(.tab-btn.active[data-tab="map"])              { --accent:#2dd4bf; --accent-hover:#14b8a6; --accent-light:#062f2a; }
+  body:has(.tab-btn.active[data-tab="competency"])       { --accent:#a78bfa; --accent-hover:#8b5cf6; --accent-light:#251a3d; }
   body:has(.tab-btn.active[data-tab="project"])          { --accent:#818cf8; --accent-hover:#6366f1; --accent-light:#1e1f4a; }
   body:has(.tab-btn.active[data-tab="work"])             { --accent:#22d3ee; --accent-hover:#06b6d4; --accent-light:#062f3d; }
   body:has(.tab-btn.active[data-tab="training"])         { --accent:#34d399; --accent-hover:#10b981; --accent-light:#0a3a2a; }
@@ -359,6 +360,9 @@
         <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
         <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
         <button class="tab-btn" data-tab="map">Map</button>
+        {% if user_role == 'admin' %}
+        <button class="tab-btn" data-tab="competency">Competency</button>
+        {% endif %}
         <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
         <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
         <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
@@ -691,6 +695,38 @@
     </div>
     <div id="map-host" style="height:calc(100vh - 220px); min-height:420px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; position:relative;">
       <div id="map" style="height:100%; width:100%;"></div>
+    </div>
+  </section>
+
+  <!-- ── COMPETENCY (Phase 1) ────────────────── -->
+  <section id="sec-competency" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">Competency</h2>
+        <div class="section-subtitle">Per-employee skill scores. Click a cell to update. Score band drives cell color: 1–3 amber, 4–6 cyan, 7–10 green. Manage the roster on the <a href="/admin/people" style="color:var(--accent)">Employees admin page</a>.</div>
+      </div>
+      <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
+      <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
+        <option value="">All roles</option>
+        <option value="executive">Executive</option>
+        <option value="manager">Manager</option>
+        <option value="engineer">Engineer</option>
+        <option value="drafter">Drafter</option>
+      </select>
+    </div>
+
+    <div id="comp-host">
+      <div id="comp-loading" style="padding:1rem;color:var(--text-muted);font-size:0.85rem;">Loading matrix…</div>
+      <div id="comp-empty" class="empty-state" style="display:none">
+        <div class="empty-title">No employees yet</div>
+        <p class="empty-copy">Add people on <a href="/admin/people" style="color:var(--accent)">/admin/people</a> first.</p>
+      </div>
+      <div id="comp-wrap" style="display:none; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);">
+        <table id="comp-matrix" style="border-collapse:collapse; width:100%; font-size:0.78rem;">
+          <thead id="comp-thead"></thead>
+          <tbody id="comp-tbody"></tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1240,7 +1276,149 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('sec-'+currentTab).classList.add('active');
     if (currentTab === 'dashboard') loadDashboard();
     if (currentTab === 'map') initOrRefreshMap();
+    if (currentTab === 'competency') loadCompetency();
   });
+});
+
+/* ── Competency matrix (Phase 1) ───────────────────────────────────────
+   Single-fetch /api/v1/skills/matrix returns
+     { employees, categories, scores: {emp_id: {cat_id: number}} }
+   Renders a 2D table; clicking a cell turns it into a number input
+   that POSTs to /api/v1/skills/scores. Empty cells show as a dim "—".
+   Score-band color: 1-3 amber, 4-6 cyan, 7-10 green. */
+let compState = { employees: [], categories: [], scores: {} };
+
+function scoreBandColor(s) {
+  if (s == null || isNaN(s)) return '';
+  if (s >= 7) return 'rgba(52,211,153,0.18)';
+  if (s >= 4) return 'rgba(34,211,238,0.16)';
+  return 'rgba(251,191,36,0.18)';
+}
+
+async function loadCompetency() {
+  const loading = document.getElementById('comp-loading');
+  const empty = document.getElementById('comp-empty');
+  const wrap = document.getElementById('comp-wrap');
+  loading.style.display = 'block'; empty.style.display = 'none'; wrap.style.display = 'none';
+  const data = await api('GET', '/api/v1/skills/matrix');
+  if (!data) return;  // 401 already redirected
+  compState = data;
+  loading.style.display = 'none';
+  if (!compState.employees.length) { empty.style.display = 'block'; return; }
+  wrap.style.display = 'block';
+  renderMatrix();
+}
+
+function renderMatrix() {
+  const thead = document.getElementById('comp-thead');
+  const tbody = document.getElementById('comp-tbody');
+  thead.replaceChildren();
+  tbody.replaceChildren();
+
+  const nameFilter = (document.getElementById('comp-filter')?.value || '').trim().toLowerCase();
+  const roleFilter = document.getElementById('comp-role-filter')?.value || '';
+  const visibleEmps = compState.employees.filter(e =>
+    (!roleFilter || e.role === roleFilter) &&
+    (!nameFilter || e.display_name.toLowerCase().includes(nameFilter))
+  );
+
+  // Header
+  const trh = document.createElement('tr');
+  const th0 = document.createElement('th');
+  th0.style.cssText = 'text-align:left; padding:0.5rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); min-width:200px;';
+  th0.textContent = 'Employee';
+  trh.appendChild(th0);
+  compState.categories.forEach(c => {
+    const th = document.createElement('th');
+    th.style.cssText = 'text-align:center; padding:0.5rem 0.4rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--text-muted); min-width:78px;';
+    th.title = c.description || '';
+    th.textContent = c.name;
+    trh.appendChild(th);
+  });
+  const thAvg = document.createElement('th');
+  thAvg.style.cssText = 'text-align:center; padding:0.5rem 0.5rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--accent);';
+  thAvg.textContent = 'Avg';
+  trh.appendChild(thAvg);
+  thead.appendChild(trh);
+
+  // Body
+  visibleEmps.forEach(emp => {
+    const tr = document.createElement('tr');
+    tr.dataset.empId = emp.id;
+    const tdName = document.createElement('td');
+    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap;';
+    const strong = document.createElement('div'); strong.style.fontWeight = '500';
+    strong.textContent = emp.display_name;
+    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)';
+    sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '');
+    tdName.appendChild(strong); tdName.appendChild(sub);
+    tr.appendChild(tdName);
+
+    let sum = 0, count = 0;
+    const empScores = compState.scores[String(emp.id)] || {};
+    compState.categories.forEach(cat => {
+      const td = document.createElement('td');
+      const val = empScores[String(cat.id)];
+      td.style.cssText = 'text-align:center; padding:0.3rem 0.4rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
+                        (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);');
+      td.textContent = (val != null) ? Number(val).toFixed(1) : '—';
+      td.title = 'Click to edit';
+      td.addEventListener('click', () => editCell(td, emp.id, cat.id, val));
+      tr.appendChild(td);
+      if (val != null) { sum += Number(val); count += 1; }
+    });
+    const tdAvg = document.createElement('td');
+    tdAvg.style.cssText = 'text-align:center; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--accent);';
+    tdAvg.textContent = count ? (sum / count).toFixed(1) : '—';
+    tr.appendChild(tdAvg);
+    tbody.appendChild(tr);
+  });
+}
+
+function editCell(td, empId, catId, currentVal) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex; align-items:center; gap:4px; justify-content:center;';
+  const input = document.createElement('input');
+  input.type = 'number'; input.min = '1'; input.max = '10'; input.step = '0.5';
+  input.value = (currentVal != null) ? currentVal : '';
+  input.style.cssText = 'width:48px; padding:2px 4px; background:var(--surface-2); color:var(--text); border:1px solid var(--accent); border-radius:3px; font-family:inherit; font-size:0.78rem; text-align:center;';
+  wrap.appendChild(input);
+  td.replaceChildren(wrap);
+  input.focus(); input.select();
+
+  let done = false;
+  const cancel = () => { if (done) return; done = true; renderMatrix(); };
+  const commit = async () => {
+    if (done) return; done = true;
+    const raw = input.value.trim();
+    if (raw === '') { renderMatrix(); return; }
+    const r = await api('POST', '/api/v1/skills/scores', {
+      employee_id: empId, category_id: catId, score: raw,
+    });
+    if (r && r.error) { toast(r.error); renderMatrix(); return; }
+    if (r && r.score != null) {
+      compState.scores[String(empId)] = compState.scores[String(empId)] || {};
+      compState.scores[String(empId)][String(catId)] = r.score;
+    }
+    renderMatrix();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  input.addEventListener('blur', commit);
+}
+
+// Live filter input — debounced re-render without re-fetching.
+document.addEventListener('DOMContentLoaded', () => {
+  const filt = document.getElementById('comp-filter');
+  if (filt) {
+    let t;
+    filt.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(renderMatrix, 120);
+    });
+  }
 });
 
 /* ── Map tab (Atlas-lite) ─────────────────────────────────────────────
