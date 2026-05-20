@@ -262,3 +262,99 @@ SKILL_CATEGORY_DEFAULTS = [
      "description": "Civil 3D, AutoCAD, Bluebeam, ArcGIS, project tooling.", "display_order": 100},
 ]
 
+
+# ── Cross-tracker bridges (Phase 3) ────────────────────────────────────────
+#
+# Declarative routes that carry data when promoting a source record into a
+# target tracker. Shape:
+#
+#   BRIDGE_MAP[src_table][tgt_table] = {
+#       "carry":           {src_field: tgt_field, ...},  # column rename map
+#       "defaults":        {tgt_field: value, ...},      # extra constants
+#       "title_template":  "Some {src_field} string",    # optional
+#       "title_field":     "title",                       # where to put it
+#       "required_overrides": ["field1", ...],            # ask UI to prompt
+#       "label":           "Open follow-up CAD task",     # for UI dropdown
+#   }
+#
+# The bridge service validates every target field referenced here against
+# ALLOWED_TABLES at app boot (_check_bridge_map_fields in app/__init__.py),
+# so a typo in this map fails loudly the first time the app starts.
+
+BRIDGE_MAP = {
+    "personnel_issues": {
+        "training_tasks": {
+            "label": "Schedule training for this",
+            "carry": {
+                "person_name":          "trainees",
+                "recommended_training": "training_goals",
+                "cad_skill_area":       "skill_area",
+                "issue_description":    "additional_context",
+                "project_number":       "project_number",
+                "project_id":           "project_id",
+            },
+            "defaults": {"source": "bridge"},
+            "title_template": "Training: {person_name}",
+            "title_field":    "title",
+            "required_overrides": [],
+        },
+        "work_tasks": {
+            "label": "Open follow-up CAD task",
+            "carry": {
+                "issue_description": "description",
+                "cad_skill_area":    "cad_skill_area",
+                "project_number":    "project_number",
+                "project_id":        "project_id",
+            },
+            "defaults": {"source": "bridge"},
+            "title_template": "Follow-up: {person_name}",
+            "title_field":    "title",
+            "required_overrides": [],
+        },
+    },
+    "work_tasks": {
+        "personnel_issues": {
+            "label": "Log a capability gap from this task",
+            "carry": {
+                "description":    "issue_description",
+                "cad_skill_area": "cad_skill_area",
+                "project_number": "project_number",
+                "project_id":     "project_id",
+            },
+            # personnel_issues has no `source` column — leave defaults empty.
+            "defaults": {},
+            # personnel_issues requires person_name; UI must prompt.
+            "required_overrides": ["person_name"],
+        },
+    },
+    "project_work_tasks": {
+        "personnel_issues": {
+            "label": "Log a capability gap from this task",
+            "carry": {
+                "task_description": "issue_description",
+                "engineer":         "person_name",
+                "engineer_id":      "person_id",
+                "project_number":   "project_number",
+                "project_id":       "project_id",
+            },
+            "defaults": {},
+            # engineer text may be blank — UI prompts if person_name lands empty.
+            "required_overrides": [],
+        },
+    },
+    "training_tasks": {
+        "personnel_issues": {
+            "label": "Log a capability gap from this training",
+            "carry": {
+                "trainees":         "person_name",
+                "skill_area":       "cad_skill_area",
+                "training_goals":   "recommended_training",
+                "project_number":   "project_number",
+                "project_id":       "project_id",
+            },
+            "defaults": {},
+            "required_overrides": [],
+        },
+    },
+}
+

@@ -19,7 +19,12 @@ from sqlalchemy import create_engine, inspect
 from werkzeug.exceptions import HTTPException
 
 from . import profile as _profile
-from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
+from .config import (
+    ADMIN_WORKFLOW_VIEWS,
+    ALLOWED_TABLES,
+    BRIDGE_MAP,
+    SIMPLE_SUBMISSION_CONFIGS,
+)
 from .csrf import init_csrf
 from .db import DB_PATH, close_session, get_secret_key
 from .logging_config import configure_logging
@@ -90,6 +95,7 @@ def create_app(db_path=None) -> Flask:
              _profile.BRAND_NAME, _profile.LOG_FORMAT, _profile.BIND_HOST)
 
     _check_schema_matches_models(app.config["DB_PATH"])
+    _check_bridge_map_fields()
 
     app.teardown_appcontext(close_session)
     init_request_middleware(app)
@@ -109,6 +115,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.api import bp as api_bp
     from .routes.attachments import bp as attachments_bp
     from .routes.auth import bp as auth_bp
+    from .routes.bridges import bp as bridges_bp
     from .routes.calendar import bp as calendar_bp
     from .routes.competency import bp as competency_bp
     from .routes.inbox import bp as inbox_bp
@@ -132,6 +139,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(calendar_bp)
     app.register_blueprint(registry_bp)
     app.register_blueprint(competency_bp)
+    app.register_blueprint(bridges_bp)
 
     from .cli import create_admin_command, db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)
@@ -170,6 +178,57 @@ def _check_schema_matches_models(db_path: str) -> None:
             + "; ".join(issues)
         )
     LOG.info("schema check: %d tables match models", len(Base.metadata.tables))
+
+
+def _check_bridge_map_fields() -> None:
+    """Refuse to start if BRIDGE_MAP references unknown tables or fields.
+
+    Same fail-loud pattern as _check_schema_matches_models. Catches typos
+    in the carry dict, defaults dict, or title_field before they become
+    silent dropped-fields at runtime."""
+    issues = []
+    for src_table, targets in BRIDGE_MAP.items():
+        if src_table not in ALLOWED_TABLES:
+            issues.append(f"unknown source table: {src_table!r}")
+            continue
+        for tgt_table, rule in targets.items():
+            if tgt_table not in ALLOWED_TABLES:
+                issues.append(
+                    f"bridge {src_table}->{tgt_table}: unknown target table"
+                )
+                continue
+            tgt_fields = set(ALLOWED_TABLES[tgt_table]["fields"])
+            src_fields = set(ALLOWED_TABLES[src_table]["fields"])
+            for sf, tf in rule.get("carry", {}).items():
+                if sf not in src_fields:
+                    issues.append(
+                        f"bridge {src_table}->{tgt_table}: source field "
+                        f"{sf!r} not in ALLOWED_TABLES[{src_table!r}]"
+                    )
+                if tf not in tgt_fields:
+                    issues.append(
+                        f"bridge {src_table}->{tgt_table}: target field "
+                        f"{tf!r} not in ALLOWED_TABLES[{tgt_table!r}]"
+                    )
+            for df in rule.get("defaults", {}):
+                if df not in tgt_fields:
+                    issues.append(
+                        f"bridge {src_table}->{tgt_table}: defaults key "
+                        f"{df!r} not in ALLOWED_TABLES[{tgt_table!r}]"
+                    )
+            tf = rule.get("title_field")
+            if tf and tf not in tgt_fields:
+                issues.append(
+                    f"bridge {src_table}->{tgt_table}: title_field "
+                    f"{tf!r} not in ALLOWED_TABLES[{tgt_table!r}]"
+                )
+    if issues:
+        raise RuntimeError(
+            "BRIDGE_MAP drift detected — refusing to start. Issues: "
+            + "; ".join(issues)
+        )
+    n_pairs = sum(len(t) for t in BRIDGE_MAP.values())
+    LOG.info("bridge check: %d pairs OK", n_pairs)
 
 
 def _register_legacy_api_redirect(app: Flask) -> None:

@@ -1035,6 +1035,12 @@
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
       <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <span id="promote-wrap" style="display:none; margin-right:auto;">
+        <select id="promote-select" class="filter-select" style="margin-right:0.4rem;">
+          <option value="">Promote / Escalate →</option>
+        </select>
+        <button class="btn btn-sm" type="button" id="promote-btn" onclick="doPromote()">Go</button>
+      </span>
       <button class="btn btn-primary" onclick="saveRecord()">Save</button>
     </div>
   </div>
@@ -2588,7 +2594,87 @@ function openModal(table,data) {
   const projectIdEl = document.getElementById('f-project_id');
   if (projectIdEl) projectIdEl.addEventListener('change', renderProjectMiniMap);
 
+  // Promote / Escalate dropdown — only meaningful on existing records.
+  renderPromoteDropdown(table);
+
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+/* ── Promote / Escalate (Phase 3 bridges) ───────────────────────────────
+   Looks up the source table's allowed targets from /api/v1/bridge/<src>/
+   targets, populates the footer dropdown, and POSTs the bridge endpoint
+   when the operator picks one. Required-overrides are prompted via the
+   native prompt() — simple enough for personal use; can be upgraded to
+   a proper modal later. */
+const PROMOTE_TABLE_LABEL = {
+  work_tasks:         'CAD Dev Task',
+  project_work_tasks: 'Project Task',
+  training_tasks:     'Training Task',
+  personnel_issues:   'Capability Entry',
+  inbox_items:        'Triage Item',
+  personal_items:     'Personal Item',
+};
+
+async function renderPromoteDropdown(table) {
+  const wrap = document.getElementById('promote-wrap');
+  const sel = document.getElementById('promote-select');
+  if (!wrap || !sel) return;
+  wrap.style.display = 'none';
+  sel.replaceChildren();
+  const placeholder = document.createElement('option');
+  placeholder.value = ''; placeholder.textContent = 'Promote / Escalate →';
+  sel.appendChild(placeholder);
+  if (!editingId) return;  // need an existing record id
+  const srcTable = API_MAP[table];
+  if (!srcTable) return;
+  let targets;
+  try {
+    const res = await fetch('/api/v1/bridge/' + encodeURIComponent(srcTable) + '/targets');
+    if (res.status === 401) { window.location='/login'; return; }
+    targets = await res.json();
+  } catch (e) { targets = []; }
+  if (!Array.isArray(targets) || targets.length === 0) return;
+  targets.forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = JSON.stringify(t);
+    opt.textContent = t.label || ('Promote to ' + (PROMOTE_TABLE_LABEL[t.target] || t.target));
+    sel.appendChild(opt);
+  });
+  wrap.style.display = 'inline-flex';
+}
+
+async function doPromote() {
+  const sel = document.getElementById('promote-select');
+  if (!sel || !sel.value) return;
+  if (!editingId) { toast('Save the record first.'); return; }
+
+  let target;
+  try { target = JSON.parse(sel.value); }
+  catch (e) { toast('Bad target selection'); return; }
+  const tgtTable = target.target;
+  const required = target.required_overrides || [];
+  const srcTable = API_MAP[editingTable];
+
+  // Prompt for each required override. Keeps the UI dependency-free.
+  const overrides = {};
+  for (const field of required) {
+    const v = window.prompt('Required for ' + (PROMOTE_TABLE_LABEL[tgtTable] || tgtTable) + ' — ' + field + ':');
+    if (v == null) return;  // operator cancelled
+    if (!v.trim()) { toast(field + ' cannot be blank'); return; }
+    overrides[field] = v.trim();
+  }
+
+  if (!confirm('Promote this record to ' + (PROMOTE_TABLE_LABEL[tgtTable] || tgtTable) + '?')) return;
+
+  const res = await api('POST',
+    '/api/v1/bridge/' + encodeURIComponent(srcTable) + '/' + editingId + '/' + encodeURIComponent(tgtTable),
+    { overrides }
+  );
+  if (res && res.error) { toast(res.error); return; }
+  toast('Promoted to ' + (PROMOTE_TABLE_LABEL[tgtTable] || tgtTable) + ' #' + res.target_id);
+  closeModal();
+  // Refresh the source tab so the operator sees the bridge in activity log later.
+  loadTable(editingTable);
 }
 function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); editingId=null; editingTable=null; }
 
