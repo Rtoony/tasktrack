@@ -57,6 +57,14 @@
   .user-name { font-size:0.8rem; color:var(--text-muted); }
   .btn-logout,.btn-admin-link { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; }
   .btn-logout:hover,.btn-admin-link:hover { background:var(--bg); color:var(--text); }
+  /* Phase-5 health pill — small colored dot showing aggregated upstream
+     service health. Hover/click reveals the per-component tooltip. */
+  .health-pill { display:inline-flex; align-items:center; padding:0.18rem 0.45rem; border-radius:999px; background:var(--surface); border:1px solid var(--border); cursor:default; }
+  .health-dot { width:9px; height:9px; border-radius:50%; background:#94a3b8; transition:background 0.2s; box-shadow:0 0 0 2px rgba(255,255,255,0.02); }
+  .health-pill[data-overall="ok"]    .health-dot { background:#34d399; }
+  .health-pill[data-overall="warn"]  .health-dot { background:#fbbf24; }
+  .health-pill[data-overall="error"] .health-dot { background:#f87171; }
+  .health-pill[data-overall="n/a"]   .health-dot { background:#64748b; }
   .context-badge { font-size:0.72rem; color:var(--text-muted); font-weight:500; margin-left:0.5rem; }
 
   /* ── Search ──────────────────────────────── */
@@ -390,6 +398,11 @@
       {% else %}
       <a href="/intake" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
       <a href="https://portal.roonytoony.dev/calendar" class="btn-admin-link" target="_blank" rel="noopener" title="Open the Nexus calendar in a new tab">&#128197; Calendar</a>
+      {% endif %}
+      {% if not standalone_tab %}
+      <span class="health-pill" id="health-pill" title="Loading…">
+        <span class="health-dot" id="health-dot"></span>
+      </span>
       {% endif %}
       <span class="user-name">{{ user_name }}</span>
       {% if user_role == 'admin' %}<a href="/admin" class="btn-admin-link">Admin</a>{% endif %}
@@ -1425,7 +1438,34 @@ document.addEventListener('DOMContentLoaded', () => {
       t = setTimeout(renderMatrix, 120);
     });
   }
+  // Phase-5 health pill — initial poll, then every 60s.
+  refreshHealthPill();
+  setInterval(refreshHealthPill, 60000);
 });
+
+/* ── Health pill (Phase 5) ─────────────────────────────────────────────
+   Pulls the cached snapshot from /api/v1/health/pill and updates the
+   header dot color + tooltip. The endpoint never hits the network
+   itself — a background thread on the server refreshes the cache. */
+async function refreshHealthPill() {
+  const pill = document.getElementById('health-pill');
+  if (!pill) return;
+  try {
+    const res = await fetch('/api/v1/health/pill');
+    if (res.status === 401) return;  // not logged in yet
+    const data = await res.json();
+    pill.dataset.overall = data.overall || 'n/a';
+    const parts = (data.components || []).map(c => {
+      const tag = ({ok:'OK', warn:'!', error:'X', 'n/a':'-'})[c.status] || c.status;
+      return `[${tag}] ${c.label}: ${c.detail || c.status}`;
+    });
+    const ts = data.checked_at ? ` (checked ${data.checked_at})` : '';
+    pill.title = parts.length ? parts.join('\n') + ts : ('overall: ' + (data.overall || 'n/a') + ts);
+  } catch (e) {
+    pill.dataset.overall = 'n/a';
+    pill.title = 'health pill unreachable';
+  }
+}
 
 /* ── Map tab (Atlas-lite) ─────────────────────────────────────────────
    Lazy init: only spin up Leaflet the first time the Map tab is opened.

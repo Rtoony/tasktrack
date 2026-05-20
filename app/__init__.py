@@ -118,6 +118,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.bridges import bp as bridges_bp
     from .routes.calendar import bp as calendar_bp
     from .routes.competency import bp as competency_bp
+    from .routes.health_pill import bp as health_pill_bp
     from .routes.inbox import bp as inbox_bp
     from .routes.intake import bp as intake_bp
     from .routes.links import bp as links_bp
@@ -140,6 +141,16 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(registry_bp)
     app.register_blueprint(competency_bp)
     app.register_blueprint(bridges_bp)
+    app.register_blueprint(health_pill_bp)
+
+    # Phase-5: background health probes. Skipped under pytest so we don't
+    # spawn a thread per test fixture. The conftest sets TESTING after
+    # create_app returns, so checking config here is too early; use the
+    # PYTEST_CURRENT_TEST env var instead, which pytest sets for every
+    # test run.
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        from .services.health import start_background_probes
+        start_background_probes()
 
     from .cli import create_admin_command, db_upgrade_command, init_db_command
     app.cli.add_command(init_db_command)
