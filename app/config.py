@@ -96,9 +96,13 @@ ALLOWED_TABLES = {
             "estimated_time_loss_minutes",
             "immediate_solution",
             "skill_category_id",
+            "person_ids",
         ],
-        "required": ["person_name", "issue_description"],
-        "label": "Capability Entry",
+        # Phase-5.5: an incident may involve zero people (process /
+        # equipment), one person, or many — person_name is no longer
+        # required. issue_description is still the one mandatory field.
+        "required": ["issue_description"],
+        "label": "Incident Report",
         "status_flow": ["Observed", "Coaching Planned", "Training Scheduled", "Monitoring", "Closed"],
     },
     "inbox_items": {
@@ -173,6 +177,11 @@ SIMPLE_SUBMISSION_CONFIGS = {
         ],
     },
     "capability": {
+        # Retained for backward-compat with the SIMPLE_SUBMISSION_CONFIGS
+        # contract (telegram_bot.py imports this name). The /intake/
+        # capability URL is intentionally 404'd in app/__init__.py
+        # because anonymous HR-data submissions were retired
+        # 2026-04-26. See `incident` below for the auth-gated successor.
         "table": "personnel_issues",
         "source_name": "Capability Observation Form",
         "page_title": "Capability Observation Submission",
@@ -187,6 +196,37 @@ SIMPLE_SUBMISSION_CONFIGS = {
             {"name": "issue_description", "label": "Observed Gap / Incident Summary", "type": "textarea", "required": True, "placeholder": "What happened or what gap keeps showing up?"},
             {"name": "incident_context", "label": "Incident Context", "type": "textarea", "placeholder": "What work or situation exposed the issue?"},
             {"name": "recommended_training", "label": "Recommended Training / Follow-Up", "type": "textarea", "placeholder": "What coaching or training would help?"},
+        ],
+    },
+    "incident": {
+        # Phase-5.5 successor to the retired anonymous capability form.
+        # Mounted at /intake/incident with @login_required so HR-sensitive
+        # data still goes through authenticated submitters. Supports 0,
+        # 1, or many people via the comma-separated "people_involved"
+        # field — the backend enrich_with_fks splits and resolves names
+        # against the Employees registry, writing both person_name (text,
+        # preserved) and person_ids (JSON list of matched ids).
+        "table": "personnel_issues",
+        "source_name": "Incident Report Form",
+        "page_title": "Incident Report",
+        "heading": "Report an Incident",
+        "intro": "Log a CAD process gap, capability shortfall, or work-related incident. People involved is optional — leave blank for process or equipment incidents.",
+        "submit_label": "Submit Incident Report",
+        "success_noun": "incident report",
+        # Marker for the hub UI to display a lock icon. Route enforces
+        # @login_required separately; this string is for the template.
+        "auth_required": True,
+        "fields": [
+            {"name": "issue_description", "label": "Incident Summary", "type": "textarea", "required": True, "placeholder": "Brief factual summary — what happened?"},
+            {"name": "person_name", "label": "People Involved (comma-separated, optional)", "type": "text", "placeholder": "Alice Smith, Bob Jones — or leave blank for 0-person incidents"},
+            {"name": "observed_by", "label": "Reported By", "type": "text", "placeholder": "Your name (optional)"},
+            {"name": "incident_context", "label": "Context", "type": "textarea", "placeholder": "What work or situation exposed this?"},
+            {"name": "cad_skill_area", "label": "Skill Area", "type": "text", "placeholder": "Detailing, modeling, standards, drainage, etc."},
+            {"name": "immediate_solution", "label": "Immediate Fix Applied", "type": "textarea", "placeholder": "What did you do in the moment to unblock the work?"},
+            {"name": "recommended_training", "label": "Recommended Training / Follow-Up", "type": "textarea", "placeholder": "What coaching, review, or training should happen next?"},
+            {"name": "severity", "label": "Severity", "type": "select", "options": ["Low", "Medium", "High", "Critical"], "default": "Medium"},
+            {"name": "estimated_time_loss_minutes", "label": "Estimated Time Lost (minutes)", "type": "number", "placeholder": "0"},
+            {"name": "project_number", "label": "Project Number (optional)", "type": "text", "placeholder": "1234.56"},
         ],
     },
 }

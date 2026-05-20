@@ -4,6 +4,7 @@ Validation, status semantics, the weekly-submission row parser, and the
 common "create a record + log it" path. These take a SQLAlchemy session
 plus a payload — no Flask routing concerns here.
 """
+import json
 import re
 from datetime import date, datetime
 
@@ -82,25 +83,98 @@ def enrich_with_fks(sess: Session, table: str, record) -> bool:
 
     Called once after `create_direct_record` so AI triage / intake forms
     that only know how to write text still get FK enrichment.
+
+    Special-cases personnel_issues' `person_name` field: it may carry a
+    comma-separated list of names, in which case we populate the
+    multi-FK `person_ids` JSON array (Phase 5.5) AND set `person_id`
+    to the first match for backward compat.
     """
-    mapping = _FK_ENRICHMENT.get(table)
-    if not mapping:
-        return False
     changed = False
-    for text_col, fk_col, model, lookup_col in mapping:
-        if getattr(record, fk_col, None):
-            continue
-        text_val = (getattr(record, text_col, "") or "").strip()
-        if not text_val:
-            continue
+    mapping = _FK_ENRICHMENT.get(table)
+    if mapping:
+        for text_col, fk_col, model, lookup_col in mapping:
+            # Skip person_id here — handled in the multi-person block below
+            # so we don't double-write or leave person_ids stale.
+            if table == "personnel_issues" and text_col == "person_name":
+                continue
+            if getattr(record, fk_col, None):
+                continue
+            text_val = (getattr(record, text_col, "") or "").strip()
+            if not text_val:
+                continue
+            hit = sess.scalar(
+                select(model).where(
+                    func.lower(getattr(model, lookup_col)) == text_val.lower()
+                ).limit(1)
+            )
+            if hit is not None:
+                setattr(record, fk_col, hit.id)
+                changed = True
+
+    # Phase-5.5 multi-person path for personnel_issues.
+    if table == "personnel_issues" and isinstance(record, PersonnelIssue):
+        if _resolve_person_ids(sess, record):
+            changed = True
+
+    return changed
+
+
+def _resolve_person_ids(sess: Session, record: PersonnelIssue) -> bool:
+    """Split person_name on commas, resolve each name to an Employee.id,
+    write the result as a JSON list into person_ids. Also seeds person_id
+    from the first match if it isn't already set. Idempotent.
+
+    Treats `person_ids` already on the record as authoritative — if the
+    caller (modal UI with multi-select) supplied a valid JSON list, we
+    keep it and skip the text-parse step entirely. This way the UI's
+    explicit selection beats the comma-parse fallback.
+    """
+    raw_ids = getattr(record, "person_ids", "") or ""
+    # If caller already supplied a non-empty list, treat as authoritative.
+    try:
+        if raw_ids and raw_ids.strip().startswith("["):
+            existing = json.loads(raw_ids)
+            if isinstance(existing, list) and existing:
+                # Just make sure person_id mirrors first entry.
+                first = existing[0]
+                try:
+                    first_int = int(first)
+                except (TypeError, ValueError):
+                    first_int = None
+                if first_int and not record.person_id:
+                    record.person_id = first_int
+                    return True
+                return False
+    except (json.JSONDecodeError, ValueError):
+        pass  # fall through to comma-split
+
+    text = (record.person_name or "").strip()
+    if not text:
+        # Make sure the column has a valid JSON empty list rather than '' / NULL.
+        if raw_ids != "[]":
+            record.person_ids = "[]"
+            return True
+        return False
+
+    # Split on comma OR semicolon — both common in human input.
+    names = [n.strip() for n in re.split(r"[,;]", text) if n.strip()]
+    if not names:
+        return False
+    found_ids: list[int] = []
+    for name in names:
         hit = sess.scalar(
-            select(model).where(
-                func.lower(getattr(model, lookup_col)) == text_val.lower()
+            select(Employee).where(
+                func.lower(Employee.display_name) == name.lower()
             ).limit(1)
         )
-        if hit is not None:
-            setattr(record, fk_col, hit.id)
-            changed = True
+        if hit is not None and hit.id not in found_ids:
+            found_ids.append(hit.id)
+    new_value = json.dumps(found_ids)
+    changed = (new_value != raw_ids)
+    record.person_ids = new_value
+    if found_ids and not record.person_id:
+        record.person_id = found_ids[0]
+        changed = True
     return changed
 
 

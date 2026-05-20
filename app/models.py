@@ -154,11 +154,17 @@ class TrainingTask(Base):
 
 
 class PersonnelIssue(Base):
-    """Capability tracking. Phase 4 carves this out into its own restricted module."""
+    """Capability / incident tracking.
+
+    Phase 5.5: `person_name` became nullable so 0-person incidents are
+    allowed (process gaps, equipment incidents); `person_ids` (JSON
+    array) carries the multi-FK list when one or more employees are
+    identified.
+    """
     __tablename__ = "personnel_issues"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    person_name: Mapped[str] = mapped_column(Text, nullable=False)
+    person_name: Mapped[str | None] = mapped_column(Text)
     observed_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     issue_description: Mapped[str] = mapped_column(Text, nullable=False)
@@ -180,6 +186,10 @@ class PersonnelIssue(Base):
     estimated_time_loss_minutes: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     immediate_solution: Mapped[str] = mapped_column(Text, server_default=text("''"))
     skill_category_id: Mapped[int | None] = mapped_column(Integer)
+    # Phase-5.5: multi-person support. JSON array of employee ids;
+    # `person_id` (above) becomes the convenience "primary person" and
+    # is auto-populated from person_ids[0] if set.
+    person_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
 
 
 class PersonalItem(Base):

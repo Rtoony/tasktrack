@@ -2234,10 +2234,11 @@ const FORMS = {
     {key:'links',label:'Links',type:'links'},
   ],
   personnel:[
-    {key:'person_name',label:'Staff Member',type:'text',required:true},
-    {key:'observed_by',label:'Observed By',type:'text',placeholder:'Who submitted or observed this issue?'},
+    {key:'issue_description',label:'Incident Summary',type:'textarea',required:true,placeholder:'What happened? Brief factual summary.'},
+    {key:'person_name',label:'People Involved (comma-separated, optional)',type:'text',placeholder:'Alice Smith, Bob Jones \u2014 or leave blank for 0-person incidents'},
+    {key:'person_ids',label:'People (registry FK \u00b7 multi-select)',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional. Pick one or more employees. The People text field above is also parsed for matching names \u2014 either path works.'},
+    {key:'observed_by',label:'Reported By',type:'text',placeholder:'Who submitted or observed this issue?'},
     {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
-    {key:'issue_description',label:'Observed Gap / Incident Summary',type:'textarea',required:true},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
     {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
     {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
@@ -2248,7 +2249,6 @@ const FORMS = {
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
-    {key:'person_id',label:'Person (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK. Pairs with the Staff Member text field above.'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -2313,6 +2313,42 @@ function renderField(f,value) {
         opt.value=r.id;
         opt.textContent=f.displayKey ? r[f.displayKey] : r.display_name || r.project_number || ('#'+r.id);
         if (String(value)===String(r.id)) opt.selected=true;
+        input.appendChild(opt);
+      });
+    });
+    if (f.hint) {
+      const hint=document.createElement('div'); hint.className='fk-hint';
+      hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
+      hint.textContent=f.hint;
+      wrap.appendChild(input);
+      wrap.appendChild(hint);
+      return wrap;
+    }
+  } else if (f.type==='fk-multi-select') {
+    /* Multi-select for the Phase-5.5 person_ids JSON array. Value is a
+       JSON string like "[1,2,3]"; we pre-select matching options. The
+       getFormData reader re-serializes to JSON when reading back. */
+    input=document.createElement('select');
+    input.id='f-'+f.key;
+    input.multiple=true;
+    input.size=6;
+    input.style.cssText='min-height:7rem; padding:0.35rem 0.55rem;';
+    let selectedIds=[];
+    if (Array.isArray(value)) selectedIds = value.map(String);
+    else if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed.startsWith('[')) {
+        try { selectedIds = JSON.parse(trimmed).map(String); } catch (e) {}
+      } else if (trimmed) {
+        selectedIds = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+      }
+    }
+    loadFkOptions(f.endpoint).then(rows => {
+      rows.forEach(r => {
+        const opt=document.createElement('option');
+        opt.value=r.id;
+        opt.textContent=f.displayKey ? r[f.displayKey] : r.display_name || ('#'+r.id);
+        if (selectedIds.includes(String(r.id))) opt.selected=true;
         input.appendChild(opt);
       });
     });
@@ -2508,7 +2544,17 @@ function getFormData(table) {
   FORMS[table]
     .flatMap(f=>f.key==='_row'?f.fields:[f])
     .filter(f=>f.type!=='placeholder-panel' && f.type!=='attachments' && f.type!=='links' && f.type!=='project-map')
-    .forEach(f=>{const el=document.getElementById('f-'+f.key);if(el)data[f.key]=el.value;});
+    .forEach(f=>{
+      const el=document.getElementById('f-'+f.key);
+      if(!el) return;
+      if (f.type === 'fk-multi-select') {
+        // <select multiple>: serialise selected ids back as a JSON array.
+        const ids = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
+        data[f.key] = JSON.stringify(ids);
+      } else {
+        data[f.key] = el.value;
+      }
+    });
   return data;
 }
 

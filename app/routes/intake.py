@@ -23,6 +23,7 @@ from flask import (
 
 from .. import limiter
 from .. import profile as _profile
+from ..auth import login_required
 from ..config import ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
 from ..db import get_session
 from ..services.tickets import build_weekly_submission_rows, create_direct_record
@@ -52,16 +53,25 @@ def submit_hub():
             "title": "Weekly Project Work Submission",
             "copy": "Use this on Friday to submit next week’s project tasks in one batch.",
             "href": "/intake/project-work",
+            "auth_required": False,
         },
         {
             "title": "CAD Request Submission",
             "copy": "Submit CAD changes, fixes, or manager follow-up requests without opening the dashboard.",
             "href": "/intake/cad-development",
+            "auth_required": False,
         },
         {
             "title": "Training Request Submission",
             "copy": "Submit coaching and training needs as planned work items.",
             "href": "/intake/training",
+            "auth_required": False,
+        },
+        {
+            "title": "Incident Report",
+            "copy": "Sign-in required. Log a CAD process gap, capability shortfall, or work-related incident — 0, 1, or many people identified.",
+            "href": "/intake/incident",
+            "auth_required": True,
         },
     ]
     return render_template("submit_hub.html", forms=forms)
@@ -215,3 +225,13 @@ def submit_training():
 # Capability submissions have been REMOVED from the intake surface
 # (decision 2026-04-26 — HR-adjacent data only via authenticated UI).
 # /submit/capability + /intake/capability both return 404.
+
+
+@bp.route("/intake/incident", methods=["GET", "POST"])
+@login_required  # Phase-5.5: auth-gated successor to the retired capability form.
+@limiter.limit(_intake_post_limit, methods=["POST"])
+def submit_incident():
+    """Auth-required incident report. The form accepts a comma-separated
+    list in `person_name`; the service-layer enrich_with_fks resolves
+    matching Employees and writes person_ids."""
+    return _render_simple_submission("incident")

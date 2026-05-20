@@ -72,9 +72,10 @@
           {% if field.type == 'textarea' %}
           <textarea id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}">{{ values.get(field.name, '') }}</textarea>
           {% elif field.type == 'select' %}
+          {% set current = values.get(field.name) or field.get('default', '') %}
           <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
             {% for option in field.options %}
-            <option value="{{ option }}" {% if values.get(field.name, '') == option %}selected{% endif %}>{{ option }}</option>
+            <option value="{{ option }}" {% if current == option %}selected{% endif %}>{{ option }}</option>
             {% endfor %}
           </select>
           {% else %}
