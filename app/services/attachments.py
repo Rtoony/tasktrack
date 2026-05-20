@@ -30,7 +30,7 @@ from typing import BinaryIO
 import boto3
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
-from flask import current_app, session as flask_session
+from flask import session as flask_session
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from werkzeug.datastructures import FileStorage
@@ -261,7 +261,7 @@ def upload(sess: Session, file_storage: FileStorage, table: str,
         )
     except ClientError as e:
         LOG.exception("MinIO put_object failed key=%s err=%s", object_key, e)
-        raise AttachmentError("Storage backend rejected the upload.", status_code=502)
+        raise AttachmentError("Storage backend rejected the upload.", status_code=502) from e
 
     att = Attachment(
         table_name=table,
@@ -316,4 +316,4 @@ def presigned_download_url(att: Attachment, ttl_seconds: int = 300) -> str:
         )
     except ClientError as e:
         LOG.exception("MinIO presign failed key=%s err=%s", att.object_key, e)
-        raise AttachmentError("Could not generate download URL.", status_code=502)
+        raise AttachmentError("Could not generate download URL.", status_code=502) from e

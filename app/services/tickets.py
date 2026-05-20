@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session
 
 from ..config import ALLOWED_TABLES, PERSONAL_CATEGORIES
 from ..models import (
-    InboxItem, PersonalItem, PersonnelIssue, ProjectWorkTask, TrainingTask, WorkTask,
+    InboxItem,
+    PersonalItem,
+    PersonnelIssue,
+    ProjectWorkTask,
+    TrainingTask,
+    WorkTask,
 )
 from .audit import log_activity
 

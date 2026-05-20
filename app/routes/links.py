@@ -13,7 +13,7 @@ from sqlalchemy import select
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import Link, to_dict
+from ..models import to_dict
 from ..services import links as link_svc
 from ..services.tickets import TABLE_MODELS
 

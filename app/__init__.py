@@ -15,9 +15,8 @@ import os
 from flask import Flask, g, jsonify, request
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-from werkzeug.exceptions import HTTPException
-
 from sqlalchemy import create_engine, inspect
+from werkzeug.exceptions import HTTPException
 
 from . import profile as _profile
 from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
@@ -104,17 +103,17 @@ def create_app(db_path=None) -> Flask:
             "attachment_max_bytes": app.config["MAX_CONTENT_LENGTH"],
         }
 
-    from .routes.auth import bp as auth_bp
-    from .routes.main import bp as main_bp
-    from .routes.intake import bp as intake_bp
-    from .routes.api import bp as api_bp
     from .routes.admin import bp as admin_bp
-    from .routes.telegram_api import bp as telegram_api_bp
+    from .routes.api import bp as api_bp
     from .routes.attachments import bp as attachments_bp
-    from .routes.links import bp as links_bp
-    from .routes.inbox import bp as inbox_bp
-    from .routes.triage import bp as triage_bp
+    from .routes.auth import bp as auth_bp
     from .routes.calendar import bp as calendar_bp
+    from .routes.inbox import bp as inbox_bp
+    from .routes.intake import bp as intake_bp
+    from .routes.links import bp as links_bp
+    from .routes.main import bp as main_bp
+    from .routes.telegram_api import bp as telegram_api_bp
+    from .routes.triage import bp as triage_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)

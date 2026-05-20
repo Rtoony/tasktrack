@@ -2,8 +2,7 @@
 import pytest
 
 from app.db import get_session
-from app.models import ActivityLog, InboxItem, WorkTask
-
+from app.models import InboxItem, WorkTask
 
 INBOX_TOKEN = "test-inbox-token"
 
@@ -14,6 +13,7 @@ def with_token(monkeypatch):
     monkeypatch.setenv("TASKTRACK_TOKEN_INBOX", INBOX_TOKEN)
     # tokens.py reads at import time — re-load it for this test.
     import importlib
+
     from app import tokens
     importlib.reload(tokens)
     yield

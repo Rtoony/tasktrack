@@ -17,8 +17,12 @@ from ..models import to_dict
 from ..services.audit import log_activity
 from ..services.tickets import TABLE_MODELS, create_direct_record
 from ..services.triage import (
-    TRIAGE_ALLOWED_TARGETS, TRIAGE_CONFIRM_TABLES, TRIAGE_PRESET_KEYS,
-    TRIAGE_TARGET_LABELS, auto_project_number, run_triage,
+    TRIAGE_ALLOWED_TARGETS,
+    TRIAGE_CONFIRM_TABLES,
+    TRIAGE_PRESET_KEYS,
+    TRIAGE_TARGET_LABELS,
+    auto_project_number,
+    run_triage,
     triage_plan_to_payload,
 )
 from ..tokens import check_scoped_token

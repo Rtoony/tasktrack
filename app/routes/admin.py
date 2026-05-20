@@ -2,7 +2,13 @@
 import secrets
 
 from flask import (
-    Blueprint, jsonify, redirect, render_template, request, session, url_for,
+    Blueprint,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash

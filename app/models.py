@@ -22,10 +22,14 @@ Design notes:
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
-    Index, Integer, String, Text, TIMESTAMP, text,
+    TIMESTAMP,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -76,7 +80,7 @@ class WorkTask(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'Not Started'"))
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
@@ -104,7 +108,7 @@ class ProjectWorkTask(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'Not Started'"))
     due_at: Mapped[str] = mapped_column(Text, server_default=text("''"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
@@ -128,7 +132,7 @@ class TrainingTask(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'Not Started'"))
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
@@ -155,7 +159,7 @@ class PersonnelIssue(Base):
     reported_date: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     follow_up_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
     resolution_notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -179,11 +183,11 @@ class PersonalItem(Base):
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
     source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
     source_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_personal_items_category", "category"),
@@ -209,12 +213,12 @@ class InboxItem(Base):
     priority: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
     promoted_to_table: Mapped[str] = mapped_column(Text, server_default=text("''"))
-    promoted_to_id: Mapped[Optional[int]] = mapped_column(Integer)
-    created_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    promoted_to_id: Mapped[int | None] = mapped_column(Integer)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
-    completed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_inbox_items_status", "status"),
@@ -260,7 +264,7 @@ class Attachment(Base):
     content_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(Text, nullable=False)
-    uploaded_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    uploaded_by_user_id: Mapped[int | None] = mapped_column(Integer)
     uploaded_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     uploaded_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
@@ -278,7 +282,7 @@ class Link(Base):
     url: Mapped[str] = mapped_column(Text, nullable=False)
     label: Mapped[str] = mapped_column(Text, server_default=text("''"))
     source_kind: Mapped[str] = mapped_column(Text, server_default=text("'generic'"))
-    added_by_user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    added_by_user_id: Mapped[int | None] = mapped_column(Integer)
     added_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
@@ -296,7 +300,7 @@ class TelegramChatAccess(Base):
     linked_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     last_seen_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     is_active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
-    user_id: Mapped[Optional[int]] = mapped_column(Integer)
+    user_id: Mapped[int | None] = mapped_column(Integer)
 
 
 def to_dict(obj) -> dict | None:

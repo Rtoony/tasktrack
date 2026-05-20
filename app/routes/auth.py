@@ -1,6 +1,12 @@
 """Login / register / logout."""
 from flask import (
-    Blueprint, current_app, redirect, render_template, request, session, url_for,
+    Blueprint,
+    current_app,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
 )
 from sqlalchemy import func, select
 from werkzeug.security import check_password_hash, generate_password_hash

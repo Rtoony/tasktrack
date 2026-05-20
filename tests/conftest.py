@@ -16,7 +16,6 @@ also rebuilt per call because each create_app pushes its own DB_PATH;
 the lazy `_ensure_engine` re-binds on first use after `_engine = None`.
 """
 import os
-from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine
@@ -66,3 +65,46 @@ def temp_app(tmp_path, monkeypatch):
 def client(temp_app):
     """Flask test client backed by the temp DB."""
     return temp_app.test_client()
+
+
+def _seed_user(temp_app, *, role="user", user_id=1, name="Tester",
+               email=None):
+    """Insert a user row directly so we can stamp the session."""
+    from app.db import get_session
+    from app.models import User
+    if email is None:
+        email = f"{name.lower().replace(' ', '.')}@example.com"
+    with temp_app.app_context():
+        sess = get_session()
+        existing = sess.get(User, user_id)
+        if existing is None:
+            sess.add(User(
+                id=user_id, email=email, display_name=name,
+                password_hash="x", role=role,
+            ))
+            sess.commit()
+    return user_id, name, role
+
+
+@pytest.fixture
+def auth_client(client, temp_app):
+    """Test client logged in as a regular user (id=1)."""
+    uid, name, role = _seed_user(temp_app, role="user")
+    with client.session_transaction() as s:
+        s["user_id"] = uid
+        s["user_name"] = name
+        s["user_role"] = role
+    return client
+
+
+@pytest.fixture
+def admin_client(client, temp_app):
+    """Test client logged in as an admin (id=2)."""
+    uid, name, role = _seed_user(temp_app, role="admin", user_id=2,
+                                  name="Admin User",
+                                  email="admin@example.com")
+    with client.session_transaction() as s:
+        s["user_id"] = uid
+        s["user_name"] = name
+        s["user_role"] = role
+    return client

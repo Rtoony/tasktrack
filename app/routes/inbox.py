@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, Response, g, jsonify, request, session
+from flask import Blueprint, Response, jsonify, request
 from sqlalchemy import select
 
 from ..auth import login_required
@@ -41,7 +41,7 @@ from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import InboxItem, to_dict
 from ..services.audit import log_activity
-from ..services.tickets import TABLE_MODELS, create_direct_record
+from ..services.tickets import create_direct_record
 from ..tokens import check_scoped_token
 
 bp = Blueprint("inbox", __name__)
@@ -240,7 +240,7 @@ def promote(item_id):
                 payload[k] = v
 
     record_id, error = create_direct_record(
-        sess, target_table, payload, source_name=f"inbox-promote",
+        sess, target_table, payload, source_name="inbox-promote",
     )
     if error:
         return jsonify({"error": error}), 400

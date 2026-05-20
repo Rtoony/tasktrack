@@ -4,6 +4,7 @@ Reads ~/.var/lib/radicale/collections by default; override with
 RADICALE_COLLECTIONS_ROOT.
 """
 import os
+from datetime import UTC
 from pathlib import Path
 
 _RADICALE_ROOT = Path(
@@ -16,7 +17,8 @@ _RADICALE_USER_DIR = "rtoony"
 
 
 def _calendar_is_date_only(value):
-    from datetime import date as _date, datetime as _datetime
+    from datetime import date as _date
+    from datetime import datetime as _datetime
     return isinstance(value, _date) and not isinstance(value, _datetime)
 
 
@@ -30,8 +32,9 @@ def calendar_upcoming_events(days: int = 30, limit: int = 8):
     if not user_dir.is_dir():
         return {"available": False, "reason": "Radicale collections not found", "events": []}
 
-    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-    now = _dt.now(tz=_tz.utc)
+    from datetime import datetime as _dt
+    from datetime import timedelta as _td
+    now = _dt.now(tz=UTC)
     horizon = now + _td(days=days)
     out = []
 
@@ -53,12 +56,12 @@ def calendar_upcoming_events(days: int = 30, limit: int = 8):
 
                 all_day = _calendar_is_date_only(start) or _calendar_is_date_only(end)
                 if all_day:
-                    cmp_start = _dt(start.year, start.month, start.day, tzinfo=_tz.utc)
+                    cmp_start = _dt(start.year, start.month, start.day, tzinfo=UTC)
                     e_end = end if hasattr(end, "year") else start
-                    cmp_end = _dt(e_end.year, e_end.month, e_end.day, tzinfo=_tz.utc)
+                    cmp_end = _dt(e_end.year, e_end.month, e_end.day, tzinfo=UTC)
                 else:
-                    cmp_start = start if getattr(start, "tzinfo", None) else start.replace(tzinfo=_tz.utc)
-                    cmp_end = end if getattr(end, "tzinfo", None) else end.replace(tzinfo=_tz.utc)
+                    cmp_start = start if getattr(start, "tzinfo", None) else start.replace(tzinfo=UTC)
+                    cmp_end = end if getattr(end, "tzinfo", None) else end.replace(tzinfo=UTC)
 
                 if cmp_end < now or cmp_start > horizon:
                     continue

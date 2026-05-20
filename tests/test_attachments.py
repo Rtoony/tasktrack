@@ -12,7 +12,6 @@ from app.db import get_session
 from app.models import ActivityLog, Attachment, WorkTask
 from app.services import attachments as att_svc
 
-
 # ── Stub MinIO ────────────────────────────────────────────────────────────
 
 class _FakeS3:

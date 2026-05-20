@@ -15,8 +15,10 @@ from datetime import date, datetime
 from functools import wraps
 
 from flask import (
-    Blueprint, g, jsonify, redirect, render_template,
-    request, session, url_for,
+    Blueprint,
+    render_template,
+    request,
+    session,
 )
 
 from .. import limiter

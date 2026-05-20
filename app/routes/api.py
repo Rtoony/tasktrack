@@ -17,8 +17,11 @@ from ..db import get_session
 from ..models import ActivityLog, Comment, to_dict
 from ..services.audit import log_activity
 from ..services.tickets import (
-    TABLE_MODELS, done_statuses_for_table,
-    extra_create_fields, is_overdue_value, overdue_field_for_table,
+    TABLE_MODELS,
+    done_statuses_for_table,
+    extra_create_fields,
+    is_overdue_value,
+    overdue_field_for_table,
     validate_record_data,
 )
 

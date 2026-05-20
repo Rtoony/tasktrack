@@ -13,8 +13,8 @@ label_factory).
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 from urllib.parse import urlparse
 
 from flask import session as flask_session
@@ -123,7 +123,7 @@ def list_for(sess: Session, table: str, record_id: int) -> list[Link]:
 
 
 def add_link(sess: Session, table: str, record_id: int, url: str,
-             label: Optional[str] = None) -> Link:
+             label: str | None = None) -> Link:
     url = _validate_url(url)
 
     # Dedupe: same record + same URL → return existing.
