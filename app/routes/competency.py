@@ -14,7 +14,7 @@ from datetime import datetime
 from flask import Blueprint, g, jsonify, request
 from sqlalchemy import select
 
-from ..auth import admin_required
+from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import Employee, EmployeeSkillScore, SkillCategory, to_dict
 from ..services.competency import CompetencyError, seed_default_categories, upsert_score
@@ -30,9 +30,13 @@ def _rid():
 
 
 @bp.route("/api/v1/skills/categories", methods=["GET"])
-@admin_required
+@login_required
 def list_categories():
     """Returns active categories ordered by display_order then name.
+
+    Open to every logged-in user — the fk-select widget on the
+    personnel-issue modal (Phase 2) pulls from here. Mutations stay
+    admin-only.
 
     On first call against an empty table, seeds the default rubric so
     Josh doesn't have to type ten categories before using the matrix."""

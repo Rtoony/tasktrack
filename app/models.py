@@ -176,6 +176,10 @@ class PersonnelIssue(Base):
     # Phase-0 FK spine.
     project_id: Mapped[int | None] = mapped_column(Integer)
     person_id: Mapped[int | None] = mapped_column(Integer)
+    # Phase-2 richer incident shape — mirrors eng-ops's IncidentReport.
+    estimated_time_loss_minutes: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    immediate_solution: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    skill_category_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class PersonalItem(Base):

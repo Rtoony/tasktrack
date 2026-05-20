@@ -10,8 +10,19 @@ from app.models import ActivityLog, Employee, EmployeeSkillScore, SkillCategory
 # ── Auth gating ───────────────────────────────────────────────────────────
 
 
-def test_categories_requires_admin(auth_client):
+def test_categories_get_open_to_logged_in_users(auth_client):
+    """Phase-2 opened GET on categories so the personnel fk-select widget
+    can populate for non-admin users. Mutations (POST/PATCH) stay
+    admin-only — covered by separate tests below."""
     r = auth_client.get("/api/v1/skills/categories")
+    assert r.status_code == 200
+    assert isinstance(r.get_json(), list)
+
+
+def test_categories_post_still_admin_only(auth_client):
+    r = auth_client.post("/api/v1/skills/categories", json={
+        "slug": "x", "name": "Y",
+    })
     assert r.status_code == 403
 
 

@@ -2037,8 +2037,11 @@ const FORMS = {
     {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
     {key:'issue_description',label:'Observed Gap / Incident Summary',type:'textarea',required:true},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
+    {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
     {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
+    {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links the incident to the Competency rubric (Phase 1).'},
     {key:'_row',fields:[{key:'severity',label:'Impact',type:'select',options:['Low','Medium','High','Critical']},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
+    {key:'estimated_time_loss_minutes',label:'Estimated Time Loss (minutes)',type:'number',placeholder:'0'},
     {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
@@ -2164,6 +2167,12 @@ function renderField(f,value) {
     return wrap;
   } else if (f.type==='date') {
     input=document.createElement('input'); input.type='date'; input.id='f-'+f.key; input.value=value?value.split('T')[0]:'';
+  } else if (f.type==='number') {
+    input=document.createElement('input'); input.type='number'; input.id='f-'+f.key; input.value=(value==null?'':value);
+    if(f.placeholder)input.placeholder=f.placeholder;
+    if(f.min!=null)input.min=f.min;
+    if(f.max!=null)input.max=f.max;
+    if(f.step!=null)input.step=f.step;
   } else if (f.type==='datetime-local') {
     input=document.createElement('input'); input.type='datetime-local'; input.id='f-'+f.key; input.value=value?String(value).slice(0,16):'';
   } else {
