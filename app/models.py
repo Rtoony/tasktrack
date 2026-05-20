@@ -92,6 +92,8 @@ class WorkTask(Base):
     ai_raw_input: Mapped[str] = mapped_column(Text, server_default=text("''"))
     ai_model: Mapped[str] = mapped_column(Text, server_default=text("''"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
+    project_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class ProjectWorkTask(Base):
@@ -116,6 +118,9 @@ class ProjectWorkTask(Base):
     source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
     ai_raw_input: Mapped[str] = mapped_column(Text, server_default=text("''"))
     ai_model: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    engineer_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class TrainingTask(Base):
@@ -141,6 +146,10 @@ class TrainingTask(Base):
     ai_raw_input: Mapped[str] = mapped_column(Text, server_default=text("''"))
     ai_model: Mapped[str] = mapped_column(Text, server_default=text("''"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Phase-0 FK spine. trainee_ids is a JSON-string array of employee ids
+    # (kept as TEXT so the generic CRUD/AI paths don't choke on a list type).
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    trainee_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
 
 
 class PersonnelIssue(Base):
@@ -163,6 +172,9 @@ class PersonnelIssue(Base):
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Phase-0 FK spine.
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    person_id: Mapped[int | None] = mapped_column(Integer)
 
 
 class PersonalItem(Base):
@@ -303,6 +315,59 @@ class TelegramChatAccess(Base):
     user_id: Mapped[int | None] = mapped_column(Integer)
 
 
+# ── Registry: employees + projects (Phase 0 FK spine) ─────────────────────
+
+class Employee(Base):
+    """Person being tracked by TaskTrack.
+
+    Distinct from `User` (which is the login identity). Josh tracks
+    employees here regardless of whether they have TaskTrack accounts.
+    """
+    __tablename__ = "employees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    role: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    title: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_employees_active", "active"),
+        Index("idx_employees_display_name", "display_name"),
+    )
+
+
+class Project(Base):
+    """Project being tracked by TaskTrack.
+
+    `project_number` is the human key (e.g. "1234.56"). `external_ref` +
+    `external_system` are slots for a future external project registry
+    integration (eng-ops's Atlas pattern) — empty for now.
+    """
+    __tablename__ = "projects"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_number: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    client: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    billing_phase_default: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    external_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    external_system: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_projects_project_number", "project_number", unique=True),
+        Index("idx_projects_active", "active"),
+    )
+
+
 def to_dict(obj) -> dict | None:
     """Serialize a SQLAlchemy model instance to a plain column-name dict.
 
@@ -338,5 +403,6 @@ __all__ = [
     "PersonnelIssue", "PersonalItem", "InboxItem",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
+    "Employee", "Project",
     "to_dict",
 ]

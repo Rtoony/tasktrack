@@ -1697,6 +1697,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Leave blank if the project is not in the registry yet.'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1704,8 +1705,10 @@ const FORMS = {
     {key:'project_name',label:'Project Name',type:'text',required:true},
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'_row',fields:[{key:'project_number',label:'Project Number',type:'text',required:true,placeholder:'1234.56'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
+    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK to the Projects registry. Carries over the text Project Number above.'},
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
     {key:'engineer',label:'Engineer',type:'text'},
+    {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
     {key:'notes',label:'Notes',type:'textarea'},
@@ -1722,6 +1725,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1736,6 +1740,8 @@ const FORMS = {
     {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
+    {key:'person_id',label:'Person (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK. Pairs with the Staff Member text field above.'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -1763,6 +1769,21 @@ FORMS.personal_father  = PERSONAL_FORM;
 FORMS.personal_house   = PERSONAL_FORM;
 FORMS.personal_cars    = PERSONAL_FORM;
 
+/* fk-select option cache. Populated lazily per endpoint; reused across
+   modal opens so the user doesn't see a flash. */
+const FK_OPTION_CACHE = {};
+async function loadFkOptions(endpoint) {
+  if (FK_OPTION_CACHE[endpoint]) return FK_OPTION_CACHE[endpoint];
+  try {
+    const res = await fetch(endpoint);
+    if (!res.ok) { FK_OPTION_CACHE[endpoint] = []; return []; }
+    const rows = await res.json();
+    FK_OPTION_CACHE[endpoint] = Array.isArray(rows) ? rows : [];
+  } catch (e) { FK_OPTION_CACHE[endpoint] = []; }
+  return FK_OPTION_CACHE[endpoint];
+}
+function invalidateFkCache() { for (const k of Object.keys(FK_OPTION_CACHE)) delete FK_OPTION_CACHE[k]; }
+
 function renderField(f,value) {
   value=value||'';
   const wrap=document.createElement('div'); wrap.className='field';
@@ -1771,6 +1792,30 @@ function renderField(f,value) {
   if (f.type==='select') {
     input=document.createElement('select'); input.id='f-'+f.key;
     f.options.forEach(o=>{const opt=document.createElement('option');opt.value=o;opt.textContent=o;if(value===o)opt.selected=true;input.appendChild(opt);});
+  } else if (f.type==='fk-select') {
+    /* Dual-column FK. value is the id (int). Renders as <select> with an
+       empty option + rows from f.endpoint. Hint label notes which text
+       column the FK pairs with so the user understands the migration. */
+    input=document.createElement('select'); input.id='f-'+f.key;
+    const empty=document.createElement('option'); empty.value=''; empty.textContent='— none —';
+    input.appendChild(empty);
+    loadFkOptions(f.endpoint).then(rows => {
+      rows.forEach(r => {
+        const opt=document.createElement('option');
+        opt.value=r.id;
+        opt.textContent=f.displayKey ? r[f.displayKey] : r.display_name || r.project_number || ('#'+r.id);
+        if (String(value)===String(r.id)) opt.selected=true;
+        input.appendChild(opt);
+      });
+    });
+    if (f.hint) {
+      const hint=document.createElement('div'); hint.className='fk-hint';
+      hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
+      hint.textContent=f.hint;
+      wrap.appendChild(input);
+      wrap.appendChild(hint);
+      return wrap;
+    }
   } else if (f.type==='textarea') {
     input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true;
   } else if (f.type==='placeholder-panel') {

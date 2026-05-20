@@ -8,13 +8,16 @@ import re
 from datetime import date, datetime
 
 from flask import session
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..config import ALLOWED_TABLES, PERSONAL_CATEGORIES
 from ..models import (
+    Employee,
     InboxItem,
     PersonalItem,
     PersonnelIssue,
+    Project,
     ProjectWorkTask,
     TrainingTask,
     WorkTask,
@@ -29,6 +32,76 @@ TABLE_MODELS = {
     "inbox_items": InboxItem,
     "personal_items": PersonalItem,
 }
+
+# Phase-0 FK spine: per-tracker mapping from text column → (FK column,
+# Employee|Project, lookup column). Used by enrich_with_fks() to do
+# exact-name lookups after the AI/intake writes text values.
+_FK_ENRICHMENT = {
+    "work_tasks": [
+        ("project_number", "project_id", Project, "project_number"),
+    ],
+    "project_work_tasks": [
+        ("project_number", "project_id", Project, "project_number"),
+        ("engineer", "engineer_id", Employee, "display_name"),
+    ],
+    "training_tasks": [
+        ("project_number", "project_id", Project, "project_number"),
+    ],
+    "personnel_issues": [
+        ("project_number", "project_id", Project, "project_number"),
+        ("person_name", "person_id", Employee, "display_name"),
+    ],
+}
+
+
+def _coerce_fk_columns(data):
+    """Strip empty strings and coerce numeric strings on FK columns.
+
+    Browsers (and the AI triage path) sometimes submit "" for an empty
+    select; SQLite happily stores that as the literal string "" which
+    later breaks comparison with the integer id. Normalise to None or int.
+    """
+    for key in ("project_id", "engineer_id", "person_id"):
+        if key not in data:
+            continue
+        raw = data[key]
+        if raw in (None, "", "null"):
+            data[key] = None
+            continue
+        try:
+            data[key] = int(raw)
+        except (TypeError, ValueError):
+            data[key] = None
+
+
+def enrich_with_fks(sess: Session, table: str, record) -> bool:
+    """Best-effort: populate empty FK columns from the row's text fields.
+
+    Exact-match only (no fuzzy). Skips columns that already have a value.
+    Returns True if anything changed.
+
+    Called once after `create_direct_record` so AI triage / intake forms
+    that only know how to write text still get FK enrichment.
+    """
+    mapping = _FK_ENRICHMENT.get(table)
+    if not mapping:
+        return False
+    changed = False
+    for text_col, fk_col, model, lookup_col in mapping:
+        if getattr(record, fk_col, None):
+            continue
+        text_val = (getattr(record, text_col, "") or "").strip()
+        if not text_val:
+            continue
+        hit = sess.scalar(
+            select(model).where(
+                func.lower(getattr(model, lookup_col)) == text_val.lower()
+            ).limit(1)
+        )
+        if hit is not None:
+            setattr(record, fk_col, hit.id)
+            changed = True
+    return changed
 
 
 def overdue_field_for_table(cfg):
@@ -66,6 +139,9 @@ def is_overdue_value(raw_value):
 
 
 def validate_record_data(table, data, creating=False):
+    # Phase-0: normalize FK columns regardless of table.
+    _coerce_fk_columns(data)
+
     if table == "personal_items":
         if creating or "category" in data:
             category = str(data.get("category") or "").strip()
@@ -185,6 +261,9 @@ def create_direct_record(sess: Session, table, payload, source_name,
     record = Model(**kwargs)
     sess.add(record)
     sess.flush()  # populate record.id without committing
+    # Best-effort FK enrichment: if the caller provided text fields but no
+    # FK ids, try to resolve them now. Quiet on miss; never blocks insert.
+    enrich_with_fks(sess, table, record)
     log_activity(sess, table, record.id, action,
                  new=action_detail or source_name)
     return record.id, None

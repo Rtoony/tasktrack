@@ -19,6 +19,7 @@ from ..services.audit import log_activity
 from ..services.tickets import (
     TABLE_MODELS,
     done_statuses_for_table,
+    enrich_with_fks,
     extra_create_fields,
     is_overdue_value,
     overdue_field_for_table,
@@ -282,6 +283,9 @@ def create_record(table):
     record = Model(**kwargs)
     sess.add(record)
     sess.flush()
+    # Phase-0: best-effort FK enrichment from text columns. Quiet no-op
+    # for tables without an _FK_ENRICHMENT entry.
+    enrich_with_fks(sess, table, record)
     log_activity(sess, table, record.id, "created",
                  new=data.get("title") or data.get("person_name", ""))
     sess.commit()

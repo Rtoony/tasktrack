@@ -16,7 +16,7 @@ from werkzeug.security import generate_password_hash
 from ..auth import admin_required
 from ..config import ADMIN_WORKFLOW_VIEWS
 from ..db import get_session
-from ..models import ApprovedEmail, AppSetting, TelegramChatAccess, User
+from ..models import ApprovedEmail, AppSetting, Employee, Project, TelegramChatAccess, User
 
 bp = Blueprint("admin", __name__)
 
@@ -69,6 +69,40 @@ def admin_panel():
         workflow_links=workflow_links,
         telegram_link_code=telegram_link_code,
         telegram_chats=telegram_chats,
+    )
+
+
+@bp.route("/admin/people")
+@admin_required
+def admin_people():
+    """Seed/manage the Employees registry."""
+    sess = get_session()
+    employees = sess.scalars(
+        select(Employee).order_by(Employee.active.desc(), Employee.display_name.asc())
+    ).all()
+    return render_template(
+        "admin_registry.html",
+        kind="employees",
+        title="Employees",
+        rows=employees,
+        user_name=session.get("user_name", ""),
+    )
+
+
+@bp.route("/admin/projects")
+@admin_required
+def admin_projects():
+    """Seed/manage the Projects registry."""
+    sess = get_session()
+    projects = sess.scalars(
+        select(Project).order_by(Project.active.desc(), Project.project_number.asc())
+    ).all()
+    return render_template(
+        "admin_registry.html",
+        kind="projects",
+        title="Projects",
+        rows=projects,
+        user_name=session.get("user_name", ""),
     )
 
 
