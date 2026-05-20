@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Week in Review — {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37;
+    --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480;
+    --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+    --radius:6px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1180px; margin:0 auto; padding:0 1.5rem; height:54px; display:flex; align-items:center; justify-content:space-between; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1180px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.5rem; font-weight:600; margin-bottom:0.25rem; }
+  .range { color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem; font-family:'IBM Plex Mono', monospace; }
+  .day-form { display:inline-flex; align-items:center; gap:0.4rem; margin-left:1rem; }
+  .day-form input { width:55px; padding:0.2rem 0.4rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:0.8rem; }
+  .day-form button { background:var(--accent); border:none; color:#0b1220; padding:0.25rem 0.7rem; border-radius:var(--radius); cursor:pointer; font-size:0.78rem; font-weight:500; }
+
+  /* Top stat row */
+  .totals { display:grid; grid-template-columns:repeat(4, 1fr); gap:0.8rem; margin-bottom:1.5rem; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem; }
+  .stat-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.4rem; }
+  .stat-value { font-size:1.8rem; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; }
+  .stat.created .stat-value  { color:var(--accent); }
+  .stat.completed .stat-value{ color:var(--ok); }
+  .stat.active .stat-value   { color:var(--text); }
+  .stat.overdue .stat-value  { color:var(--danger); }
+
+  /* Bucket sections */
+  .bucket { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.15rem; margin-bottom:0.9rem; }
+  .bucket-head { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:0.55rem; }
+  .bucket h2 { font-size:0.98rem; font-weight:600; }
+  .bucket-counts { display:flex; gap:0.65rem; font-size:0.75rem; color:var(--text-muted); font-variant-numeric:tabular-nums; }
+  .bucket-counts strong { color:var(--text); font-weight:500; }
+  .bucket-counts .completed { color:var(--ok); }
+  .bucket-counts .overdue   { color:var(--danger); }
+
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; }
+  @media (max-width: 880px) { .cols { grid-template-columns:1fr; } .totals { grid-template-columns:repeat(2, 1fr); } }
+  .col h3 { font-size:0.74rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.3rem; font-weight:500; }
+  ul.items { list-style:none; }
+  ul.items li { padding:0.32rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; display:flex; justify-content:space-between; gap:0.5rem; }
+  ul.items li:last-child { border-bottom:none; }
+  ul.items .when { color:var(--text-dim); font-size:0.72rem; font-family:'IBM Plex Mono', monospace; white-space:nowrap; }
+  .empty { color:var(--text-dim); font-size:0.78rem; font-style:italic; padding:0.4rem 0; }
+
+  /* Incidents block */
+  .incident-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:0.7rem; padding:0.45rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; align-items:baseline; }
+  .incident-row:last-child { border-bottom:none; }
+  .sev { display:inline-block; padding:0.06rem 0.45rem; border-radius:3px; font-size:0.66rem; font-weight:500; }
+  .sev.Critical { background:rgba(248,113,113,0.18); color:var(--danger); }
+  .sev.High     { background:rgba(248,113,113,0.12); color:var(--danger); }
+  .sev.Medium   { background:rgba(251,191,36,0.12); color:var(--warn); }
+  .sev.Low      { background:rgba(148,163,184,0.12); color:var(--text-muted); }
+  .who { font-weight:500; }
+  .desc { color:var(--text-muted); }
+
+  .admin-only { border-left:3px solid var(--accent); }
+  .admin-badge { display:inline-block; padding:0.05rem 0.4rem; border-radius:3px; background:rgba(96,165,250,0.15); color:var(--accent); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Week in Review</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      {% if is_admin %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <h1>Week in Review</h1>
+  <div class="range">
+    Window: <strong>{{ snapshot.since }}</strong> &rarr; <strong>{{ snapshot.until }}</strong>
+    ({{ snapshot.days }} day{{ '' if snapshot.days == 1 else 's' }})
+    <form class="day-form" method="get" action="/weekly">
+      <label for="day-input" style="color:var(--text-dim);">Days:</label>
+      <input id="day-input" type="number" min="1" max="90" name="days" value="{{ snapshot.days }}">
+      <button type="submit">Refresh</button>
+    </form>
+  </div>
+
+  <section class="totals">
+    <div class="stat created">
+      <div class="stat-label">Created</div>
+      <div class="stat-value">{{ snapshot.totals.created }}</div>
+    </div>
+    <div class="stat completed">
+      <div class="stat-label">Completed</div>
+      <div class="stat-value">{{ snapshot.totals.completed }}</div>
+    </div>
+    <div class="stat active">
+      <div class="stat-label">Active now</div>
+      <div class="stat-value">{{ snapshot.totals.active_now }}</div>
+    </div>
+    <div class="stat overdue">
+      <div class="stat-label">Overdue now</div>
+      <div class="stat-value">{{ snapshot.totals.overdue_now }}</div>
+    </div>
+  </section>
+
+  {% for table, b in snapshot.buckets.items() %}
+  <section class="bucket">
+    <div class="bucket-head">
+      <h2>{{ b.label }}</h2>
+      <div class="bucket-counts">
+        <span><strong>{{ b.created }}</strong> created</span>
+        <span class="completed"><strong>{{ b.completed }}</strong> completed</span>
+        <span><strong>{{ b.active_now }}</strong> active</span>
+        {% if b.overdue_now %}<span class="overdue"><strong>{{ b.overdue_now }}</strong> overdue</span>{% endif %}
+      </div>
+    </div>
+    <div class="cols">
+      <div class="col">
+        <h3>Created this window ({{ b.items_created|length }})</h3>
+        {% if b.items_created %}
+        <ul class="items">
+          {% for item in b.items_created %}
+          <li>
+            <span>{{ item.title }}</span>
+            <span class="when">{{ (item.created_at or '')[:10] }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty">— nothing created in this window</div>
+        {% endif %}
+      </div>
+      <div class="col">
+        <h3>Completed this window ({{ b.items_completed|length }})</h3>
+        {% if b.items_completed %}
+        <ul class="items">
+          {% for item in b.items_completed %}
+          <li>
+            <span>{{ item.title }}</span>
+            <span class="when">{{ (item.completed_at or '')[:10] }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="empty">— nothing completed in this window</div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+  {% endfor %}
+
+  {% if snapshot.incidents_recent %}
+  <section class="bucket">
+    <div class="bucket-head"><h2>Incidents this window ({{ snapshot.incidents_recent|length }})</h2></div>
+    {% for inc in snapshot.incidents_recent %}
+    <div class="incident-row">
+      <span class="sev {{ inc.severity or 'Medium' }}">{{ inc.severity or 'Medium' }}</span>
+      <span class="desc"><span class="who">{{ inc.person_name }}</span> &mdash; {{ inc.issue_description }}</span>
+      <span class="when" style="color:var(--text-dim);font-size:0.72rem">{{ inc.status }}</span>
+      <span class="when">{{ (inc.created_at or '')[:10] }}</span>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  {% if is_admin and snapshot.skill_score_changes %}
+  <section class="bucket admin-only">
+    <div class="bucket-head">
+      <h2>Skill score changes <span class="admin-badge">admin</span></h2>
+      <div class="bucket-counts">{{ snapshot.skill_score_changes|length }} change{{ '' if snapshot.skill_score_changes|length == 1 else 's' }}</div>
+    </div>
+    <ul class="items">
+      {% for c in snapshot.skill_score_changes %}
+      <li>
+        <span>Score row #{{ c.score_row_id }} &middot; {{ c.field }}: <strong>{{ c.old or '—' }}</strong> &rarr; <strong>{{ c.new }}</strong></span>
+        <span class="when">{{ (c.when or '')[:16] }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <p style="color:var(--text-dim); font-size:0.75rem; margin-top:1.5rem;">
+    Pull live JSON at <a href="/api/v1/weekly?days={{ snapshot.days }}" style="color:var(--accent);text-decoration:none">/api/v1/weekly?days={{ snapshot.days }}</a>.
+    Completion timestamps approximate (uses updated_at on tables without a completed_at column).
+  </p>
+</main>
+</body>
+</html>

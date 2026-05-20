@@ -126,6 +126,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.registry import bp as registry_bp
     from .routes.telegram_api import bp as telegram_api_bp
     from .routes.triage import bp as triage_bp
+    from .routes.weekly import bp as weekly_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(main_bp)
@@ -142,6 +143,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(competency_bp)
     app.register_blueprint(bridges_bp)
     app.register_blueprint(health_pill_bp)
+    app.register_blueprint(weekly_bp)
 
     # Phase-5: background health probes. Skipped under pytest so we don't
     # spawn a thread per test fixture. The conftest sets TESTING after
