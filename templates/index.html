@@ -1744,6 +1744,7 @@ const FORMS = {
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
     {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
+    {key:'links',label:'Links',type:'links'},
   ],
 };
 
@@ -1755,6 +1756,7 @@ const PERSONAL_FORM = [
   {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context.'},
   {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
   {key:'due_date',label:'Due Date',type:'date'},
+  {key:'links',label:'Links',type:'links'},
 ];
 FORMS.personal_husband = PERSONAL_FORM;
 FORMS.personal_father  = PERSONAL_FORM;

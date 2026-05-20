@@ -82,13 +82,21 @@ def close_session(exc) -> None:
 
 # ── Secret-key helper ─────────────────────────────────────────────────────
 #
-# Reads the persistent Flask secret out of `app_settings` (kept here
-# rather than in models.py because it runs during create_app, before
-# the request-scoped session machinery is ready). On first run (empty
-# DB after `flask db upgrade`) this generates a fresh key and inserts
-# it.
+# Resolution order:
+#   1. TASKTRACK_SECRET_KEY env var — injected from the Nexus vault by
+#      `nexus-svc-inject` into /dev/shm/nexus-env-collab-tracker. Preferred
+#      per the Nexus zero-disk policy.
+#   2. app_settings.secret_key in the SQLite DB — historical storage,
+#      kept for backwards compatibility and as a graceful fallback during
+#      the vault rollout.
+#   3. Fresh generation, persisted to the DB so a restart without vault
+#      still uses the same key (sessions survive).
 
 def get_secret_key(db_path=None) -> str:
+    env_key = (os.environ.get("TASKTRACK_SECRET_KEY") or "").strip()
+    if env_key:
+        return env_key
+
     path = db_path or DB_PATH
     db = sqlite3.connect(path)
     try:
@@ -97,7 +105,9 @@ def get_secret_key(db_path=None) -> str:
         ).fetchone()
         if row:
             return row[0]
-        # First boot of a fresh DB — seed a key.
+        # First boot of a fresh DB AND no vault key — seed one. This
+        # keeps fresh deploys (e.g. tests, new dev clones) working
+        # without forcing the vault round-trip.
         key = secrets.token_hex(32)
         db.execute(
             "INSERT INTO app_settings (key, value) VALUES ('secret_key', ?)",
