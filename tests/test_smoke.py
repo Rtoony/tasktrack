@@ -1,11 +1,39 @@
 """HTTP smoke tests against a running TaskTrack instance.
 
 These mirror scripts/smoke.sh in pytest form so the same checks run from
-both `make smoke` (shell) and `make test` (pytest). Phase 1A.2 will add
-in-process unit tests with an isolated DB; until then these are the
-primary regression net.
+both `make smoke` (shell) and `make test` (pytest). The whole module
+auto-skips when nothing is listening on base_url so CI (and local devs
+without gunicorn running) don't see false failures.
 """
+import socket
+from urllib.parse import urlparse
+
+import pytest
 import requests
+
+
+def _service_reachable(base_url: str) -> bool:
+    """Quick TCP probe — true if base_url's host:port accepts a connection."""
+    parsed = urlparse(base_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=0.5):
+            return True
+    except (OSError, ValueError):
+        return False
+
+
+@pytest.fixture(autouse=True)
+def _require_live_service(base_url):
+    """Skip this entire module when the target isn't up. Lets the same
+    test file work in (a) local with gunicorn running, (b) local with
+    nothing on :5050, and (c) CI containers that don't ship a service."""
+    if not _service_reachable(base_url):
+        pytest.skip(
+            f"live service at {base_url} not reachable — "
+            "smoke tests require a running gunicorn (start with `make run`)"
+        )
 
 
 def test_healthz_returns_ok(base_url):
