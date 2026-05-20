@@ -57,6 +57,35 @@
   .user-name { font-size:0.8rem; color:var(--text-muted); }
   .btn-logout,.btn-admin-link { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; }
   .btn-logout:hover,.btn-admin-link:hover { background:var(--bg); color:var(--text); }
+  /* Phase-4 Kanban toggle + lanes — opt-in alternative view for the
+     Project Tasks tab. Renders client-side from tableCache.project,
+     so no extra round trips. */
+  .view-toggle { display:inline-flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .view-toggle-btn { background:none; border:none; color:var(--text-muted); padding:0.35rem 0.7rem; font-family:inherit; font-size:0.74rem; font-weight:500; cursor:pointer; transition:all 0.15s; }
+  .view-toggle-btn:hover { background:var(--bg); color:var(--text); }
+  .view-toggle-btn.active { background:var(--accent-light); color:var(--accent); }
+  .kanban-wrap { padding-top:0.3rem; }
+  .kanban-board { display:grid; grid-template-columns:repeat(4, minmax(220px, 1fr)); gap:0.7rem; }
+  .kanban-lane { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); display:flex; flex-direction:column; min-height:200px; }
+  .kanban-lane-head { padding:0.55rem 0.7rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; font-size:0.74rem; font-weight:600; color:var(--text-muted); letter-spacing:0.04em; text-transform:uppercase; }
+  .kanban-lane-count { background:var(--bg); color:var(--accent); border-radius:999px; padding:0.05rem 0.45rem; font-size:0.7rem; font-weight:500; }
+  .kanban-lane-body { padding:0.5rem; display:flex; flex-direction:column; gap:0.45rem; overflow-y:auto; max-height:calc(100vh - 240px); }
+  .kanban-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.55rem 0.65rem; cursor:pointer; transition:transform 0.1s, border-color 0.15s; }
+  .kanban-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  .kanban-card-title { font-size:0.82rem; font-weight:500; color:var(--text); line-height:1.3; }
+  .kanban-card-meta { margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.35rem; font-size:0.68rem; color:var(--text-muted); }
+  .kanban-card-tag { display:inline-flex; align-items:center; padding:0.05rem 0.4rem; border-radius:3px; background:var(--surface); border:1px solid var(--border); }
+  .kanban-card-tag.high     { color:#f87171; border-color:rgba(248,113,113,0.4); }
+  .kanban-card-tag.medium   { color:#fbbf24; border-color:rgba(251,191,36,0.4); }
+  .kanban-card-tag.low      { color:#94a3b8; }
+  .kanban-card-tag.overdue  { color:#f87171; border-color:rgba(248,113,113,0.5); background:rgba(248,113,113,0.08); }
+  .kanban-card-pn { font-family:'IBM Plex Mono', monospace; font-size:0.7rem; color:var(--text-muted); }
+  @media (max-width: 1100px) {
+    .kanban-board { grid-template-columns:repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .kanban-board { grid-template-columns:1fr; }
+  }
   /* Phase-5 health pill — small colored dot showing aggregated upstream
      service health. Hover/click reveals the per-component tooltip. */
   .health-pill { display:inline-flex; align-items:center; padding:0.18rem 0.45rem; border-radius:999px; background:var(--surface); border:1px solid var(--border); cursor:default; }
@@ -799,11 +828,15 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-project-overdue" onchange="loadTable('project')" style="margin-right:3px">Overdue only</label>
+      <span class="view-toggle" role="tablist" aria-label="Project Tasks view">
+        <button type="button" class="view-toggle-btn active" data-view="table" onclick="setProjectView('table')">Table</button>
+        <button type="button" class="view-toggle-btn" data-view="kanban" onclick="setProjectView('kanban')">Kanban</button>
+      </span>
       <a class="btn btn-sm btn-export" href="/intake/project-work" target="_blank" rel="noopener">Submit Form</a>
       <a class="btn btn-sm btn-export" href="/api/v1/project_work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('project')">+ Add Project Task</button>
     </div>
-    <div class="table-wrap">
+    <div class="table-wrap" id="project-table-view">
       <table><thead><tr>
         <th data-col="project_number" data-table="project">Project # <span class="sort-arrow">&#9650;</span></th>
         <th data-col="billing_phase" data-table="project">Billing <span class="sort-arrow">&#9650;</span></th>
@@ -818,6 +851,13 @@
       <div class="empty-state" id="empty-project" style="display:none">
         <div class="empty-title">No project work yet</div>
         <p class="empty-copy">Use this section for real project execution items that should stay tied to a project number, billing phase, and engineer. Click <strong>+ Add Project Task</strong> to start.</p>
+      </div>
+    </div>
+    <div class="kanban-wrap" id="project-kanban-view" style="display:none;">
+      <div class="kanban-board" id="kanban-project"></div>
+      <div class="empty-state" id="kanban-project-empty" style="display:none">
+        <div class="empty-title">No project tasks to show</div>
+        <p class="empty-copy">Add tasks via <strong>+ Add Project Task</strong> or the Submit Form.</p>
       </div>
     </div>
   </section>
@@ -1862,6 +1902,122 @@ async function loadTable(table) {
     }
     tbody.appendChild(tr);
   });
+
+  // Phase-4: keep the Kanban view in sync with the same filtered set.
+  if (table === 'project') renderProjectKanban(filtered);
+}
+
+/* ── Kanban view (Phase 4) ─────────────────────────────────────────────
+   project_work_tasks gets an alt view toggled via the [Table|Kanban] bar.
+   Renders client-side from the already-loaded filtered list — no extra
+   round trip. Click a card to open the existing edit modal. Status
+   changes still go through the modal (no drag-drop yet). */
+let projectViewMode = 'table';
+const PROJECT_LANES = ['Not Started', 'In Progress', 'On Hold', 'Complete'];
+const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+
+function setProjectView(mode) {
+  projectViewMode = mode;
+  document.querySelectorAll('#sec-project .view-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === mode);
+  });
+  document.getElementById('project-table-view').style.display = (mode === 'table') ? '' : 'none';
+  document.getElementById('project-kanban-view').style.display = (mode === 'kanban') ? '' : 'none';
+  // Re-render so the kanban picks up current filters even if the table
+  // was rendered with an older set.
+  if (mode === 'kanban') {
+    const cache = (tableCache.project || []).slice();
+    const statusFilter = document.getElementById('filter-project-status')?.value || '';
+    const priorityFilter = document.getElementById('filter-project-priority')?.value || '';
+    const overdueFilter = document.getElementById('filter-project-overdue')?.checked || false;
+    let filtered = cache;
+    if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+    if (priorityFilter) filtered = filtered.filter(r => r.priority === priorityFilter);
+    if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
+    renderProjectKanban(filtered);
+  }
+}
+
+function renderProjectKanban(rows) {
+  const host = document.getElementById('kanban-project');
+  const empty = document.getElementById('kanban-project-empty');
+  if (!host || !empty) return;
+  host.replaceChildren();
+
+  if (!rows || !rows.length) {
+    host.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  host.style.display = 'grid';
+
+  // Bucket by status. Anything not in PROJECT_LANES (custom statuses)
+  // falls into "Not Started" so it stays visible somewhere.
+  const lanes = Object.fromEntries(PROJECT_LANES.map(s => [s, []]));
+  rows.forEach(r => {
+    const lane = lanes[r.status] ? r.status : 'Not Started';
+    lanes[lane].push(r);
+  });
+  // Within each lane: high-priority first, then earliest due.
+  Object.values(lanes).forEach(list => list.sort((a, b) => {
+    const pa = PRIORITY_RANK[a.priority] ?? 9;
+    const pb = PRIORITY_RANK[b.priority] ?? 9;
+    if (pa !== pb) return pa - pb;
+    return String(a.due_at || '\uffff').localeCompare(String(b.due_at || '\uffff'));
+  }));
+
+  PROJECT_LANES.forEach(status => {
+    const lane = document.createElement('div'); lane.className = 'kanban-lane';
+    const head = document.createElement('div'); head.className = 'kanban-lane-head';
+    const label = document.createElement('span'); label.textContent = status;
+    const count = document.createElement('span'); count.className = 'kanban-lane-count';
+    count.textContent = lanes[status].length;
+    head.appendChild(label); head.appendChild(count);
+    lane.appendChild(head);
+
+    const body = document.createElement('div'); body.className = 'kanban-lane-body';
+    lanes[status].forEach(r => body.appendChild(makeKanbanCard(r)));
+    lane.appendChild(body);
+    host.appendChild(lane);
+  });
+}
+
+function makeKanbanCard(r) {
+  const card = document.createElement('div');
+  card.className = 'kanban-card';
+  card.dataset.id = r.id;
+  card.addEventListener('click', () => editRecord('project', r.id));
+
+  const title = document.createElement('div'); title.className = 'kanban-card-title';
+  title.textContent = r.title || '(untitled)';
+  card.appendChild(title);
+
+  const meta = document.createElement('div'); meta.className = 'kanban-card-meta';
+  if (r.project_number) {
+    const pn = document.createElement('span'); pn.className = 'kanban-card-pn';
+    pn.textContent = r.project_number;
+    meta.appendChild(pn);
+  }
+  if (r.engineer) {
+    const eng = document.createElement('span'); eng.className = 'kanban-card-tag';
+    eng.textContent = r.engineer;
+    meta.appendChild(eng);
+  }
+  if (r.priority) {
+    const pr = document.createElement('span');
+    pr.className = 'kanban-card-tag ' + r.priority.toLowerCase();
+    pr.textContent = r.priority;
+    meta.appendChild(pr);
+  }
+  if (r.due_at) {
+    const due = document.createElement('span');
+    due.className = 'kanban-card-tag' + (isOverdue(r) ? ' overdue' : '');
+    due.textContent = 'Due ' + String(r.due_at).slice(0, 10);
+    meta.appendChild(due);
+  }
+  card.appendChild(meta);
+  return card;
 }
 
 function makeCell(text,cls) { const td=document.createElement('td'); if(cls)td.className=cls; td.textContent=text||''; return td; }
