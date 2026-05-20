@@ -131,6 +131,7 @@
 
   {% if mode == 'register' %}
   <form method="POST" action="/register">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="field">
       <label>Display Name</label>
       <input type="text" name="name" required autofocus placeholder="Your name">
@@ -148,6 +149,7 @@
   <p class="toggle">Already have an account? <a href="/login">Sign in</a></p>
   {% else %}
   <form method="POST" action="/login">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="field">
       <label>Email</label>
       <input type="email" name="email" required autofocus placeholder="you@example.com">

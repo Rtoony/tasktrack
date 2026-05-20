@@ -32,6 +32,28 @@ def init_request_middleware(app):
     def _end_request(response):
         rid = g.get("request_id", "-")
         response.headers["X-Request-Id"] = rid
+        # Security headers. CSP is intentionally strict (no inline scripts);
+        # all current templates use external <script> tags or inline-handler-
+        # free patterns. style-src allows 'unsafe-inline' because the
+        # dashboard CSS variables are set in a <style> block.
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains",
+        )
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'",
+        )
         # Access log — never log request bodies (may contain confidential
         # project data). Only method, path, status, latency.
         elapsed_ms = int((time.monotonic() - g.get("request_started_at", time.monotonic())) * 1000)

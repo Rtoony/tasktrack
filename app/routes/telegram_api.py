@@ -14,9 +14,10 @@ ships in Phase 3 RBAC.
 """
 from datetime import datetime
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify, request
 from sqlalchemy import select
 
+from .. import limiter
 from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import AppSetting, TelegramChatAccess, to_dict
@@ -24,6 +25,10 @@ from ..services.tickets import TABLE_MODELS, create_direct_record
 from ..tokens import check_scoped_token
 
 bp = Blueprint("telegram_api", __name__)
+
+
+def _skip_limit_for_tests() -> bool:
+    return bool(current_app.config.get("TESTING"))
 
 
 def _require_bot():
@@ -43,6 +48,7 @@ def _chat_status(sess, chat_id: int) -> dict:
 
 
 @bp.route("/api/v1/telegram/pair", methods=["POST"])
+@limiter.limit("5 per minute; 30 per hour", exempt_when=_skip_limit_for_tests)
 def telegram_pair():
     err = _require_bot()
     if err:

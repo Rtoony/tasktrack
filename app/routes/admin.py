@@ -156,7 +156,10 @@ def reset_user_password(user_id):
 @bp.route("/api/v1/admin/telegram/link-code/regenerate", methods=["PUT"])
 @admin_required
 def regenerate_telegram_link_code():
-    code = secrets.token_hex(4).upper()
+    # 8 bytes -> 64 bits of entropy (~1.8e19 codes). Plus the
+    # /api/v1/telegram/pair rate limit (5/min, 30/hr) this makes
+    # brute-force pairing infeasible.
+    code = secrets.token_hex(8).upper()
     sess = get_session()
     setting = sess.get(AppSetting, "telegram_link_code")
     if setting is None:

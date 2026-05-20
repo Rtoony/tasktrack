@@ -8,6 +8,14 @@ if [ -z "${BW_SESSION:-}" ] && [ -f /dev/shm/nexus_session ]; then
   BW_SESSION=$(cat /dev/shm/nexus_session)
 fi
 
+# Quiet exit during early boot before nexus-unlock has run. systemd retries
+# every RestartSec=5; only escalate to a loud error once a session exists
+# but the vault lookup still fails (real misconfiguration).
+if [ -z "${BW_SESSION:-}" ]; then
+  echo "waiting for vault session (/dev/shm/nexus_session)" >&2
+  exit 1
+fi
+
 TASKTRACK_TELEGRAM_TOKEN=$(
   bw get item BR_TRACK_BOT 2>/dev/null \
     | jq -r '.fields[]? | select(.name == "TELEGRAM_BOT_TOKEN") | .value' \

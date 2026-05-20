@@ -21,6 +21,7 @@ from sqlalchemy import create_engine, inspect
 
 from . import profile as _profile
 from .config import ADMIN_WORKFLOW_VIEWS, ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
+from .csrf import init_csrf
 from .db import DB_PATH, close_session, get_secret_key
 from .logging_config import configure_logging
 from .middleware import init_request_middleware
@@ -91,6 +92,7 @@ def create_app(db_path=None) -> Flask:
 
     app.teardown_appcontext(close_session)
     init_request_middleware(app)
+    init_csrf(app)
     limiter.init_app(app)
     _register_error_handlers(app)
     _register_legacy_api_redirect(app)

@@ -1,17 +1,25 @@
 """Login / register / logout."""
 from flask import (
-    Blueprint, redirect, render_template, request, session, url_for,
+    Blueprint, current_app, redirect, render_template, request, session, url_for,
 )
 from sqlalchemy import func, select
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from .. import limiter
 from ..db import get_session
 from ..models import ApprovedEmail, User
 
 bp = Blueprint("auth", __name__)
 
 
+def _skip_limit_for_tests() -> bool:
+    """Bypass rate limits inside the pytest test client."""
+    return bool(current_app.config.get("TESTING"))
+
+
 @bp.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute; 100 per hour", methods=["POST"],
+               exempt_when=_skip_limit_for_tests)
 def login():
     if "user_id" in session:
         return redirect(url_for("main.index"))
@@ -39,6 +47,8 @@ def login():
 
 
 @bp.route("/register", methods=["GET", "POST"])
+@limiter.limit("5 per hour; 20 per day", methods=["POST"],
+               exempt_when=_skip_limit_for_tests)
 def register():
     if "user_id" in session:
         return redirect(url_for("main.index"))

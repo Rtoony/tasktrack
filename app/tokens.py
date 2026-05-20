@@ -17,6 +17,7 @@ it returns None on success or a (response, status) tuple on failure.
 """
 import logging
 import os
+import secrets as _secrets
 
 from flask import g, jsonify, request
 
@@ -50,13 +51,13 @@ def check_scoped_token(scope: str):
         }), 401
 
     expected = SCOPED_TOKENS[scope]
-    if expected and presented == expected:
+    if expected and _secrets.compare_digest(presented, expected):
         return None
 
     # Backward compat: the legacy single secret still works across all
     # scopes for one release cycle. We log it (not the token value) so
     # operators can spot which clients still need updating.
-    if LEGACY_TOKEN and presented == LEGACY_TOKEN:
+    if LEGACY_TOKEN and _secrets.compare_digest(presented, LEGACY_TOKEN):
         LOG.warning(
             "legacy TASKTRACK_TOKEN used for scope=%s path=%s — "
             "rotate to scope-specific token",

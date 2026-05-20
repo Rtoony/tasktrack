@@ -72,6 +72,7 @@
     .add-row { flex-direction: column; }
   }
 </style>
+<meta name="csrf-token" content="{{ csrf_token }}">
 </head>
 <body>
 
@@ -194,8 +195,12 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 async function api(method, path, body) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+  };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (res.status === 401) { window.location = '/login'; return null; }
@@ -213,6 +218,7 @@ async function addEmail() {
 }
 
 async function removeEmail(email, btn) {
+  if (!confirm('Remove ' + email + ' from the approved list? They will no longer be able to register.')) return;
   await api('DELETE', '/api/admin/approved-emails/' + encodeURIComponent(email));
   btn.closest('tr').remove();
   toast('Removed ' + email);
@@ -220,6 +226,7 @@ async function removeEmail(email, btn) {
 
 async function toggleRole(uid, current) {
   const newRole = current === 'admin' ? 'user' : 'admin';
+  if (!confirm('Change role to ' + newRole + '?')) return;
   await api('PUT', '/api/admin/users/' + uid + '/role', { role: newRole });
   toast('Role updated');
   location.reload();
@@ -241,6 +248,7 @@ async function promptResetPassword(uid, name) {
 }
 
 async function regenerateTelegramCode() {
+  if (!confirm('Regenerate the Telegram pairing code? Any pending pair attempts using the old code will fail.')) return;
   const res = await api('PUT', '/api/admin/telegram/link-code/regenerate');
   if (res && res.telegram_link_code) {
     document.getElementById('telegram-link-code').textContent = res.telegram_link_code;

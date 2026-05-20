@@ -44,7 +44,11 @@ DEFAULT_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
 
 # (extension, mimetype) — both must match. mimetypes.guess_type returns
 # None for DWG/DXF on most stdlib builds, so we accept octet-stream for
-# those two when the extension is right.
+# those two when the extension is right. We deliberately do NOT accept
+# octet-stream for XLSX/DOCX — those are PKZip archives and stdlib
+# reliably maps them; allowing octet-stream there was the historical
+# MIME-bypass hole. Magic-byte validation in _validate_filetype is the
+# second line of defense.
 ALLOWED_EXTENSIONS = {
     ".pdf":  {"application/pdf"},
     ".png":  {"image/png"},
@@ -56,9 +60,23 @@ ALLOWED_EXTENSIONS = {
     ".dxf":  {"image/vnd.dxf", "application/dxf", "application/x-dxf",
               "application/octet-stream"},
     ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-              "application/vnd.ms-excel", "application/octet-stream"},
+              "application/vnd.ms-excel"},
     ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-              "application/msword", "application/octet-stream"},
+              "application/msword"},
+}
+
+# Magic-byte prefixes (first bytes of a file). When set for an extension
+# the upload must start with one of these byte strings, regardless of
+# what MIME type the browser declared. DXF is plain-text ASCII so it has
+# no reliable magic; DWG's magic changes per release. We enforce magic
+# for everything we have a stable signature for.
+EXTENSION_MAGIC = {
+    ".pdf":  [b"%PDF-"],
+    ".png":  [b"\x89PNG\r\n\x1a\n"],
+    ".jpg":  [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".xlsx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
+    ".docx": [b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"],
 }
 
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
@@ -136,12 +154,38 @@ def _validate_filetype(filename: str, declared_mime: str) -> str:
         )
     declared = (declared_mime or "").lower().split(";")[0].strip()
     guessed = (mimetypes.guess_type(filename)[0] or "").lower()
-    candidate = declared or guessed or "application/octet-stream"
+    candidate = declared or guessed
+    if not candidate:
+        # Empty MIME — only acceptable for the legitimately-ambiguous
+        # CAD formats where stdlib has no mapping. Everything else gets
+        # rejected here rather than silently allowed.
+        if ext in (".dwg", ".dxf"):
+            candidate = "application/octet-stream"
+        else:
+            raise AttachmentError(
+                f"Could not determine content type for '{ext}'. "
+                "Re-upload with a proper Content-Type header."
+            )
     if candidate not in allowed:
         raise AttachmentError(
             f"Declared content type '{candidate}' does not match extension '{ext}'."
         )
     return candidate
+
+
+def _validate_magic_bytes(filename: str, blob: bytes) -> None:
+    """Confirm the file's first bytes match its extension. No-op for
+    formats without a reliable magic (DXF text, DWG release-dependent).
+    """
+    ext = os.path.splitext(filename)[1].lower()
+    expected = EXTENSION_MAGIC.get(ext)
+    if not expected:
+        return
+    head = blob[:16]
+    if not any(head.startswith(sig) for sig in expected):
+        raise AttachmentError(
+            f"File contents do not match the declared '{ext}' format."
+        )
 
 
 def _hash_and_size(stream: BinaryIO, max_bytes: int) -> tuple[str, int, bytes]:
@@ -186,6 +230,7 @@ def upload(sess: Session, file_storage: FileStorage, table: str,
     content_type = _validate_filetype(safe_name, file_storage.mimetype or "")
 
     sha, size, blob = _hash_and_size(file_storage.stream, _max_bytes())
+    _validate_magic_bytes(safe_name, blob)
 
     existing = sess.scalar(
         select(Attachment).where(
