@@ -17,3 +17,6 @@ htmlcov/
 .DS_Store
 deploy/minio.env
 deploy/tokens.env
+
+# Per-dev tooling (Claude Code preview, etc.)
+.claude/

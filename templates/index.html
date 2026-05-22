@@ -723,9 +723,9 @@
         <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Click a pin to copy the project number. Edit on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
       </div>
       <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
-        <option value="">Status: any</option>
-        <option value="active">Active</option>
+        <option value="active" selected>Active</option>
         <option value="dormant">Dormant</option>
+        <option value="">Status: any</option>
       </select>
       <select class="filter-select" id="map-component-filter" onchange="reloadMap()">
         <option value="">Type: any</option>
