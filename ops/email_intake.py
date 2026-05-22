@@ -3,7 +3,10 @@
 
 Reads unread mail from an IMAP mailbox, extracts body + sender + subject, and
 POSTs to `${TASKTRACK_URL}/api/v1/triage` with `commit=true` and `source=email` so
-the task lands in TaskTrack flagged `needs_review`.
+the task lands in TaskTrack flagged `needs_review`. After the task is created,
+any whitelisted MIME attachments (PDF / DWG / DXF / PNG / JPG / XLSX / DOCX)
+are POSTed to `/api/v1/attachments/<table>/<task_id>` so the operator sees the
+referenced files when they review the row.
 
 Designed to run as a short-lived systemd user service triggered by a timer
 (every 5 minutes). Exits 0 when no messages are waiting; exits non-zero on
@@ -17,8 +20,14 @@ Environment:
   INTAKE_IMAP_FOLDER   default "INBOX"
   INTAKE_IMAP_SSL      default "1" (set "0" to use STARTTLS on 143)
   INTAKE_MAX_MESSAGES  default 10
+  INTAKE_MAX_ATTACHMENT_BYTES  default 52428800 (50 MB — matches the
+                       server-side attachment cap; oversized parts are
+                       skipped with a warning instead of failing the
+                       message)
   TASKTRACK_URL        default "http://127.0.0.1:5050"
-  TASKTRACK_TOKEN      required — matches TASKTRACK_TOKEN on the server
+  TASKTRACK_TOKEN      required — matches TASKTRACK_TOKEN_TRIAGE on the
+                       server (legacy single-secret TASKTRACK_TOKEN also
+                       still works during deprecation)
 """
 
 from __future__ import annotations
@@ -116,6 +125,83 @@ def _post_triage(url: str, token: str, text: str, requested_by: str) -> dict:
     return resp.json()
 
 
+# Mirror of app.services.attachments.ALLOWED_EXTENSIONS — kept in sync by
+# hand. Drift here is graceful: the server-side validator is the source of
+# truth, an unknown extension simply gets rejected with a 400 we log.
+_ATTACHMENT_EXTENSIONS = {
+    ".pdf", ".png", ".jpg", ".jpeg",
+    ".dwg", ".dxf", ".xlsx", ".docx",
+}
+
+
+def _safe_attachment_filename(raw_name: str | None) -> str | None:
+    """Strip directory components and reject anything without a whitelisted
+    extension. Returns None if the part should be skipped."""
+    if not raw_name:
+        return None
+    name = os.path.basename(raw_name).strip()
+    if not name:
+        return None
+    ext = os.path.splitext(name)[1].lower()
+    if ext not in _ATTACHMENT_EXTENSIONS:
+        return None
+    return name
+
+
+def _iter_attachments(msg: EmailMessage):
+    """Yield (filename, content_type, payload_bytes) for each whitelisted
+    attachment part. Inline parts (text/plain, text/html) are skipped — we
+    only want real file enclosures.
+    """
+    for part in msg.walk():
+        if part.is_multipart():
+            continue
+        # Only treat parts as attachments when MIME actually flagged them
+        # that way (Content-Disposition: attachment) or when the part has
+        # a filename. This avoids hoovering up inline images embedded in
+        # HTML signatures.
+        disp = (part.get("Content-Disposition") or "").lower()
+        raw_filename = part.get_filename()
+        if "attachment" not in disp and not raw_filename:
+            continue
+        filename = _safe_attachment_filename(raw_filename)
+        if filename is None:
+            if raw_filename:
+                LOG.info("skipping part with disallowed filename %r", raw_filename)
+            continue
+        payload = part.get_payload(decode=True)
+        if not payload:
+            continue
+        ctype = part.get_content_type() or "application/octet-stream"
+        yield filename, ctype, payload
+
+
+def _post_attachment(url: str, token: str, table: str, record_id: int,
+                     filename: str, content_type: str, blob: bytes) -> bool:
+    """POST a single attachment. Returns True on success (201 or already-existed
+    dedupe), False on any failure — failures are logged but never fatal so a
+    single bad attachment doesn't keep an entire email un-imported."""
+    endpoint = f"{url.rstrip('/')}/api/v1/attachments/{table}/{record_id}"
+    try:
+        resp = requests.post(
+            endpoint,
+            headers={"X-Token": token},
+            files={"file": (filename, blob, content_type)},
+            timeout=120,
+        )
+    except requests.RequestException as exc:
+        LOG.warning("attachment POST failed (network) file=%s err=%s", filename, exc)
+        return False
+    if resp.status_code in (200, 201):
+        LOG.info("attached %s (%d bytes) to %s/%s", filename, len(blob), table, record_id)
+        return True
+    LOG.warning(
+        "attachment rejected file=%s status=%s body=%s",
+        filename, resp.status_code, resp.text[:200],
+    )
+    return False
+
+
 def _connect(host: str, port: int, use_ssl: bool, user: str, password: str, folder: str):
     cls = imaplib.IMAP4_SSL if use_ssl else imaplib.IMAP4
     conn = cls(host, port)
@@ -141,6 +227,7 @@ def main() -> int:
     folder = _env("INTAKE_IMAP_FOLDER", "INBOX")
     use_ssl = _env("INTAKE_IMAP_SSL", "1") not in ("0", "false", "False")
     max_messages = int(_env("INTAKE_MAX_MESSAGES", "10"))
+    max_attachment_bytes = int(_env("INTAKE_MAX_ATTACHMENT_BYTES", str(50 * 1024 * 1024)))
 
     tt_url = _env("TASKTRACK_URL", "http://127.0.0.1:5050")
     tt_token = _env("TASKTRACK_TOKEN", required=True)
@@ -179,7 +266,24 @@ def main() -> int:
                 LOG.error("triage POST failed for id=%s: %s", msg_id, exc)
                 continue
             task_id = result.get("task_id")
-            LOG.info("id=%s -> task_id=%s model=%s", msg_id, task_id, result.get("model"))
+            target_table = result.get("target_table")
+            LOG.info("id=%s -> task_id=%s table=%s model=%s",
+                     msg_id, task_id, target_table, result.get("model"))
+
+            # Best-effort attachment upload. We've already created the task,
+            # so attachment failures don't roll anything back — they just
+            # leave the operator without the file (visible in the log).
+            if task_id and target_table:
+                for filename, ctype, blob in _iter_attachments(msg):
+                    if len(blob) > max_attachment_bytes:
+                        LOG.warning(
+                            "skipping oversized attachment file=%s size=%d cap=%d",
+                            filename, len(blob), max_attachment_bytes,
+                        )
+                        continue
+                    _post_attachment(tt_url, tt_token, target_table, task_id,
+                                     filename, ctype, blob)
+
             conn.store(msg_id, "+FLAGS", "\\Seen")
             processed += 1
 

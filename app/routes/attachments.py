@@ -19,7 +19,8 @@ shows up.
 """
 from __future__ import annotations
 
-from flask import Blueprint, Response, jsonify, redirect, request
+from flask import Blueprint, Response, jsonify, redirect, request, session
+
 from sqlalchemy import select
 
 from ..auth import login_required
@@ -28,8 +29,18 @@ from ..db import get_session
 from ..models import Attachment, to_dict
 from ..services import attachments as att_svc
 from ..services.tickets import TABLE_MODELS
+from ..tokens import check_scoped_token
 
 bp = Blueprint("attachments", __name__)
+
+
+def _require_upload_auth():
+    """Session OR triage-scoped token. Used so email_intake.py and other
+    triage-side callers can attach files they parsed out of the source
+    message without holding a browser session."""
+    if "user_id" in session:
+        return None
+    return check_scoped_token("triage")
 
 
 def _record_exists(sess, table: str, record_id: int) -> bool:
@@ -60,8 +71,10 @@ def list_attachments(table, record_id):
 
 
 @bp.route("/api/v1/attachments/<table>/<int:record_id>", methods=["POST"])
-@login_required
 def upload_attachment(table, record_id):
+    err = _require_upload_auth()
+    if err:
+        return err
     if table not in ALLOWED_TABLES:
         return jsonify({"error": "Invalid table"}), 400
     sess = get_session()

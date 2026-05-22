@@ -182,3 +182,53 @@ def test_unauthenticated_upload_blocked(client, temp_app):
         content_type="multipart/form-data",
     )
     assert r.status_code in (401, 302)
+
+
+def test_triage_token_can_upload(client, temp_app, patched_minio, monkeypatch):
+    """Email intake (and any other triage-token client) must be able to
+    attach files to an AI-created task without a browser session."""
+    from app import tokens as tokens_mod
+
+    monkeypatch.setitem(tokens_mod.SCOPED_TOKENS, "triage", "test-triage-token")
+    record_id = _seed_work_task(temp_app)
+
+    # No session login — just the scoped token.
+    r = client.post(
+        f"/api/v1/attachments/work_tasks/{record_id}",
+        data={"file": (io.BytesIO(b"%PDF-1.4 stub"), "drawing.pdf", "application/pdf")},
+        content_type="multipart/form-data",
+        headers={"X-Token": "test-triage-token"},
+    )
+    assert r.status_code == 201, r.data
+    body = r.get_json()
+    assert body["filename"] == "drawing.pdf"
+
+    # Wrong token still blocked.
+    r = client.post(
+        f"/api/v1/attachments/work_tasks/{record_id}",
+        data={"file": (io.BytesIO(b"%PDF-1.4 nope"), "other.pdf", "application/pdf")},
+        content_type="multipart/form-data",
+        headers={"X-Token": "wrong"},
+    )
+    assert r.status_code == 401
+
+
+def test_list_and_delete_still_require_session(client, temp_app, patched_minio, monkeypatch):
+    """Token auth was added only to the upload endpoint — the other
+    attachment operations must still demand a browser session."""
+    from app import tokens as tokens_mod
+
+    monkeypatch.setitem(tokens_mod.SCOPED_TOKENS, "triage", "test-triage-token")
+    record_id = _seed_work_task(temp_app)
+
+    r = client.get(
+        f"/api/v1/attachments/work_tasks/{record_id}",
+        headers={"X-Token": "test-triage-token"},
+    )
+    assert r.status_code in (401, 302)
+
+    r = client.delete(
+        "/api/v1/attachments/1",
+        headers={"X-Token": "test-triage-token"},
+    )
+    assert r.status_code in (401, 302)

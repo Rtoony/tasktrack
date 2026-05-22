@@ -47,5 +47,12 @@ set -a; source /dev/shm/nexus-env-tasktrack-email-intake; set +a
   network / LiteLLM outages don't drop mail — the next tick retries.
 - Up to 10 messages per tick (`INTAKE_MAX_MESSAGES` override). Large backlogs
   drain over several ticks.
-- The poller does **not** currently handle attachments — PDFs / images are
-  ignored. Add Gemini vision handling in a later iteration if needed.
+- Whitelisted MIME attachments (PDF / DWG / DXF / PNG / JPG / XLSX / DOCX)
+  ride along with the triage POST: once the task row is created, each part
+  is uploaded to `/api/v1/attachments/<table>/<task_id>` with the same
+  triage token. Failures are logged but never block the row — the task
+  still lands so the operator can chase the missing file. Override the
+  per-part cap (default 50 MB, matching the server) with
+  `INTAKE_MAX_ATTACHMENT_BYTES`.
+- Body-only text extraction; rich attachment understanding (Gemini vision
+  OCR on scanned PDFs, image captioning) is still a later iteration.
