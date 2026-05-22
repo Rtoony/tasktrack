@@ -1664,7 +1664,16 @@ async function reloadMap(fit) {
 function initOrRefreshMap() {
   if (mapInstance) { setTimeout(() => mapInstance.invalidateSize(), 50); reloadMap(true); return; }
   if (!window.L) return; // Leaflet failed to load; map-empty will show
-  mapInstance = L.map('map', { preferCanvas: true }).setView([38.42, -122.71], 10);
+  // Finer zoom granularity for dense project areas (e.g. SF Bay has
+  // ~4,700 pins). Default delta=1, snap=1, wheel=60. Half-step delta on
+  // +/- buttons and double-click, quarter-step snap so fitBounds + box
+  // zooms land between integers, and 2x wheel travel per zoom step.
+  mapInstance = L.map('map', {
+    preferCanvas: true,
+    zoomDelta: 0.5,
+    zoomSnap: 0.25,
+    wheelPxPerZoomLevel: 120,
+  }).setView([38.42, -122.71], 10);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
