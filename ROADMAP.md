@@ -49,6 +49,14 @@ To be decided after the post-cleanup regroup. Candidates:
 - M365 / Outlook integrations.
 - SLA timers tied to a customer-facing service desk.
 - BR Engineering branding or company-VM install machinery.
+- **CAD Project Setup System metadata** (jurisdictions, stakeholders,
+  project area / boundary, sheet indices, CAD/Civil 3D templates,
+  client/title-block presets, override / status / alert workflow,
+  GIS/aerial/LiDAR background data). All of this lands in OrdoCAD,
+  not TaskTrack — see
+  `~/projects/ordocad/docs/SEPARATION_AND_DEPLOY_PLAN.md` (2026-05-22).
+  TaskTrack stays a personal task tracker; project metadata richness
+  is owned by OrdoCAD when Codex deploys it.
 
 ## Not yet decided
 
