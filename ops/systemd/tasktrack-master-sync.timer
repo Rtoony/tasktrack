@@ -1,0 +1,14 @@
+[Unit]
+Description=TaskTrack — daily master-list sync (03:30 local)
+
+[Timer]
+# Fire daily at 03:30 local. RandomizedDelaySec keeps this from
+# colliding with the 04:00 Proxmox backup window even after clock drift.
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=300
+AccuracySec=1min
+Persistent=true
+Unit=tasktrack-master-sync.service
+
+[Install]
+WantedBy=timers.target

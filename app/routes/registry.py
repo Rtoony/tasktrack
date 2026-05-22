@@ -11,16 +11,24 @@ Routes mirror the rest of /api/v1/*:
 - DELETE /api/v1/employees/<id>   (soft delete: sets active=0)
 - (same shape for /api/v1/projects)
 """
+import json
+import os
 from datetime import datetime
+from pathlib import Path
 
 from flask import Blueprint, g, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import Employee, Project, to_dict
+from ..models import Employee, Project, ProjectSite, to_dict
 
-_PROJECT_DISPLAY_STATUSES = {"active", "dormant", "completed", "draft", "review"}
+# Pared down to {active, dormant} to match the firm's Master Project List
+# spreadsheet, which is now the source of truth for project state. The
+# old completed/draft/review options pre-dated the master-list import
+# and weren't actually in use (projects table was empty when the import
+# ran).
+_PROJECT_DISPLAY_STATUSES = {"active", "dormant"}
 
 
 def _coerce_latlng(raw):
@@ -147,44 +155,182 @@ def list_projects():
 def projects_geojson():
     """GeoJSON FeatureCollection for the Map tab.
 
-    Skips projects without lat/lng (can't pin them). Status drives color
-    on the client. `bbox` query param (west,south,east,north) optional
-    filter; defaults to all active projects.
+    Emits one Feature per `project_sites` row so multi-site projects (the
+    Master List has ~360 of these, worst case 84 sites for "223.00") all
+    render. Falls back to the legacy `projects.lat`/`projects.lng`
+    columns for any project without a row in `project_sites` — e.g.
+    projects added through the admin UI after the import.
+
+    Optional query params (all AND'd together):
+        ?bbox=west,south,east,north   bounding-box clip
+        ?component=<exact>            filter by project Component
+        ?client=<substring>           case-insensitive client substring
+        ?display_status=active|dormant
+        ?pin_color=yellow|red|green|blue|pink   per-site artifact color
+        ?include_inactive=1           include soft-deleted projects
     """
     sess = get_session()
     include_inactive = request.args.get("include_inactive") in ("1", "true", "yes")
-    stmt = select(Project).where(
-        Project.lat.is_not(None), Project.lng.is_not(None),
-    )
-    if not include_inactive:
-        stmt = stmt.where(Project.active == 1)
+
+    component = (request.args.get("component") or "").strip()
+    client_q = (request.args.get("client") or "").strip()
+    ds_q = (request.args.get("display_status") or "").strip()
+    pin_color = (request.args.get("pin_color") or "").strip()
 
     bbox = request.args.get("bbox", "")
+    bbox_vals = None
     if bbox:
         try:
-            west, south, east, north = (float(x) for x in bbox.split(","))
-            stmt = stmt.where(
+            bbox_vals = tuple(float(x) for x in bbox.split(","))
+            if len(bbox_vals) != 4:
+                bbox_vals = None
+        except (ValueError, TypeError):
+            bbox_vals = None
+
+    def _apply_project_filters(stmt):
+        if not include_inactive:
+            stmt = stmt.where(Project.active == 1)
+        if component:
+            stmt = stmt.where(Project.component == component)
+        if client_q:
+            stmt = stmt.where(Project.client.ilike(f"%{client_q}%"))
+        if ds_q:
+            stmt = stmt.where(Project.display_status == ds_q)
+        return stmt
+
+    features = []
+
+    # 1) One feature per project_sites row (the common path, ~5,400 pins).
+    site_stmt = (
+        select(ProjectSite, Project)
+        .join(Project, Project.id == ProjectSite.project_id)
+    )
+    site_stmt = _apply_project_filters(site_stmt)
+    if pin_color:
+        site_stmt = site_stmt.where(ProjectSite.pin_color == pin_color)
+    if bbox_vals is not None:
+        west, south, east, north = bbox_vals
+        site_stmt = site_stmt.where(
+            ProjectSite.lng >= west, ProjectSite.lng <= east,
+            ProjectSite.lat >= south, ProjectSite.lat <= north,
+        )
+
+    seen_project_ids: set[int] = set()
+    for site, proj in sess.execute(site_stmt).all():
+        seen_project_ids.add(proj.id)
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [site.lng, site.lat]},
+            "properties": {
+                "project_id":     proj.id,
+                "site_id":        site.id,
+                "project_number": proj.project_number,
+                "name":           proj.name,
+                "client":         proj.client,
+                "component":      proj.component,
+                "principal":      proj.principal,
+                "display_status": proj.display_status,
+                "pin_color":      site.pin_color,
+                "is_primary":     bool(site.is_primary),
+                "active":         bool(proj.active),
+            },
+        })
+
+    # 2) Fallback: projects with legacy lat/lng but no project_sites row
+    # (e.g. ones added via admin UI after the master-list import). Skip
+    # them if a pin_color filter is in effect since they have no color.
+    if not pin_color:
+        legacy_stmt = select(Project).where(
+            Project.lat.is_not(None), Project.lng.is_not(None),
+        )
+        legacy_stmt = _apply_project_filters(legacy_stmt)
+        if bbox_vals is not None:
+            west, south, east, north = bbox_vals
+            legacy_stmt = legacy_stmt.where(
                 Project.lng >= west, Project.lng <= east,
                 Project.lat >= south, Project.lat <= north,
             )
-        except (ValueError, TypeError):
-            pass  # ignore malformed bbox; return full set
+        for proj in sess.scalars(legacy_stmt).all():
+            if proj.id in seen_project_ids:
+                continue
+            features.append({
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [proj.lng, proj.lat]},
+                "properties": {
+                    "project_id":     proj.id,
+                    "site_id":        None,
+                    "project_number": proj.project_number,
+                    "name":           proj.name,
+                    "client":         proj.client,
+                    "component":      proj.component,
+                    "principal":      proj.principal,
+                    "display_status": proj.display_status,
+                    "pin_color":      "",
+                    "is_primary":     True,
+                    "active":         bool(proj.active),
+                },
+            })
 
-    features = []
-    for p in sess.scalars(stmt).all():
-        features.append({
-            "type": "Feature",
-            "geometry": {"type": "Point", "coordinates": [p.lng, p.lat]},
-            "properties": {
-                "project_id": p.id,
-                "project_number": p.project_number,
-                "name": p.name,
-                "client": p.client,
-                "display_status": p.display_status,
-                "active": bool(p.active),
-            },
-        })
     return jsonify({"type": "FeatureCollection", "features": features})
+
+
+@bp.route("/api/v1/projects/components", methods=["GET"])
+@login_required
+def project_components():
+    """Distinct (component, count) pairs for the Map-tab filter dropdown.
+
+    Excludes the empty string so the dropdown only lists real types.
+    Honors `?include_inactive=1` the same way the geojson endpoint does
+    so the counts match what the user can see.
+    """
+    sess = get_session()
+    include_inactive = request.args.get("include_inactive") in ("1", "true", "yes")
+    stmt = (
+        select(Project.component, func.count(Project.id))
+        .where(Project.component != "")
+        .group_by(Project.component)
+        .order_by(func.count(Project.id).desc())
+    )
+    if not include_inactive:
+        stmt = stmt.where(Project.active == 1)
+    rows = [{"component": c, "count": n} for c, n in sess.execute(stmt).all()]
+    return jsonify(rows)
+
+
+def _master_sync_state_path() -> Path:
+    """Mirror scripts/sync_master_if_changed.py's _state_path()
+    convention. Kept in lockstep by hand — small enough that pulling
+    in the script module just for one helper isn't worth it."""
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "tasktrack" / "master-sync.json"
+
+
+@bp.route("/api/v1/projects/sync-status", methods=["GET"])
+@login_required
+def projects_sync_status():
+    """Surface the last master-list sync run for the admin badge.
+
+    Returns the state file's contents verbatim (last_run_at, hashes,
+    compact summary) plus a `state` field with one of:
+      - "never_run"         no state file exists yet
+      - "unreadable"        state file exists but couldn't be parsed
+      - "ok"                state file parsed cleanly
+    """
+    state_path = _master_sync_state_path()
+    if not state_path.is_file():
+        return jsonify({
+            "state": "never_run",
+            "message": "The automated sync has not run yet on this host.",
+        })
+    try:
+        payload = json.loads(state_path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        return jsonify({
+            "state":   "unreadable",
+            "message": f"State file present but could not be parsed: {exc}",
+        }), 500
+    payload["state"] = "ok"
+    return jsonify(payload)
 
 
 @bp.route("/api/v1/projects", methods=["POST"])
@@ -217,6 +363,10 @@ def create_project():
         external_ref=(data.get("external_ref") or "").strip(),
         external_system=(data.get("external_system") or "").strip(),
         notes=(data.get("notes") or "").strip(),
+        component=(data.get("component") or "").strip(),
+        principal=(data.get("principal") or "").strip(),
+        start_date=(data.get("start_date") or "").strip(),
+        dormant_date=(data.get("dormant_date") or "").strip(),
         active=1 if data.get("active", 1) else 0,
         lat=_coerce_latlng(data.get("lat")),
         lng=_coerce_latlng(data.get("lng")),
@@ -246,7 +396,8 @@ def update_project(proj_id):
         return jsonify({"error": "not found", "request_id": _rid()}), 404
     data = request.get_json(silent=True) or {}
     for col in ("project_number", "name", "client", "billing_phase_default",
-                "external_ref", "external_system", "notes"):
+                "external_ref", "external_system", "notes",
+                "component", "principal", "start_date", "dormant_date"):
         if col in data:
             val = (data[col] or "").strip()
             if col == "project_number" and not val:

@@ -1,0 +1,24 @@
+[Unit]
+Description=TaskTrack — sync project master list (XLSX + KMZ -> DB)
+After=network-online.target collab-tracker.service
+Wants=network-online.target
+# Reads TASKTRACK_MASTER_SOURCE_DIR from the "TaskTrack" vault group (set
+# to /mnt/synology-eng-data/master-list once the NAS share is mounted)
+# and TELEGRAM_BOT_TOKEN / TELEGRAM_CLAUDE_CHAT_ID from "Messaging" so
+# the digest can ping the operator. Won't start without a live
+# BW_SESSION; if either vault group is missing the wrapper falls back
+# gracefully (source dir error -> SystemExit; missing Telegram creds ->
+# stdout-only digest).
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rtoony/projects/collab-tracker
+ExecStartPre=/home/rtoony/bin/nexus-svc-inject tasktrack-master-sync "TaskTrack" "Messaging"
+ExecStart=/home/rtoony/miniconda3/bin/python3 /home/rtoony/projects/collab-tracker/scripts/sync_master_if_changed.py
+ExecStopPost=/bin/rm -f /dev/shm/nexus-env-tasktrack-master-sync
+EnvironmentFile=-/dev/shm/nexus-env-tasktrack-master-sync
+Environment=PATH=/home/rtoony/bin:/home/rtoony/miniconda3/bin:/usr/local/bin:/usr/bin:/bin
+# oneshot — the timer re-launches on schedule.
+
+[Install]
+WantedBy=default.target

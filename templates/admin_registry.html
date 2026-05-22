@@ -125,7 +125,7 @@
   {% if kind == 'projects' %}
   <div class="panel">
     <h2>Add Project</h2>
-    <form class="add-form" onsubmit="event.preventDefault(); addProject()" style="grid-template-columns:repeat(7, 1fr)">
+    <form class="add-form" onsubmit="event.preventDefault(); addProject()" style="grid-template-columns:repeat(4, 1fr)">
       <div class="field"><label>Project number *</label><input id="add-pn" required placeholder="1234.56"></div>
       <div class="field"><label>Name</label><input id="add-name"></div>
       <div class="field"><label>Client</label><input id="add-client"></div>
@@ -133,21 +133,22 @@
         <select id="add-status" style="width:100%;padding:0.45rem 0.6rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);font-family:inherit;font-size:0.85rem">
           <option value="active">active</option>
           <option value="dormant">dormant</option>
-          <option value="completed">completed</option>
-          <option value="draft">draft</option>
-          <option value="review">review</option>
         </select>
       </div>
+      <div class="field"><label>Component (type)</label><input id="add-component" placeholder="e.g. Topographic Mapping"></div>
+      <div class="field"><label>Principal</label><input id="add-principal" placeholder="e.g. Long, David"></div>
+      <div class="field"><label>Start date</label><input id="add-start" type="date"></div>
+      <div class="field"><label>Dormant date</label><input id="add-dormant" type="date"></div>
       <div class="field"><label>Latitude</label><input id="add-lat" placeholder="38.4404" inputmode="decimal"></div>
       <div class="field"><label>Longitude</label><input id="add-lng" placeholder="-122.7141" inputmode="decimal"></div>
-      <div class="field"><button class="btn" type="submit">Add</button></div>
+      <div class="field" style="grid-column:span 2;display:flex;align-items:end"><button class="btn" type="submit">Add</button></div>
     </form>
   </div>
   <div class="panel">
-    <h2>Project list</h2>
+    <h2>Project list <span id="sync-status-badge" style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);margin-left:0.5rem"></span></h2>
     <table>
       <thead><tr>
-        <th>Number</th><th>Name</th><th>Client</th><th>Status</th><th>Location</th><th>Active</th><th></th>
+        <th>Number</th><th>Name</th><th>Client</th><th>Component</th><th>Principal</th><th>Status</th><th>Location</th><th>Active</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in rows %}
@@ -155,7 +156,9 @@
           <td><code>{{ r.project_number }}</code></td>
           <td>{{ r.name }}</td>
           <td>{{ r.client }}</td>
-          <td><span class="pill ok">{{ r.display_status }}</span></td>
+          <td>{{ r.component }}</td>
+          <td>{{ r.principal }}</td>
+          <td><span class="pill {{ 'ok' if r.display_status == 'active' else 'off' }}">{{ r.display_status }}</span></td>
           <td>
             {% if r.lat is not none and r.lng is not none %}
             <code style="font-size:0.72rem;color:var(--text-muted)">{{ '%.4f'|format(r.lat) }}, {{ '%.4f'|format(r.lng) }}</code>
@@ -221,6 +224,10 @@ async function addProject() {
     name: document.getElementById('add-name').value.trim(),
     client: document.getElementById('add-client').value.trim(),
     display_status: document.getElementById('add-status').value,
+    component: document.getElementById('add-component').value.trim(),
+    principal: document.getElementById('add-principal').value.trim(),
+    start_date: document.getElementById('add-start').value.trim(),
+    dormant_date: document.getElementById('add-dormant').value.trim(),
   };
   const lat = document.getElementById('add-lat').value.trim();
   const lng = document.getElementById('add-lng').value.trim();
@@ -245,6 +252,36 @@ async function reactivate(kind, id) {
   if (r && r.error) return toast(r.error);
   location.reload();
 }
+
+// Master-list sync status badge — populates next to "Project list" if
+// the projects panel is on screen. Silent failure on every error
+// path; this is informational only and the rest of the page must
+// keep working without it.
+async function loadSyncStatusBadge() {
+  const badge = document.getElementById('sync-status-badge');
+  if (!badge) return;
+  try {
+    const res = await fetch('/api/v1/projects/sync-status');
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.state === 'never_run') {
+      badge.textContent = 'Master sync: never run on this host';
+      return;
+    }
+    const when = data.last_run_at
+      ? new Date(data.last_run_at).toLocaleString()
+      : '(unknown)';
+    const r = data.last_report || {};
+    const parts = [];
+    if (r.created_count)   parts.push(r.created_count + ' added');
+    if (r.updated_count)   parts.push(r.updated_count + ' updated');
+    if (r.vanished_count)  parts.push(r.vanished_count + ' vanished');
+    if (r.returned_count)  parts.push(r.returned_count + ' returned');
+    const tail = parts.length ? ' — ' + parts.join(', ') : ' — no changes';
+    badge.textContent = 'Master sync: ' + when + tail;
+  } catch (e) { /* informational only */ }
+}
+loadSyncStatusBadge();
 </script>
 
 </body>

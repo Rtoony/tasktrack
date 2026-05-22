@@ -376,16 +376,71 @@ class Project(Base):
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
     # Phase-0.5 (Atlas-lite): primary point location + workflow status that
     # drives map-pin color. `active` above is the soft-delete flag and is
-    # intentionally distinct from `display_status` here.
+    # intentionally distinct from `display_status` here. As of the
+    # master-list import, `display_status` is constrained to
+    # `{"active", "dormant"}` to match the source spreadsheet.
     lat: Mapped[float | None] = mapped_column(Float)
     lng: Mapped[float | None] = mapped_column(Float)
     display_status: Mapped[str] = mapped_column(Text, server_default=text("'active'"))
+    # Master-list import fields. `component` is the project TYPE (e.g.
+    # "Site Improvement Plans", "Topographic Mapping" — 33 distinct values
+    # in the source). `principal` is the lead-of-record. Dates are stored
+    # as ISO YYYY-MM-DD strings to keep the generic CRUD/to_dict path
+    # simple; empty string means "not set" (consistent with the other
+    # date-ish columns in this app).
+    component: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    principal: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    start_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    dormant_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # Vanish-tracking for the automated master-list sync. Both are
+    # ISO 8601 strings or "" for "never". `last_seen_in_master_at` is
+    # bumped to the run start time on every sync that finds the
+    # project_number in the Excel. `vanished_from_master_at` is set on
+    # the first sync that doesn't, and cleared back to "" if the
+    # project later reappears.
+    last_seen_in_master_at: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    vanished_from_master_at: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
         Index("idx_projects_project_number", "project_number", unique=True),
         Index("idx_projects_active", "active"),
+        Index("idx_projects_component", "component"),
+        Index("idx_projects_client", "client"),
+        Index("idx_projects_vanished_from_master_at",
+              "vanished_from_master_at"),
+    )
+
+
+class ProjectSite(Base):
+    """One physical pin location for a project.
+
+    Most projects have a single site (matching the legacy
+    `projects.lat`/`projects.lng` columns, which are kept and mirror the
+    primary site for backward compatibility). A handful — e.g. multi-
+    parcel work for repeat clients like Forestville Water District — have
+    many sites under one project number; the worst offender ("209") has
+    69 pins. Each row carries a `pin_color` derived from the source KMZ
+    pushpin icon, which encodes per-site artifact metadata (yellow =
+    primary form placement, red = archived PDF on file, green = topo
+    survey on file, blue = archived PDF + survey, pink = stray legacy).
+    """
+    __tablename__ = "project_sites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    lat: Mapped[float] = mapped_column(Float, nullable=False)
+    lng: Mapped[float] = mapped_column(Float, nullable=False)
+    pin_color: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    raw_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    is_primary: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    source: Mapped[str] = mapped_column(Text, server_default=text("'kmz'"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_project_sites_project_id", "project_id"),
+        Index("idx_project_sites_pin_color", "pin_color"),
     )
 
 

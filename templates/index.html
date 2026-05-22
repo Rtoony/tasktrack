@@ -720,21 +720,32 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Projects Map</h2>
-        <div class="section-subtitle">Active projects with a location pin. Click a pin to copy the project number. Add lat/lng on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
+        <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Click a pin to copy the project number. Edit on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
       </div>
       <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
-        <option value="">All statuses</option>
+        <option value="">Status: any</option>
         <option value="active">Active</option>
         <option value="dormant">Dormant</option>
-        <option value="completed">Completed</option>
-        <option value="draft">Draft</option>
-        <option value="review">In review</option>
       </select>
+      <select class="filter-select" id="map-component-filter" onchange="reloadMap()">
+        <option value="">Type: any</option>
+      </select>
+      <select class="filter-select" id="map-pin-color-filter" onchange="reloadMap()">
+        <option value="">Artifact: any</option>
+        <option value="yellow">Project form (yellow)</option>
+        <option value="green">Topo on file (green)</option>
+        <option value="red">Archived PDF (red)</option>
+        <option value="blue">Archived + survey (blue)</option>
+      </select>
+      <input class="filter-select" id="map-client-filter" type="text"
+             placeholder="Client contains…" style="min-width:160px"
+             oninput="scheduleMapReload()">
       <button class="btn btn-sm" type="button" onclick="reloadMap(true)">Refresh / Fit</button>
+      <span class="filter-select" id="map-count" style="background:transparent;border:none;padding:0;color:var(--text-muted);font-size:0.78rem"></span>
     </div>
     <div id="map-empty" class="empty-state" style="display:none">
-      <div class="empty-title">No projects pinned yet</div>
-      <p class="empty-copy">When a project has lat/lng set in <a href="/admin/projects" style="color:var(--accent)">/admin/projects</a>, it shows up here. CSV sync from the Atlas registry is on the roadmap.</p>
+      <div class="empty-title">No projects match these filters</div>
+      <p class="empty-copy">Try widening the filters above, or add a project on <a href="/admin/projects" style="color:var(--accent)">/admin/projects</a>.</p>
     </div>
     <div id="map-host" style="height:calc(100vh - 220px); min-height:420px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; position:relative;">
       <div id="map" style="height:100%; width:100%;"></div>
@@ -1514,22 +1525,73 @@ async function refreshHealthPill() {
    tiles redraw after the section was hidden. */
 let mapInstance = null;
 let mapLayer = null;
+let mapComponentsLoaded = false;
+let mapClientDebounce = null;
+
+// Workflow status -> outline color. Pared to {active, dormant} to match
+// the Master Project List's binary Status column.
 const STATUS_COLOR = {
-  active:    '#34d399',
-  dormant:   '#fbbf24',
-  completed: '#94a3b8',
-  draft:     '#a78bfa',
-  review:    '#22d3ee',
+  active:  '#34d399',
+  dormant: '#94a3b8',
 };
 
-function mapStatusFilterValue() {
-  return document.getElementById('map-status-filter')?.value || '';
+// KMZ artifact color -> fill color. These come from the firm's pushpin
+// legend: yellow = primary form placement, red = archived PDF on file,
+// green = topo survey on file, blue = archived PDF + survey, pink =
+// stray legacy. A blank pin_color (admin-created projects) falls back
+// to the workflow color.
+const PIN_COLOR = {
+  yellow: '#facc15',
+  red:    '#ef4444',
+  green:  '#22c55e',
+  blue:   '#3b82f6',
+  pink:   '#ec4899',
+};
+
+function mapStatusFilterValue()    { return document.getElementById('map-status-filter')?.value || ''; }
+function mapComponentFilterValue() { return document.getElementById('map-component-filter')?.value || ''; }
+function mapPinColorFilterValue()  { return document.getElementById('map-pin-color-filter')?.value || ''; }
+function mapClientFilterValue()    { return document.getElementById('map-client-filter')?.value.trim() || ''; }
+
+// Debounce the client text input so each keystroke doesn't fire a
+// fetch + repaint of thousands of markers.
+function scheduleMapReload() {
+  clearTimeout(mapClientDebounce);
+  mapClientDebounce = setTimeout(() => reloadMap(), 300);
+}
+
+async function populateMapComponentFilter() {
+  if (mapComponentsLoaded) return;
+  try {
+    const res = await fetch('/api/v1/projects/components');
+    if (res.status === 401) { window.location='/login'; return; }
+    const rows = await res.json();
+    const sel = document.getElementById('map-component-filter');
+    if (!sel) return;
+    for (const r of rows) {
+      const opt = document.createElement('option');
+      opt.value = r.component;
+      opt.textContent = r.component + ' (' + r.count + ')';
+      sel.appendChild(opt);
+    }
+    mapComponentsLoaded = true;
+  } catch (e) { /* leave the dropdown with just "Type: any" */ }
 }
 
 async function reloadMap(fit) {
   if (!mapInstance) { initOrRefreshMap(); return; }
+  const params = new URLSearchParams();
   const status = mapStatusFilterValue();
-  const url = '/api/v1/projects/geojson' + (status ? '?display_status=' + encodeURIComponent(status) : '');
+  const component = mapComponentFilterValue();
+  const pinColor = mapPinColorFilterValue();
+  const client = mapClientFilterValue();
+  if (status)    params.set('display_status', status);
+  if (component) params.set('component', component);
+  if (pinColor)  params.set('pin_color', pinColor);
+  if (client)    params.set('client', client);
+  const qs = params.toString();
+  const url = '/api/v1/projects/geojson' + (qs ? ('?' + qs) : '');
+
   let geo;
   try {
     const res = await fetch(url);
@@ -1538,30 +1600,56 @@ async function reloadMap(fit) {
   } catch (e) { geo = { features: [] }; }
 
   if (mapLayer) { mapLayer.remove(); mapLayer = null; }
-  const features = (geo.features || []).filter(f =>
-    !status || f.properties.display_status === status
-  );
+  const features = (geo.features || []);
 
   document.getElementById('map-empty').style.display = features.length ? 'none' : 'block';
   document.getElementById('map-host').style.display = features.length ? 'block' : 'none';
+  const countEl = document.getElementById('map-count');
+  if (countEl) {
+    // Distinct project count vs. site count — both useful when a project
+    // can render many pins (the worst is "223.00" with 84 sites).
+    const projectIds = new Set(features.map(f => f.properties.project_id));
+    countEl.textContent = features.length
+      ? `${projectIds.size} project${projectIds.size === 1 ? '' : 's'} · ${features.length} pin${features.length === 1 ? '' : 's'}`
+      : '';
+  }
 
   if (!features.length) { return; }
 
+  // Radius scales down for dense views — at 5000+ pins, a fat marker is
+  // a UX disaster. Pick once based on total count, not per-pin.
+  const baseRadius = features.length > 2000 ? 4 : features.length > 500 ? 5 : 7;
+
   mapLayer = L.geoJSON({ type:'FeatureCollection', features }, {
     pointToLayer: (feat, latlng) => {
-      const status = feat.properties.display_status || 'active';
-      const color = STATUS_COLOR[status] || '#94a3b8';
+      const p = feat.properties;
+      const fill = PIN_COLOR[p.pin_color] || STATUS_COLOR[p.display_status] || '#94a3b8';
+      const stroke = STATUS_COLOR[p.display_status] || fill;
       return L.circleMarker(latlng, {
-        radius: 7, weight: 2, color: color, fillColor: color, fillOpacity: 0.7,
+        radius: baseRadius,
+        weight: 1.5,
+        color: stroke,
+        fillColor: fill,
+        fillOpacity: p.display_status === 'active' ? 0.85 : 0.55,
       });
     },
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
+      const pin = p.pin_color ? `<span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:50%;background:${PIN_COLOR[p.pin_color] || '#94a3b8'};margin-right:0.3rem;vertical-align:middle"></span>${escHtml(p.pin_color)}` : '';
       const html =
-        '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.4">' +
+        '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
-        '<div style="color:#555"><code>' + escHtml(p.project_number) + '</code> &middot; ' + escHtml(p.client || '—') + '</div>' +
-        '<div style="margin-top:0.3rem"><span style="display:inline-block;padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span></div>' +
+        '<div style="color:#555;margin-top:0.15rem">' +
+          '<code style="cursor:pointer" title="Click to copy" onclick="navigator.clipboard.writeText(\'' + escHtml(p.project_number).replace(/'/g, "\\'") + '\')">' + escHtml(p.project_number) + '</code>' +
+          ' &middot; ' + escHtml(p.client || '—') +
+        '</div>' +
+        (p.component
+          ? '<div style="color:#555;margin-top:0.15rem;font-size:0.76rem">' + escHtml(p.component) + (p.principal ? ' · ' + escHtml(p.principal) : '') + '</div>'
+          : '') +
+        '<div style="margin-top:0.4rem;display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap">' +
+          '<span style="padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span>' +
+          (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
+        '</div>' +
         '</div>';
       layer.bindPopup(html);
     },
@@ -1581,6 +1669,7 @@ function initOrRefreshMap() {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
   }).addTo(mapInstance);
+  populateMapComponentFilter();
   reloadMap(true);
 }
 
