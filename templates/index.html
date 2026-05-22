@@ -740,6 +740,10 @@
       <input class="filter-select" id="map-client-filter" type="text"
              placeholder="Client contains…" style="min-width:160px"
              oninput="scheduleMapReload()">
+      <label class="filter-select" style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+        <input type="checkbox" id="map-show-areas" onchange="reloadMap()" style="margin:0">
+        <span style="font-size:0.78rem">Show project areas</span>
+      </label>
       <button class="btn btn-sm" type="button" onclick="reloadMap(true)">Refresh / Fit</button>
       <span class="filter-select" id="map-count" style="background:transparent;border:none;padding:0;color:var(--text-muted);font-size:0.78rem"></span>
     </div>
@@ -1525,6 +1529,7 @@ async function refreshHealthPill() {
    tiles redraw after the section was hidden. */
 let mapInstance = null;
 let mapLayer = null;
+let mapHullLayer = null;
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
 
@@ -1552,6 +1557,7 @@ function mapStatusFilterValue()    { return document.getElementById('map-status-
 function mapComponentFilterValue() { return document.getElementById('map-component-filter')?.value || ''; }
 function mapPinColorFilterValue()  { return document.getElementById('map-pin-color-filter')?.value || ''; }
 function mapClientFilterValue()    { return document.getElementById('map-client-filter')?.value.trim() || ''; }
+function mapShowAreasValue()       { return !!document.getElementById('map-show-areas')?.checked; }
 
 // Debounce the client text input so each keystroke doesn't fire a
 // fetch + repaint of thousands of markers.
@@ -1659,6 +1665,71 @@ async function reloadMap(fit) {
     try { mapInstance.fitBounds(mapLayer.getBounds(), { padding: [24, 24] }); } catch (e) {}
   }
   setTimeout(() => mapInstance.invalidateSize(), 50);
+
+  // ── Project-area hulls (multi-site only) ───────────────────────
+  // Pure rendering — visualizes existing project_sites as a translucent
+  // polygon for projects with 3+ sites. No new schema. The OrdoCAD lane
+  // separation (2026-05-22) keeps per-project boundary metadata over there.
+  await reloadMapHulls();
+}
+
+async function reloadMapHulls() {
+  if (mapHullLayer) { mapHullLayer.remove(); mapHullLayer = null; }
+  if (!mapShowAreasValue()) return;
+  const params = new URLSearchParams();
+  const status = mapStatusFilterValue();
+  const component = mapComponentFilterValue();
+  const pinColor = mapPinColorFilterValue();
+  const client = mapClientFilterValue();
+  if (status)    params.set('display_status', status);
+  if (component) params.set('component', component);
+  if (pinColor)  params.set('pin_color', pinColor);
+  if (client)    params.set('client', client);
+  const qs = params.toString();
+  const url = '/api/v1/projects/hulls' + (qs ? ('?' + qs) : '');
+  let geo;
+  try {
+    const res = await fetch(url);
+    if (res.status === 401) { window.location='/login'; return; }
+    geo = await res.json();
+  } catch (e) { return; }
+  const hulls = (geo.features || []);
+  if (!hulls.length) return;
+  mapHullLayer = L.geoJSON({ type:'FeatureCollection', features: hulls }, {
+    style: (feat) => {
+      const p = feat.properties;
+      const stroke = STATUS_COLOR[p.display_status] || '#94a3b8';
+      return {
+        color: stroke,
+        weight: 1.5,
+        opacity: 0.8,
+        fillColor: stroke,
+        fillOpacity: p.display_status === 'active' ? 0.18 : 0.10,
+        // Render under the pins so individual sites stay clickable.
+        interactive: true,
+      };
+    },
+    onEachFeature: (feat, layer) => {
+      const p = feat.properties;
+      const html =
+        '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
+        '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + ' <span style="color:var(--text-muted);font-weight:400">· area</span></div>' +
+        '<div style="color:#555;margin-top:0.15rem">' +
+          '<code>' + escHtml(p.project_number) + '</code>' +
+          ' &middot; ' + escHtml(p.client || '—') +
+        '</div>' +
+        '<div style="color:#555;margin-top:0.15rem;font-size:0.76rem">' +
+          p.site_count + ' site' + (p.site_count === 1 ? '' : 's') + ' · ' + escHtml(p.display_status) +
+        '</div>' +
+        '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
+        '</div>';
+      layer.bindPopup(html);
+    },
+  }).addTo(mapInstance);
+  // Pins are added AFTER hulls in DOM order, so they naturally render
+  // on top. Force the hull layer to the back as a belt-and-suspenders
+  // for any future re-ordering.
+  if (mapHullLayer.bringToBack) mapHullLayer.bringToBack();
 }
 
 function initOrRefreshMap() {

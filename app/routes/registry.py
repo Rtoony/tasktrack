@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import Employee, Project, ProjectSite, to_dict
+from ..services.convex_hull import hull_geojson_ring
 
 # Pared down to {active, dormant} to match the firm's Master Project List
 # spreadsheet, which is now the source of truth for project state. The
@@ -270,6 +271,93 @@ def projects_geojson():
                     "active":         bool(proj.active),
                 },
             })
+
+    return jsonify({"type": "FeatureCollection", "features": features})
+
+
+@bp.route("/api/v1/projects/hulls", methods=["GET"])
+@login_required
+def projects_hulls():
+    """GeoJSON FeatureCollection of convex hulls for multi-site projects.
+
+    Rendering-only feature for the Map tab — gives a "general area"
+    view of projects that span more than one location, without
+    requiring any new schema (the OrdoCAD lane separation explicitly
+    forbids adding per-project boundary metadata to TaskTrack; this
+    just visualizes the existing project_sites rows differently).
+
+    Only projects with **3 or more sites** get a Polygon. Two-site
+    projects yield a degenerate line and are skipped — they remain
+    visible as the two individual pins via the geojson endpoint.
+
+    Honors the same filter params as /api/v1/projects/geojson so the
+    hull layer stays in sync with the pin layer:
+        ?component=<exact>
+        ?client=<substring>
+        ?display_status=active|dormant
+        ?include_inactive=1
+        ?pin_color=...   (filters which SITES contribute to the hull;
+                          a project with sites of multiple colors will
+                          still get a hull computed from the matching
+                          sites only)
+
+    No bbox clipping — the hull may legitimately extend outside the
+    current viewport (that's its purpose). The frontend can z-cull.
+    """
+    sess = get_session()
+    include_inactive = request.args.get("include_inactive") in ("1", "true", "yes")
+    component = (request.args.get("component") or "").strip()
+    client_q = (request.args.get("client") or "").strip()
+    ds_q = (request.args.get("display_status") or "").strip()
+    pin_color = (request.args.get("pin_color") or "").strip()
+
+    stmt = (
+        select(ProjectSite, Project)
+        .join(Project, Project.id == ProjectSite.project_id)
+    )
+    if not include_inactive:
+        stmt = stmt.where(Project.active == 1)
+    if component:
+        stmt = stmt.where(Project.component == component)
+    if client_q:
+        stmt = stmt.where(Project.client.ilike(f"%{client_q}%"))
+    if ds_q:
+        stmt = stmt.where(Project.display_status == ds_q)
+    if pin_color:
+        stmt = stmt.where(ProjectSite.pin_color == pin_color)
+
+    # Bucket sites by project_id, keep one Project ref per bucket.
+    by_project: dict[int, dict] = {}
+    for site, proj in sess.execute(stmt).all():
+        bucket = by_project.setdefault(
+            proj.id,
+            {"proj": proj, "points": []},
+        )
+        bucket["points"].append((site.lng, site.lat))
+
+    features = []
+    for pid, bucket in by_project.items():
+        if len(bucket["points"]) < 3:
+            continue
+        ring = hull_geojson_ring(bucket["points"])
+        if ring is None:
+            continue
+        proj = bucket["proj"]
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Polygon", "coordinates": [ring]},
+            "properties": {
+                "project_id":     proj.id,
+                "project_number": proj.project_number,
+                "name":           proj.name,
+                "client":         proj.client,
+                "component":      proj.component,
+                "principal":      proj.principal,
+                "display_status": proj.display_status,
+                "site_count":     len(bucket["points"]),
+                "active":         bool(proj.active),
+            },
+        })
 
     return jsonify({"type": "FeatureCollection", "features": features})
 
