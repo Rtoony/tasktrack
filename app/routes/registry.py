@@ -21,7 +21,17 @@ from sqlalchemy import func, select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import Employee, Project, ProjectSite, to_dict
+from ..models import (
+    CalendarEvent,
+    Employee,
+    PersonnelIssue,
+    Project,
+    ProjectSite,
+    ProjectWorkTask,
+    TrainingTask,
+    WorkTask,
+    to_dict,
+)
 from ..services.convex_hull import hull_geojson_ring
 
 # Pared down to {active, dormant} to match the firm's Master Project List
@@ -40,6 +50,47 @@ def _coerce_latlng(raw):
         return float(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _project_identity_filters():
+    project_id_q = (request.args.get("project_id") or "").strip()
+    project_number = (request.args.get("project_number") or "").strip()
+    project_id = None
+    if project_id_q:
+        try:
+            project_id = int(project_id_q)
+        except (TypeError, ValueError):
+            return None, None, jsonify({
+                "error": "project_id must be an integer",
+                "request_id": _rid(),
+            }), 400
+    return project_id, project_number, None, None
+
+
+def _project_filter_stmt(stmt, *, include_inactive: bool, component: str = "",
+                         client_q: str = "", ds_q: str = "",
+                         project_id: int | None = None,
+                         project_number: str = ""):
+    if not include_inactive:
+        stmt = stmt.where(Project.active == 1)
+    if component:
+        stmt = stmt.where(Project.component == component)
+    if client_q:
+        stmt = stmt.where(Project.client.ilike(f"%{client_q}%"))
+    if ds_q:
+        stmt = stmt.where(Project.display_status == ds_q)
+    if project_id is not None:
+        stmt = stmt.where(Project.id == project_id)
+    if project_number:
+        stmt = stmt.where(Project.project_number == project_number)
+    return stmt
+
+
+def _linked_rows(sess, model, project_id: int, project_number: str, *, limit: int = 50):
+    stmt = select(model).where(
+        (model.project_id == project_id) | (model.project_number == project_number)
+    ).order_by(model.id.desc()).limit(limit)
+    return [to_dict(row) for row in sess.scalars(stmt).all()]
 
 bp = Blueprint("registry", __name__)
 
@@ -177,6 +228,9 @@ def projects_geojson():
     client_q = (request.args.get("client") or "").strip()
     ds_q = (request.args.get("display_status") or "").strip()
     pin_color = (request.args.get("pin_color") or "").strip()
+    project_id, project_number, err, code = _project_identity_filters()
+    if err is not None:
+        return err, code
 
     bbox = request.args.get("bbox", "")
     bbox_vals = None
@@ -189,15 +243,15 @@ def projects_geojson():
             bbox_vals = None
 
     def _apply_project_filters(stmt):
-        if not include_inactive:
-            stmt = stmt.where(Project.active == 1)
-        if component:
-            stmt = stmt.where(Project.component == component)
-        if client_q:
-            stmt = stmt.where(Project.client.ilike(f"%{client_q}%"))
-        if ds_q:
-            stmt = stmt.where(Project.display_status == ds_q)
-        return stmt
+        return _project_filter_stmt(
+            stmt,
+            include_inactive=include_inactive,
+            component=component,
+            client_q=client_q,
+            ds_q=ds_q,
+            project_id=project_id,
+            project_number=project_number,
+        )
 
     features = []
 
@@ -310,19 +364,23 @@ def projects_hulls():
     client_q = (request.args.get("client") or "").strip()
     ds_q = (request.args.get("display_status") or "").strip()
     pin_color = (request.args.get("pin_color") or "").strip()
+    project_id, project_number, err, code = _project_identity_filters()
+    if err is not None:
+        return err, code
 
     stmt = (
         select(ProjectSite, Project)
         .join(Project, Project.id == ProjectSite.project_id)
     )
-    if not include_inactive:
-        stmt = stmt.where(Project.active == 1)
-    if component:
-        stmt = stmt.where(Project.component == component)
-    if client_q:
-        stmt = stmt.where(Project.client.ilike(f"%{client_q}%"))
-    if ds_q:
-        stmt = stmt.where(Project.display_status == ds_q)
+    stmt = _project_filter_stmt(
+        stmt,
+        include_inactive=include_inactive,
+        component=component,
+        client_q=client_q,
+        ds_q=ds_q,
+        project_id=project_id,
+        project_number=project_number,
+    )
     if pin_color:
         stmt = stmt.where(ProjectSite.pin_color == pin_color)
 
@@ -420,6 +478,60 @@ def projects_sync_status():
     payload["state"] = "ok"
     return jsonify(payload)
 
+
+
+
+def _project_workspace_payload(sess, proj: Project) -> dict:
+    sites = [
+        to_dict(row)
+        for row in sess.scalars(
+            select(ProjectSite)
+            .where(ProjectSite.project_id == proj.id)
+            .order_by(ProjectSite.is_primary.desc(), ProjectSite.id.asc())
+        ).all()
+    ]
+    linked = {
+        "work_tasks": _linked_rows(sess, WorkTask, proj.id, proj.project_number),
+        "project_work_tasks": _linked_rows(sess, ProjectWorkTask, proj.id, proj.project_number),
+        "training_tasks": _linked_rows(sess, TrainingTask, proj.id, proj.project_number),
+        "personnel_issues": _linked_rows(sess, PersonnelIssue, proj.id, proj.project_number),
+        "calendar_events": _linked_rows(sess, CalendarEvent, proj.id, proj.project_number),
+    }
+    return {
+        "project": to_dict(proj),
+        "sites": sites,
+        "linked_records": linked,
+        "counts": {key: len(value) for key, value in linked.items()} | {
+            "sites": len(sites),
+        },
+        "external": {
+            "system": proj.external_system or "",
+            "ref": proj.external_ref or "",
+        },
+    }
+
+
+@bp.route("/api/v1/projects/<int:proj_id>/workspace", methods=["GET"])
+@login_required
+def project_workspace_by_id(proj_id):
+    sess = get_session()
+    proj = sess.get(Project, proj_id)
+    if proj is None:
+        return jsonify({"error": "not found", "request_id": _rid()}), 404
+    return jsonify(_project_workspace_payload(sess, proj))
+
+
+@bp.route("/api/v1/projects/workspace", methods=["GET"])
+@login_required
+def project_workspace_by_number():
+    project_number = (request.args.get("project_number") or "").strip()
+    if not project_number:
+        return jsonify({"error": "project_number is required", "request_id": _rid()}), 400
+    sess = get_session()
+    proj = sess.scalar(select(Project).where(Project.project_number == project_number))
+    if proj is None:
+        return jsonify({"error": "not found", "request_id": _rid()}), 404
+    return jsonify(_project_workspace_payload(sess, proj))
 
 @bp.route("/api/v1/projects", methods=["POST"])
 @admin_required
