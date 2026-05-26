@@ -44,6 +44,7 @@ BUCKET_LABELS = {
     "personnel_issues":   "Incidents / Capabilities",
     "inbox_items":        "Triage / Inbox",
     "personal_items":     "Internal",
+    "calendar_events":    "Calendar",
 }
 
 # Limit the size of `items_*` lists so the JSON doesn't bloat.

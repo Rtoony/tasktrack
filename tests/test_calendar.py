@@ -1,0 +1,181 @@
+"""Internal calendar MVP tests."""
+from datetime import datetime, timedelta
+
+from app.db import get_session
+from app.models import Project
+
+
+def _future(days=1, hour_offset=0):
+    value = datetime.now().replace(microsecond=0) + timedelta(days=days, hours=hour_offset)
+    return value.isoformat(timespec="minutes")
+
+
+def _past(days=1):
+    value = datetime.now().replace(microsecond=0) - timedelta(days=days)
+    return value.isoformat(timespec="minutes")
+
+
+def _create_event(auth_client, **overrides):
+    payload = {
+        "title": "Ops meeting",
+        "event_type": "meeting",
+        "start_at": _future(),
+    }
+    payload.update(overrides)
+    r = auth_client.post("/api/v1/calendar_events", json=payload)
+    assert r.status_code == 201, r.get_json()
+    return r.get_json()
+
+
+def test_calendar_events_crud_and_project_enrichment(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Project(project_number="1234.56", name="Bridge Study"))
+        sess.commit()
+
+    created = _create_event(
+        auth_client,
+        title="Bridge kickoff",
+        event_type="milestone",
+        project_number="1234.56",
+        location="Conference Room",
+        all_day=True,
+    )
+    assert created["status"] == "scheduled"
+    assert created["all_day"] == 1
+    assert created["project_id"] == 1
+    assert created["created_by_user_id"] == 1
+
+    event_id = created["id"]
+    r = auth_client.get(f"/api/v1/calendar_events/{event_id}")
+    assert r.status_code == 200
+    assert r.get_json()["title"] == "Bridge kickoff"
+
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event_id}",
+        json={"status": "done", "description": "Meeting completed"},
+    )
+    assert r.status_code == 200
+    assert r.get_json()["status"] == "done"
+
+    r = auth_client.delete(f"/api/v1/calendar_events/{event_id}")
+    assert r.status_code == 200
+    assert auth_client.get(f"/api/v1/calendar_events/{event_id}").status_code == 404
+
+
+def test_calendar_create_validation(auth_client):
+    cases = [
+        ({"title": "No start"}, "'start_at' is required"),
+        ({"title": "Bad type", "start_at": _future(), "event_type": "party"}, "event_type"),
+        ({"title": "Bad status", "start_at": _future(), "status": "open"}, "status"),
+        ({"title": "Bad visibility", "start_at": _future(), "visibility": "public"}, "visibility"),
+        ({"title": "Bad date", "start_at": "tomorrow"}, "Start"),
+        ({"title": "Bad end", "start_at": _future(2), "end_at": _future(1)}, "end_at"),
+        ({"title": "Bad related", "start_at": _future(), "related_table": "nope"}, "related_table"),
+    ]
+    for payload, expected in cases:
+        r = auth_client.post("/api/v1/calendar_events", json=payload)
+        assert r.status_code == 400
+        assert expected in r.get_json()["error"]
+
+
+def test_upcoming_events_filters_window_and_status(auth_client):
+    future_a = _create_event(auth_client, title="Soon", start_at=_future(1))
+    _create_event(auth_client, title="Later", start_at=_future(20))
+    _create_event(auth_client, title="Past", start_at=_past(1))
+    _create_event(auth_client, title="Cancelled", start_at=_future(1, 1), status="cancelled")
+
+    r = auth_client.get("/api/v1/calendar/upcoming?days=7&limit=10")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["available"] is True
+    titles = [event["title"] for event in body["events"]]
+    assert titles == ["Soon"]
+    assert body["events"][0]["id"] == future_a["id"]
+
+
+def test_range_events_filters_by_project_type_and_status(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Project(project_number="2222.00", name="Waterline"))
+        sess.commit()
+
+    meeting = _create_event(
+        auth_client,
+        title="Waterline review",
+        event_type="review",
+        status="tentative",
+        project_number="2222.00",
+        start_at=_future(3),
+    )
+    _create_event(auth_client, title="Other", event_type="meeting", start_at=_future(3))
+
+    r = auth_client.get(
+        f"/api/v1/calendar/events?from={datetime.now().date().isoformat()}"
+        f"&to={(datetime.now() + timedelta(days=10)).date().isoformat()}"
+        f"&project_id={meeting['project_id']}&type=review&status=tentative"
+    )
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert [row["title"] for row in rows] == ["Waterline review"]
+    assert rows[0]["event_type"] == "review"
+    assert rows[0]["project_number"] == "2222.00"
+
+
+def test_private_calendar_events_are_hidden_from_other_users(auth_client):
+    private = _create_event(
+        auth_client,
+        title="Private prep",
+        visibility="private",
+        start_at=_future(1),
+    )
+    public = _create_event(auth_client, title="Internal prep", start_at=_future(1, 1))
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    r = auth_client.get("/api/v1/calendar_events")
+    assert r.status_code == 200
+    ids = {row["id"] for row in r.get_json()}
+    assert public["id"] in ids
+    assert private["id"] not in ids
+
+    assert auth_client.get(f"/api/v1/calendar_events/{private['id']}").status_code == 404
+    assert auth_client.put(f"/api/v1/calendar_events/{private['id']}/cycle-status").status_code == 404
+    assert auth_client.get(f"/api/v1/calendar_events/{private['id']}/comments").status_code == 404
+    assert auth_client.post(
+        f"/api/v1/calendar_events/{private['id']}/comments",
+        json={"body": "should not attach"},
+    ).status_code == 404
+    assert auth_client.get(f"/api/v1/calendar_events/{private['id']}/activity").status_code == 404
+    assert auth_client.delete(f"/api/v1/calendar_events/{private['id']}").status_code == 404
+
+    csv_resp = auth_client.get("/api/v1/calendar_events/export.csv")
+    assert csv_resp.status_code == 200
+    csv_body = csv_resp.data.decode("utf-8")
+    assert "Internal prep" in csv_body
+    assert "Private prep" not in csv_body
+
+    r = auth_client.get("/api/v1/calendar/upcoming?days=7")
+    assert r.status_code == 200
+    titles = {event["title"] for event in r.get_json()["events"]}
+    assert "Internal prep" in titles
+    assert "Private prep" not in titles
+
+
+
+
+def test_dashboard_includes_calendar_surface(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8")
+    assert "Upcoming Operations" in html
+    assert 'data-tab="calendar"' in html
+    assert 'id="sec-calendar"' in html
+    assert 'tbody-calendar' in html
+
+def test_calendar_routes_require_login(client):
+    assert client.get("/api/v1/calendar/upcoming").status_code == 401
+    assert client.get("/api/v1/calendar/events").status_code == 401

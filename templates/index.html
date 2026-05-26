@@ -35,6 +35,7 @@
   body:has(.tab-btn.active[data-tab="work"])             { --accent:#22d3ee; --accent-hover:#06b6d4; --accent-light:#062f3d; }
   body:has(.tab-btn.active[data-tab="training"])         { --accent:#34d399; --accent-hover:#10b981; --accent-light:#0a3a2a; }
   body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#facc15; --accent-hover:#eab308; --accent-light:#3a3008; }
+  body:has(.tab-btn.active[data-tab="calendar"])         { --accent:#38bdf8; --accent-hover:#0ea5e9; --accent-light:#082f49; }
   body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#fb7185; --accent-hover:#f43f5e; --accent-light:#3a121d; }
   body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#a78bfa; --accent-hover:#8b5cf6; --accent-light:#251a3d; }
   body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#fb923c; --accent-hover:#f97316; --accent-light:#3a1d08; }
@@ -225,6 +226,13 @@
   .badge-training-scheduled { background:#ede9fe; color:#6d28d9; }
   .badge-monitoring { background:#fffbeb; color:#b45309; }
   .badge-closed { background:#ecfdf5; color:#065f46; }
+  .badge-scheduled { background:#eff6ff; color:#1d4ed8; }
+  .badge-tentative { background:#fef3c7; color:#92400e; }
+  .badge-done { background:#ecfdf5; color:#065f46; }
+  .badge-cancelled { background:#fef2f2; color:#b91c1c; }
+  .badge-internal { background:#e0f2fe; color:#0369a1; }
+  .badge-private { background:#fce7f3; color:#9d174d; }
+  .badge-shared { background:#ede9fe; color:#6d28d9; }
 
   /* ── Modal ───────────────────────────────── */
   .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); z-index:200; align-items:center; justify-content:center; }
@@ -406,6 +414,7 @@
         <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
         <button class="tab-btn" data-tab="personnel">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
         <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Internal</span></span>
+        <button class="tab-btn" data-tab="calendar">Calendar <span class="tab-count" id="count-calendar">0</span></button>
         <button class="tab-btn" data-tab="personal_husband">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
         <button class="tab-btn" data-tab="personal_father">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
         <button class="tab-btn" data-tab="personal_house">Office <span class="tab-count" id="count-personal_house">0</span></button>
@@ -613,6 +622,13 @@
     </div>
 
     <div class="dash-grid" id="dash-stats"></div>
+    <div class="dash-card" style="margin:1.25rem 0;">
+      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <span>Upcoming Operations</span>
+        <button class="btn btn-sm btn-export" type="button" onclick="openModal('calendar')">+ Add Event</button>
+      </div>
+      <div class="dash-card-body" id="dash-upcoming"><div class="empty-card">No upcoming events</div></div>
+    </div>
     {% if user_role == 'admin' %}
     <div class="dash-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header">Admin Workflow Shortcuts</div>
@@ -945,6 +961,46 @@
     </div>
   </section>
 
+  <!-- ── INTERNAL CALENDAR ───────────────────── -->
+  <section id="sec-calendar" class="section">
+    <div class="filter-bar">
+      <div class="section-heading">
+        <h2 class="section-title">Calendar</h2>
+        <div class="section-subtitle">Internal meetings, milestones, report deadlines, prep blocks, and project-linked reminders.</div>
+      </div>
+      <select class="filter-select" id="filter-calendar-status" onchange="loadTable('calendar')">
+        <option value="">All Statuses</option>
+        <option value="scheduled">Scheduled</option><option value="tentative">Tentative</option>
+        <option value="done">Done</option><option value="cancelled">Cancelled</option>
+      </select>
+      <select class="filter-select" id="filter-calendar-type" onchange="loadTable('calendar')">
+        <option value="">All Types</option>
+        <option value="meeting">Meeting</option><option value="milestone">Milestone</option>
+        <option value="deadline">Deadline</option><option value="review">Review</option>
+        <option value="task_due">Task Due</option><option value="prep">Prep</option>
+        <option value="reminder">Reminder</option><option value="other">Other</option>
+      </select>
+      <a class="btn btn-sm btn-export" href="/api/v1/calendar_events/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('calendar')">+ Add Event</button>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr>
+        <th data-col="start_at" data-table="calendar">Start <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="title" data-table="calendar">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="event_type" data-table="calendar">Type <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="calendar">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="project_number" data-table="calendar">Project # <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="location" data-table="calendar">Location <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="visibility" data-table="calendar">Visibility <span class="sort-arrow">&#9650;</span></th>
+        <th></th>
+      </tr></thead><tbody id="tbody-calendar"></tbody></table>
+      <div class="empty-state" id="empty-calendar" style="display:none">
+        <div class="empty-title">No calendar events yet</div>
+        <p class="empty-copy">Add meetings, deadlines, milestones, or prep blocks that should show up in the operations agenda.</p>
+      </div>
+    </div>
+  </section>
+
   <!-- ── INTERNAL — Follow-up ───────────────── -->
   <section id="sec-personal_husband" class="section">
     <div class="filter-bar">
@@ -1166,6 +1222,7 @@ const API_MAP = {
   training:'training_tasks',
   personnel:'personnel_issues',
   triage:'inbox_items',
+  calendar:'calendar_events',
   personal_husband:'personal_items',
   personal_father:'personal_items',
   personal_house:'personal_items',
@@ -1287,6 +1344,7 @@ const TABLE_LABELS = {
   personnel_issues:'Capabilities',
   inbox_items:'Triage',
   personal_items:'Internal',
+  calendar_events:'Calendar',
 };
 const sortState = {
   work:{col:'id',order:'asc'},
@@ -1294,6 +1352,7 @@ const sortState = {
   training:{col:'id',order:'asc'},
   personnel:{col:'id',order:'asc'},
   triage:{col:'created_at',order:'desc'},
+  calendar:{col:'start_at',order:'asc'},
   personal_husband:{col:'created_at',order:'desc'},
   personal_father:{col:'created_at',order:'desc'},
   personal_house:{col:'created_at',order:'desc'},
@@ -1302,7 +1361,7 @@ const sortState = {
 let currentTab = 'dashboard', editingId = null, editingTable = null;
 let tableCache = {
   work:[], project:[], training:[], personnel:[],
-  triage:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
+  triage:[], calendar:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
 };
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 
@@ -1311,9 +1370,9 @@ function toast(msg) { const t=document.getElementById('toast'); t.textContent=ms
 function today() { return new Date().toISOString().split('T')[0]; }
 
 function isOverdue(r) {
-  const d = r.due_at || r.due_date || r.reported_date || '';
+  const d = r.due_at || r.due_date || r.start_at || r.reported_date || '';
   if (!d) return false;
-  const done = ['Complete','Closed','Resolved'];
+  const done = ['Complete','Closed','Resolved','done','cancelled'];
   if (done.includes(r.status)) return false;
   try {
     if (d.includes('T')) return new Date(d).getTime() < Date.now();
@@ -1344,6 +1403,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     if (currentTab === 'dashboard') loadDashboard();
     if (currentTab === 'map') initOrRefreshMap();
     if (currentTab === 'competency') loadCompetency();
+    if (API_MAP[currentTab]) loadTable(currentTab);
   });
 });
 
@@ -1807,9 +1867,9 @@ async function loadDashboard() {
   const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
   const s = data.stats;
-  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0);
-  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0);
-  const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0);
+  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0) + (s.calendar_events?.active||0);
+  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0) + (s.calendar_events?.overdue||0);
+  const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0) + (s.calendar_events?.by_status?.done||0);
   const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.personal_items?.by_priority?.High||0);
 
   const statsEl = document.getElementById('dash-stats');
@@ -1832,6 +1892,7 @@ async function loadDashboard() {
     ...(s.training_tasks?.overdue_items||[]).map(r=>({...r,_src:'Training'})),
     ...(s.personnel_issues?.overdue_items||[]).map(r=>({...r,_src:'Capabilities'})),
     ...(s.personal_items?.overdue_items||[]).map(r=>({...r,_src:'Internal'})),
+    ...(s.calendar_events?.overdue_items||[]).map(r=>({...r,_src:'Calendar'})),
   ];
   overdueEl.replaceChildren();
   if (!allOverdue.length) { overdueEl.innerHTML='<div class="empty-card">Nothing overdue</div>'; }
@@ -1842,7 +1903,7 @@ async function loadDashboard() {
       const title = document.createElement('span'); title.className='overdue-title'; title.textContent=r.title||r.person_name||'';
       const src = document.createElement('span'); src.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem'; src.textContent=r._src;
       left.appendChild(title); left.appendChild(src);
-      const dateSpan = document.createElement('span'); dateSpan.className='overdue-date'; dateSpan.textContent=formatDateTime(r.due_at || r.due_date || r.reported_date || '');
+      const dateSpan = document.createElement('span'); dateSpan.className='overdue-date'; dateSpan.textContent=formatDateTime(r.due_at || r.due_date || r.start_at || r.reported_date || '');
       div.appendChild(left); div.appendChild(dateSpan);
       overdueEl.appendChild(div);
     });
@@ -1862,6 +1923,31 @@ async function loadDashboard() {
       actEl.appendChild(div);
     });
   }
+  loadUpcomingOperations();
+}
+
+async function loadUpcomingOperations() {
+  const host = document.getElementById('dash-upcoming');
+  if (!host) return;
+  const data = await api('GET','/api/v1/calendar/upcoming?days=30&limit=8');
+  if (!data) return;
+  const rows = Array.isArray(data.events) ? data.events : [];
+  host.replaceChildren();
+  if (!rows.length) { host.innerHTML='<div class="empty-card">No upcoming events</div>'; return; }
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'overdue-item';
+    const left = document.createElement('div');
+    const title = document.createElement('span'); title.className='overdue-title'; title.textContent = r.title || '';
+    const meta = document.createElement('span'); meta.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem';
+    meta.textContent = formatEventType(r.event_type || r.type || 'event') + (r.project_number ? ' · ' + r.project_number : '');
+    left.appendChild(title); left.appendChild(meta);
+    const when = document.createElement('span'); when.className='overdue-date'; when.textContent = formatDateTime(r.start_at || r.start || '');
+    div.appendChild(left); div.appendChild(when);
+    div.addEventListener('click', () => { document.querySelector('.tab-btn[data-tab="calendar"]')?.click(); setTimeout(() => editRecord('calendar', r.id), 150); });
+    host.appendChild(div);
+  });
+}
 
 function formatTimeAgo(ts) {
   if (!ts) return '';
@@ -1883,6 +1969,7 @@ async function loadTable(table) {
   // Apply filters
   const statusFilter = document.getElementById('filter-'+table+'-status')?.value || '';
   const priorityFilter = document.getElementById('filter-'+table+'-priority')?.value || '';
+  const typeFilter = document.getElementById('filter-'+table+'-type')?.value || '';
   const overdueFilter = document.getElementById('filter-'+table+'-overdue')?.checked || false;
 
   let filtered = data;
@@ -1893,6 +1980,7 @@ async function loadTable(table) {
   if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
+  if (typeFilter && table === 'calendar') filtered = filtered.filter(r => r.event_type === typeFilter);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
 
   const tbody = document.getElementById('tbody-'+table);
@@ -1905,6 +1993,8 @@ async function loadTable(table) {
     // tab's category (since the table is shared across tabs).
     if (table === 'triage') {
       countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
+    } else if (table === 'calendar') {
+      countEl.textContent = data.filter(r => r.status === 'scheduled' || r.status === 'tentative').length;
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       const cat = INTERNAL_QUEUE_CATEGORIES[table];
       countEl.textContent = data.filter(r =>
@@ -1953,6 +2043,15 @@ async function loadTable(table) {
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
+      tr.appendChild(makeActions(table,r.id,r.title));
+    } else if (table==='calendar') {
+      tr.appendChild(makeDateCell(r.start_at));
+      tr.appendChild(makeCell(r.title,'cell-title'));
+      tr.appendChild(makeStatusBadge(formatEventType(r.event_type)));
+      tr.appendChild(makeClickableStatus(table,r));
+      tr.appendChild(makeCell(r.project_number,'cell-supporting'));
+      tr.appendChild(makeCell(r.location,'cell-supporting'));
+      tr.appendChild(makeStatusBadge(r.visibility));
       tr.appendChild(makeActions(table,r.id,r.title));
     } else if (table==='triage') {
       tr.appendChild(makeCell(r.title,'cell-title'));
@@ -2119,7 +2218,12 @@ function descriptionPreview(src) {
   const text = String(src || '').replace(/^\s*[-*]\s*\[( |x|X)\]\s*/gm, '\u2713 ').replace(/\n+/g, ' \u00b7 ');
   return text.length > 140 ? text.slice(0, 140) + '\u2026' : text;
 }
-function makeStatusBadge(val) { const td=document.createElement('td'); if(!val) return td; const s=document.createElement('span'); s.className='badge badge-'+val.toLowerCase().replace(/\s+/g,'-'); s.textContent=val; td.appendChild(s); return td; }
+function makeStatusBadge(val) { const td=document.createElement('td'); if(!val) return td; const s=document.createElement('span'); s.className='badge badge-'+String(val).toLowerCase().replace(/\s+/g,'-').replace(/_/g,'-'); s.textContent=val; td.appendChild(s); return td; }
+
+function formatEventType(val) {
+  const raw = String(val || 'event');
+  return raw.replace(/_/g, ' ').replace(/\w/g, c => c.toUpperCase());
+}
 
 function itemLabel(table) {
   return {
@@ -2128,6 +2232,7 @@ function itemLabel(table) {
     training: 'training task',
     personnel: 'capability note',
     triage: 'triage item',
+    calendar: 'calendar event',
     personal_husband: 'follow-up item',
     personal_father: 'meeting item',
     personal_house: 'office item',
@@ -2331,6 +2436,35 @@ const FORMS = {
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
+  calendar:[
+    {key:'title',label:'Event Title',type:'text',required:true,placeholder:'Management check-in, submittal deadline, project review…'},
+    {key:'description',label:'Notes / Prep',type:'textarea',placeholder:'Agenda, decisions needed, report context, or follow-up notes.'},
+    {key:'_row',fields:[
+      {key:'event_type',label:'Type',type:'select',options:[
+        {value:'meeting',label:'Meeting'}, {value:'milestone',label:'Milestone'},
+        {value:'deadline',label:'Deadline'}, {value:'review',label:'Review'},
+        {value:'task_due',label:'Task Due'}, {value:'prep',label:'Prep'},
+        {value:'reminder',label:'Reminder'}, {value:'other',label:'Other'},
+      ]},
+      {key:'status',label:'Status',type:'select',options:[
+        {value:'scheduled',label:'Scheduled'}, {value:'tentative',label:'Tentative'},
+        {value:'done',label:'Done'}, {value:'cancelled',label:'Cancelled'},
+      ]},
+    ]},
+    {key:'_row',fields:[{key:'start_at',label:'Start',type:'datetime-local',required:true},{key:'end_at',label:'End',type:'datetime-local'}]},
+    {key:'_row',fields:[
+      {key:'all_day',label:'All Day',type:'select',options:[{value:'0',label:'No'},{value:'1',label:'Yes'}]},
+      {key:'visibility',label:'Visibility',type:'select',options:[
+        {value:'internal',label:'Internal'}, {value:'private',label:'Private'}, {value:'shared',label:'Shared'},
+      ]},
+    ]},
+    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
+    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Project number also works and will be enriched when it matches.'},
+    {key:'_row',fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
+    {key:'_row',fields:[{key:'related_table',label:'Related Table',type:'select',options:['','work_tasks','project_work_tasks','training_tasks','personnel_issues','inbox_items','personal_items']},{key:'related_id',label:'Related ID',type:'number'}]},
+    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'links',label:'Links',type:'links'},
+  ],
   triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
@@ -2377,7 +2511,7 @@ function renderField(f,value) {
   let input;
   if (f.type==='select') {
     input=document.createElement('select'); input.id='f-'+f.key;
-    f.options.forEach(o=>{const opt=document.createElement('option');opt.value=o;opt.textContent=o;if(value===o)opt.selected=true;input.appendChild(opt);});
+    f.options.forEach(o=>{const opt=document.createElement('option');const optValue=(typeof o==='object')?o.value:o;const optLabel=(typeof o==='object')?o.label:o;opt.value=optValue;opt.textContent=optLabel;if(String(value)===String(optValue))opt.selected=true;input.appendChild(opt);});
   } else if (f.type==='fk-select') {
     /* Dual-column FK. value is the id (int). Renders as <select> with an
        empty option + rows from f.endpoint. Hint label notes which text
@@ -2676,6 +2810,14 @@ async function renderProjectMiniMap() {
 }
 
 function validateForm(table, data) {
+  if (table === 'calendar') {
+    if (!data.title || !data.title.trim()) { toast('Event title is required'); return false; }
+    if (!data.start_at || !data.start_at.trim()) { toast('Start is required'); return false; }
+    if (data.end_at && data.start_at && new Date(data.end_at).getTime() < new Date(data.start_at).getTime()) {
+      toast('End must be after start'); return false;
+    }
+    return true;
+  }
   if (table !== 'project') return true;
   if (!/^\d{4}\.\d{2}$/.test(data.project_number || '')) {
     toast('Project Number must use ####.##');
@@ -2889,6 +3031,7 @@ function openModal(table,data) {
     training:'Training Task',
     personnel:'Capability Entry',
     triage:'Triage Item',
+    calendar:'Calendar Event',
     personal_husband:'Follow-up Item',
     personal_father:'Meeting Item',
     personal_house:'Office Item',
@@ -2933,6 +3076,7 @@ const PROMOTE_TABLE_LABEL = {
   personnel_issues:   'Capability Entry',
   inbox_items:        'Triage Item',
   personal_items:     'Internal Item',
+  calendar_events:    'Calendar Event',
 };
 
 async function renderPromoteDropdown(table) {
@@ -3010,7 +3154,9 @@ async function saveRecord() {
   if (INTERNAL_QUEUE_TABS.includes(table)) data.category = INTERNAL_QUEUE_CATEGORIES[table];
   if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
   else await api('POST','/api/v1/'+API_MAP[table],data);
-  closeModal(); loadTable(table); toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+  closeModal(); loadTable(table);
+  if (table === 'calendar') loadDashboard();
+  toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
 }
 
 /* ── AI Intake tab ───────────────────────────────────────────────────── */
@@ -3347,7 +3493,9 @@ function confirmDelete(table,id,name) {
   document.getElementById('confirm-overlay').classList.add('open');
   document.getElementById('confirm-delete-btn').onclick=async()=>{
     await api('DELETE','/api/v1/'+API_MAP[table]+'/'+id);
-    closeConfirm(); loadTable(table); toast(itemLabel(table) + ' deleted');
+    closeConfirm(); loadTable(table);
+    if (table === 'calendar') loadDashboard();
+    toast(itemLabel(table) + ' deleted');
   };
 }
 function closeConfirm() { document.getElementById('confirm-overlay').classList.remove('open'); }
@@ -3366,6 +3514,7 @@ if (STANDALONE_TAB) {
   loadDashboard();
   loadTable('triage');
   loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
+  loadTable('calendar');
   loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
 }
 </script>

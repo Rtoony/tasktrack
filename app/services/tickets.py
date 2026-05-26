@@ -12,8 +12,14 @@ from flask import session
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..config import ALLOWED_TABLES, INTERNAL_ITEM_CATEGORIES
+from ..config import (
+    ALLOWED_TABLES,
+    CALENDAR_EVENT_TYPES,
+    CALENDAR_VISIBILITIES,
+    INTERNAL_ITEM_CATEGORIES,
+)
 from ..models import (
+    CalendarEvent,
     Employee,
     InboxItem,
     PersonalItem,
@@ -32,6 +38,7 @@ TABLE_MODELS = {
     "personnel_issues": PersonnelIssue,
     "inbox_items": InboxItem,
     "personal_items": PersonalItem,
+    "calendar_events": CalendarEvent,
 }
 
 # Phase-0 FK spine: per-tracker mapping from text column → (FK column,
@@ -52,6 +59,9 @@ _FK_ENRICHMENT = {
         ("project_number", "project_id", Project, "project_number"),
         ("person_name", "person_id", Employee, "display_name"),
     ],
+    "calendar_events": [
+        ("project_number", "project_id", Project, "project_number"),
+    ],
 }
 
 
@@ -62,7 +72,7 @@ def _coerce_fk_columns(data):
     select; SQLite happily stores that as the literal string "" which
     later breaks comparison with the integer id. Normalise to None or int.
     """
-    for key in ("project_id", "engineer_id", "person_id"):
+    for key in ("project_id", "engineer_id", "person_id", "related_id"):
         if key not in data:
             continue
         raw = data[key]
@@ -185,6 +195,8 @@ def overdue_field_for_table(cfg):
         return "follow_up_date"
     if "due_date" in cfg["fields"]:
         return "due_date"
+    if "start_at" in cfg["fields"]:
+        return "start_at"
     return None
 
 
@@ -193,6 +205,8 @@ def done_statuses_for_table(table_name):
         return {"Closed"}
     if table_name in ("inbox_items", "personal_items"):
         return {"Done", "Archived"}
+    if table_name == "calendar_events":
+        return {"done", "cancelled"}
     return {"Complete"}
 
 
@@ -212,6 +226,86 @@ def is_overdue_value(raw_value):
         return False
 
 
+
+def _validate_iso_datetime_field(data, key: str, label: str, *, required: bool = False):
+    raw = str(data.get(key) or "").strip()
+    if not raw:
+        if required:
+            return f"'{key}' is required", None
+        data[key] = ""
+        return None, None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return f"{label} must be a valid ISO date or datetime", None
+    data[key] = raw
+    return None, parsed
+
+
+def _validate_calendar_event(data, creating=False):
+    if creating or "title" in data:
+        title = str(data.get("title") or "").strip()
+        if not title:
+            return "'title' is required"
+        data["title"] = title
+
+    if creating or "event_type" in data:
+        event_type = str(data.get("event_type") or "meeting").strip()
+        if event_type not in CALENDAR_EVENT_TYPES:
+            return f"event_type must be one of: {', '.join(CALENDAR_EVENT_TYPES)}"
+        data["event_type"] = event_type
+
+    if creating or "status" in data:
+        status = str(data.get("status") or ALLOWED_TABLES["calendar_events"]["status_flow"][0]).strip()
+        if status not in ALLOWED_TABLES["calendar_events"]["status_flow"]:
+            return f"status must be one of: {', '.join(ALLOWED_TABLES['calendar_events']['status_flow'])}"
+        data["status"] = status
+
+    if creating or "visibility" in data:
+        visibility = str(data.get("visibility") or "internal").strip()
+        if visibility not in CALENDAR_VISIBILITIES:
+            return f"visibility must be one of: {', '.join(CALENDAR_VISIBILITIES)}"
+        data["visibility"] = visibility
+
+    start_error, start_dt = _validate_iso_datetime_field(
+        data, "start_at", "Start", required=creating or "start_at" in data,
+    )
+    if start_error:
+        return start_error
+
+    end_dt = None
+    if "end_at" in data:
+        end_error, end_dt = _validate_iso_datetime_field(data, "end_at", "End")
+        if end_error:
+            return end_error
+
+    if "reminder_date" in data:
+        reminder_error, _ = _validate_iso_datetime_field(data, "reminder_date", "Reminder")
+        if reminder_error:
+            return reminder_error
+
+    if start_dt is not None and end_dt is not None and end_dt < start_dt:
+        return "end_at must be after start_at"
+
+    if "all_day" in data:
+        raw = data.get("all_day")
+        if isinstance(raw, bool):
+            data["all_day"] = 1 if raw else 0
+        else:
+            try:
+                data["all_day"] = 1 if int(raw) else 0
+            except (TypeError, ValueError):
+                return "all_day must be 0 or 1"
+
+    if "project_number" in data:
+        data["project_number"] = str(data.get("project_number") or "").strip()
+    if "related_table" in data:
+        related_table = str(data.get("related_table") or "").strip()
+        if related_table and related_table not in ALLOWED_TABLES:
+            return "related_table must reference a known tracker table"
+        data["related_table"] = related_table
+    return None
+
 def validate_record_data(table, data, creating=False):
     # Phase-0: normalize FK columns regardless of table.
     _coerce_fk_columns(data)
@@ -225,6 +319,9 @@ def validate_record_data(table, data, creating=False):
                 return f"category must be one of: {', '.join(INTERNAL_ITEM_CATEGORIES)}"
             data["category"] = category
         return None
+
+    if table == "calendar_events":
+        return _validate_calendar_event(data, creating)
 
     if table != "project_work_tasks":
         return None

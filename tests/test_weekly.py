@@ -35,10 +35,11 @@ def test_snapshot_buckets_one_per_allowed_table(temp_app):
     with temp_app.app_context():
         sess = get_session()
         snap = weekly_snapshot(sess, days=7)
-    # All six tracker tables get a bucket.
+    # All generic tracker tables get a bucket.
     assert set(snap["buckets"].keys()) == {
         "work_tasks", "project_work_tasks", "training_tasks",
         "personnel_issues", "inbox_items", "personal_items",
+        "calendar_events",
     }
 
 

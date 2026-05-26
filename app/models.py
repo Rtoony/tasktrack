@@ -254,6 +254,45 @@ class InboxItem(Base):
     )
 
 
+
+class CalendarEvent(Base):
+    """Internal operations calendar event.
+
+    Stores meeting prep, milestones, due dates, reporting deadlines, and
+    reminders without depending on an external personal calendar service.
+    Dates stay as ISO TEXT to match the rest of TaskTrack and keep the
+    SQLite-to-Postgres migration path simple.
+    """
+    __tablename__ = "calendar_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'meeting'"))
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    start_at: Mapped[str] = mapped_column(Text, nullable=False)
+    end_at: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    all_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'scheduled'"))
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    related_table: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    related_id: Mapped[int | None] = mapped_column(Integer)
+    reminder_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    location: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    visibility: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'internal'"))
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_calendar_events_start_at", "start_at"),
+        Index("idx_calendar_events_status", "status"),
+        Index("idx_calendar_events_event_type", "event_type"),
+        Index("idx_calendar_events_project_id", "project_id"),
+        Index("idx_calendar_events_related", "related_table", "related_id"),
+    )
+
 # ── Audit / activity / comments / telegram ────────────────────────────────
 
 class ActivityLog(Base):
@@ -522,7 +561,7 @@ __all__ = [
     "Base",
     "User", "ApprovedEmail", "AppSetting",
     "WorkTask", "ProjectWorkTask", "TrainingTask",
-    "PersonnelIssue", "PersonalItem", "InboxItem",
+    "PersonnelIssue", "PersonalItem", "InboxItem", "CalendarEvent",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
     "Employee", "Project",

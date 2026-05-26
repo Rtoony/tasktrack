@@ -136,9 +136,35 @@ ALLOWED_TABLES = {
         "label": "Internal Item",
         "status_flow": ["New", "In Progress", "Done", "Archived"],
     },
+    "calendar_events": {
+        "fields": [
+            "event_type",
+            "title",
+            "description",
+            "start_at",
+            "end_at",
+            "all_day",
+            "status",
+            "project_id",
+            "project_number",
+            "related_table",
+            "related_id",
+            "reminder_date",
+            "location",
+            "visibility",
+        ],
+        "required": ["title", "start_at"],
+        "label": "Calendar Event",
+        "status_flow": ["scheduled", "tentative", "done", "cancelled"],
+    },
 }
 
 INTERNAL_ITEM_CATEGORIES = ["Follow-up", "Meetings", "Office", "Assets"]
+CALENDAR_EVENT_TYPES = [
+    "meeting", "milestone", "deadline", "review",
+    "task_due", "prep", "reminder", "other",
+]
+CALENDAR_VISIBILITIES = ["internal", "private", "shared"]
 
 SIMPLE_SUBMISSION_CONFIGS = {
     "cad-development": {
