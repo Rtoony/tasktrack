@@ -35,6 +35,7 @@ def weekly_json():
     sess = get_session()
     return jsonify(weekly_snapshot(
         sess, days=_days_arg(), include_admin=_is_admin(),
+        user_id=session.get("user_id"),
     ))
 
 
@@ -44,6 +45,7 @@ def weekly_page():
     sess = get_session()
     snapshot = weekly_snapshot(
         sess, days=_days_arg(), include_admin=_is_admin(),
+        user_id=session.get("user_id"),
     )
     return render_template(
         "weekly.html",

@@ -16,7 +16,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from flask import Blueprint, g, jsonify, request
+from flask import Blueprint, g, jsonify, request, session
 from sqlalchemy import func, select
 
 from ..auth import admin_required, login_required
@@ -89,7 +89,16 @@ def _project_filter_stmt(stmt, *, include_inactive: bool, component: str = "",
 def _linked_rows(sess, model, project_id: int, project_number: str, *, limit: int = 50):
     stmt = select(model).where(
         (model.project_id == project_id) | (model.project_number == project_number)
-    ).order_by(model.id.desc()).limit(limit)
+    )
+    if model is CalendarEvent:
+        user_id = session.get("user_id")
+        if user_id is None:
+            stmt = stmt.where(model.visibility != "private")
+        else:
+            stmt = stmt.where(
+                (model.visibility != "private") | (model.created_by_user_id == user_id)
+            )
+    stmt = stmt.order_by(model.id.desc()).limit(limit)
     return [to_dict(row) for row in sess.scalars(stmt).all()]
 
 bp = Blueprint("registry", __name__)

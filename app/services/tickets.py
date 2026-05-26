@@ -85,14 +85,15 @@ def _coerce_fk_columns(data):
             data[key] = None
 
 
-def enrich_with_fks(sess: Session, table: str, record) -> bool:
-    """Best-effort: populate empty FK columns from the row's text fields.
+def enrich_with_fks(sess: Session, table: str, record, *,
+                    refresh_existing: bool = False,
+                    changed_fields: set[str] | None = None) -> bool:
+    """Best-effort: populate FK columns from matching text fields.
 
-    Exact-match only (no fuzzy). Skips columns that already have a value.
-    Returns True if anything changed.
-
-    Called once after `create_direct_record` so AI triage / intake forms
-    that only know how to write text still get FK enrichment.
+    Exact-match only (no fuzzy). By default, skips columns that already
+    have a value. On update, callers can pass ``refresh_existing=True``
+    plus ``changed_fields`` so changing a text key like project_number
+    refreshes the paired FK while leaving explicit FK edits alone.
 
     Special-cases personnel_issues' `person_name` field: it may carry a
     comma-separated list of names, in which case we populate the
@@ -107,18 +108,25 @@ def enrich_with_fks(sess: Session, table: str, record) -> bool:
             # so we don't double-write or leave person_ids stale.
             if table == "personnel_issues" and text_col == "person_name":
                 continue
-            if getattr(record, fk_col, None):
+            if changed_fields is not None:
+                if text_col not in changed_fields or fk_col in changed_fields:
+                    continue
+            if not refresh_existing and getattr(record, fk_col, None):
                 continue
             text_val = (getattr(record, text_col, "") or "").strip()
             if not text_val:
+                if refresh_existing and getattr(record, fk_col, None) is not None:
+                    setattr(record, fk_col, None)
+                    changed = True
                 continue
             hit = sess.scalar(
                 select(model).where(
                     func.lower(getattr(model, lookup_col)) == text_val.lower()
                 ).limit(1)
             )
-            if hit is not None:
-                setattr(record, fk_col, hit.id)
+            new_fk = hit.id if hit is not None else None
+            if getattr(record, fk_col, None) != new_fk:
+                setattr(record, fk_col, new_fk)
                 changed = True
 
     # Phase-5.5 multi-person path for personnel_issues.
@@ -195,8 +203,6 @@ def overdue_field_for_table(cfg):
         return "follow_up_date"
     if "due_date" in cfg["fields"]:
         return "due_date"
-    if "start_at" in cfg["fields"]:
-        return "start_at"
     return None
 
 
@@ -208,6 +214,15 @@ def done_statuses_for_table(table_name):
     if table_name == "calendar_events":
         return {"done", "cancelled"}
     return {"Complete"}
+
+
+def record_visible_to_user(table_name, row, user_id) -> bool:
+    """Shared record-visibility rule for private calendar events."""
+    if table_name != "calendar_events":
+        return True
+    if getattr(row, "visibility", "") != "private":
+        return True
+    return user_id is not None and getattr(row, "created_by_user_id", None) == user_id
 
 
 def is_overdue_value(raw_value):

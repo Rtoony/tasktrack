@@ -23,6 +23,7 @@ from ..services.tickets import (
     extra_create_fields,
     is_overdue_value,
     overdue_field_for_table,
+    record_visible_to_user,
     validate_record_data,
 )
 
@@ -30,11 +31,7 @@ bp = Blueprint("api", __name__)
 
 
 def _record_visible_to_current_user(table: str, row) -> bool:
-    if table != "calendar_events":
-        return True
-    if getattr(row, "visibility", "") != "private":
-        return True
-    return getattr(row, "created_by_user_id", None) == session.get("user_id")
+    return record_visible_to_user(table, row, session.get("user_id"))
 
 
 def _calendar_target_visible(sess, table: str, record_id: int) -> bool:
@@ -341,18 +338,28 @@ def update_record(table, record_id):
         return jsonify({"error": "Invalid table"}), 400
     data = request.json or {}
     cfg = ALLOWED_TABLES[table]
-    error = validate_record_data(table, data)
-    if error:
-        return jsonify({"error": error}), 400
-    fields = [f for f in cfg["fields"] if f in data]
-    if not fields:
-        return jsonify({"error": "No valid fields to update"}), 400
-
     Model = TABLE_MODELS[table]
     sess = get_session()
     row = sess.get(Model, record_id)
     if row is None or not _record_visible_to_current_user(table, row):
         return jsonify({"error": "Not found"}), 404
+
+    validation_data = dict(data)
+    if table == "calendar_events":
+        # Partial updates still need to validate the resulting event window.
+        validation_data.setdefault("start_at", getattr(row, "start_at", "") or "")
+        validation_data.setdefault("end_at", getattr(row, "end_at", "") or "")
+
+    error = validate_record_data(table, validation_data)
+    if error:
+        return jsonify({"error": error}), 400
+    for key in list(data.keys()):
+        if key in validation_data:
+            data[key] = validation_data[key]
+
+    fields = [f for f in cfg["fields"] if f in data]
+    if not fields:
+        return jsonify({"error": "No valid fields to update"}), 400
 
     for f in fields:
         old_val = getattr(row, f, "")
@@ -361,6 +368,7 @@ def update_record(table, record_id):
             log_activity(sess, table, record_id, "updated", f, old_val, new_val)
         setattr(row, f, new_val)
 
+    enrich_with_fks(sess, table, row, refresh_existing=True, changed_fields=set(fields))
     row.updated_at = datetime.utcnow()
     sess.commit()
     sess.refresh(row)

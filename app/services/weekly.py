@@ -34,6 +34,7 @@ from .tickets import (
     done_statuses_for_table,
     is_overdue_value,
     overdue_field_for_table,
+    record_visible_to_user,
 )
 
 # Display labels for the weekly buckets — friendlier than the raw table name.
@@ -96,7 +97,7 @@ def _title_for(row, table: str) -> str:
     return f"#{getattr(row, 'id', '?')}"
 
 
-def _bucket_for_table(sess: Session, table: str, since: datetime) -> dict:
+def _bucket_for_table(sess: Session, table: str, since: datetime, user_id: int | None = None) -> dict:
     Model = TABLE_MODELS.get(table)
     if Model is None:
         return {}
@@ -104,7 +105,10 @@ def _bucket_for_table(sess: Session, table: str, since: datetime) -> dict:
     done = done_statuses_for_table(table)
     due_field = overdue_field_for_table(cfg)
 
-    rows = sess.scalars(select(Model)).all()
+    rows = [
+        row for row in sess.scalars(select(Model)).all()
+        if record_visible_to_user(table, row, user_id)
+    ]
     items_created = []
     items_completed = []
     active = 0
@@ -220,7 +224,8 @@ def _recent_incidents(sess: Session, since: datetime) -> list[dict]:
 
 
 def weekly_snapshot(sess: Session, since: datetime | None = None,
-                    days: int = 7, include_admin: bool = False) -> dict:
+                    days: int = 7, include_admin: bool = False,
+                    user_id: int | None = None) -> dict:
     """Compute the weekly digest.
 
     If `since` is None, derives it from `days` (default 7) against now-UTC.
@@ -240,7 +245,7 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
     buckets: dict[str, dict] = {}
     totals = {"created": 0, "completed": 0, "active_now": 0, "overdue_now": 0}
     for table in ALLOWED_TABLES:
-        b = _bucket_for_table(sess, table, since_naive)
+        b = _bucket_for_table(sess, table, since_naive, user_id=user_id)
         if not b:
             continue
         buckets[table] = b

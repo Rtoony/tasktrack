@@ -70,6 +70,47 @@ def test_project_workspace_by_id_and_number(auth_client, temp_app):
         assert body["linked_records"]["project_work_tasks"][0]["title"] == "Draft exhibit"
 
 
+
+def test_project_workspace_hides_private_calendar_events_from_other_users(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="8800.50", name="Privacy project")
+        sess.add(proj)
+        sess.flush()
+        sess.add(CalendarEvent(
+            title="Shared project review",
+            event_type="review",
+            start_at=(datetime.now() + timedelta(days=1)).isoformat(timespec="minutes"),
+            project_number="8800.50",
+            project_id=proj.id,
+            visibility="internal",
+            created_by_user_id=1,
+        ))
+        sess.add(CalendarEvent(
+            title="Private project prep",
+            event_type="prep",
+            start_at=(datetime.now() + timedelta(days=1)).isoformat(timespec="minutes"),
+            project_number="8800.50",
+            project_id=proj.id,
+            visibility="private",
+            created_by_user_id=1,
+        ))
+        sess.commit()
+        proj_id = proj.id
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    titles = {row["title"] for row in body["linked_records"]["calendar_events"]}
+    assert "Shared project review" in titles
+    assert "Private project prep" not in titles
+    assert body["counts"]["calendar_events"] == 1
+
 def test_project_workspace_requires_auth(client):
     assert client.get("/api/v1/projects/1/workspace").status_code == 401
 

@@ -167,6 +167,50 @@ def test_private_calendar_events_are_hidden_from_other_users(auth_client):
 
 
 
+
+def test_past_calendar_events_do_not_count_as_overdue(auth_client):
+    _create_event(auth_client, title="Past meeting", start_at=_past(1), status="scheduled")
+
+    r = auth_client.get("/api/v1/dashboard")
+    assert r.status_code == 200
+    bucket = r.get_json()["stats"]["calendar_events"]
+    assert bucket["active"] == 1
+    assert bucket["overdue"] == 0
+    assert bucket["overdue_items"] == []
+
+
+def test_calendar_update_validates_existing_start_against_new_end(auth_client):
+    event = _create_event(auth_client, title="Review", start_at=_future(3))
+
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"end_at": _future(1)},
+    )
+    assert r.status_code == 400
+    assert "end_at" in r.get_json()["error"]
+
+
+def test_calendar_update_refreshes_project_fk_from_project_number(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        p1 = Project(project_number="3300.01", name="Original")
+        p2 = Project(project_number="3300.02", name="Updated")
+        sess.add_all([p1, p2])
+        sess.commit()
+        p1_id, p2_id = p1.id, p2.id
+
+    event = _create_event(auth_client, project_number="3300.01")
+    assert event["project_id"] == p1_id
+
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"project_number": "3300.02"},
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["project_number"] == "3300.02"
+    assert body["project_id"] == p2_id
+
 def test_dashboard_includes_calendar_surface(auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200

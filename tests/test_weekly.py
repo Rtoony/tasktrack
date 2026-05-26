@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from app.db import get_session
 from app.models import (
     ActivityLog,
+    CalendarEvent,
     Employee,
     EmployeeSkillScore,
     PersonnelIssue,
@@ -143,6 +144,51 @@ def test_zero_person_incidents_show_up_in_weekly(temp_app):
         snap = weekly_snapshot(sess, days=7)
     assert any(i["person_name"] == "(no person)"
                for i in snap["incidents_recent"])
+
+
+
+def test_weekly_calendar_past_meetings_are_not_overdue(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(CalendarEvent(
+            title="Past calendar meeting",
+            event_type="meeting",
+            start_at=(datetime.now(tz=UTC) - timedelta(days=1)).replace(tzinfo=None).isoformat(timespec="minutes"),
+            status="scheduled",
+            created_by_user_id=1,
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, user_id=1)
+    cal = snap["buckets"]["calendar_events"]
+    assert cal["active_now"] == 1
+    assert cal["overdue_now"] == 0
+
+
+def test_weekly_hides_private_calendar_events_from_other_users(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        start = (datetime.now(tz=UTC) + timedelta(days=1)).replace(tzinfo=None).isoformat(timespec="minutes")
+        sess.add(CalendarEvent(
+            title="Shared weekly event",
+            event_type="meeting",
+            start_at=start,
+            visibility="internal",
+            created_by_user_id=1,
+        ))
+        sess.add(CalendarEvent(
+            title="Private weekly event",
+            event_type="prep",
+            start_at=start,
+            visibility="private",
+            created_by_user_id=1,
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, user_id=2)
+    cal = snap["buckets"]["calendar_events"]
+    titles = {item["title"] for item in cal["items_created"]}
+    assert "Shared weekly event" in titles
+    assert "Private weekly event" not in titles
+    assert cal["active_now"] == 1
 
 
 # ── Admin-only skill score changes ──────────────────────────────────────

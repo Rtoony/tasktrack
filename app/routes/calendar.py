@@ -9,6 +9,7 @@ from sqlalchemy import select
 from ..auth import login_required
 from ..db import get_session
 from ..models import CalendarEvent
+from ..services.tickets import record_visible_to_user
 
 bp = Blueprint("calendar", __name__)
 
@@ -52,9 +53,7 @@ def _event_start(row: CalendarEvent) -> datetime | None:
 
 
 def _visible_to_current_user(row: CalendarEvent) -> bool:
-    if row.visibility != "private":
-        return True
-    return row.created_by_user_id == session.get("user_id")
+    return record_visible_to_user("calendar_events", row, session.get("user_id"))
 
 
 def _serialize(row: CalendarEvent) -> dict:

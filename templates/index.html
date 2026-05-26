@@ -1425,7 +1425,7 @@ function toast(msg) { const t=document.getElementById('toast'); t.textContent=ms
 function today() { return new Date().toISOString().split('T')[0]; }
 
 function isOverdue(r) {
-  const d = r.due_at || r.due_date || r.start_at || r.reported_date || '';
+  const d = r.due_at || r.due_date || r.follow_up_date || '';
   if (!d) return false;
   const done = ['Complete','Closed','Resolved','done','cancelled'];
   if (done.includes(r.status)) return false;
@@ -1974,7 +1974,7 @@ async function loadDashboard() {
   if (!data) return;
   const s = data.stats;
   const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0) + (s.calendar_events?.active||0);
-  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0) + (s.calendar_events?.overdue||0);
+  const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0);
   const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0) + (s.calendar_events?.by_status?.done||0);
   const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.personal_items?.by_priority?.High||0);
 
@@ -1998,7 +1998,6 @@ async function loadDashboard() {
     ...(s.training_tasks?.overdue_items||[]).map(r=>({...r,_src:'Training'})),
     ...(s.personnel_issues?.overdue_items||[]).map(r=>({...r,_src:'Capabilities'})),
     ...(s.personal_items?.overdue_items||[]).map(r=>({...r,_src:'Internal'})),
-    ...(s.calendar_events?.overdue_items||[]).map(r=>({...r,_src:'Calendar'})),
   ];
   overdueEl.replaceChildren();
   if (!allOverdue.length) { overdueEl.innerHTML='<div class="empty-card">Nothing overdue</div>'; }
@@ -2009,7 +2008,7 @@ async function loadDashboard() {
       const title = document.createElement('span'); title.className='overdue-title'; title.textContent=r.title||r.person_name||'';
       const src = document.createElement('span'); src.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem'; src.textContent=r._src;
       left.appendChild(title); left.appendChild(src);
-      const dateSpan = document.createElement('span'); dateSpan.className='overdue-date'; dateSpan.textContent=formatDateTime(r.due_at || r.due_date || r.start_at || r.reported_date || '');
+      const dateSpan = document.createElement('span'); dateSpan.className='overdue-date'; dateSpan.textContent=formatDateTime(r.due_at || r.due_date || r.follow_up_date || '');
       div.appendChild(left); div.appendChild(dateSpan);
       overdueEl.appendChild(div);
     });
