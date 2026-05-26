@@ -257,5 +257,9 @@ def test_hub_lists_incident_form(auth_client):
     assert r.status_code == 200
     html = r.data.decode("utf-8")
     assert "Incident Report" in html
+    assert "Submit CAD changes, fixes, or manager follow-up requests" in html
+    assert "Routes to CAD Dev" in html
+    assert "What happens after submission" in html
+    assert "built-in method copy" not in html
     # The sign-in marker should be visible on the auth-gated card.
     assert "sign-in" in html.lower()

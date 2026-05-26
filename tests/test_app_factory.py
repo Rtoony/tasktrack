@@ -19,6 +19,8 @@ def test_login_form_renders_via_test_client(client):
     r = client.get("/login")
     assert r.status_code == 200
     assert b"Sign in" in r.data
+    assert b"Submission Forms" in r.data
+    assert b"approved email" in r.data
 
 
 def test_root_redirects_to_login(client):
@@ -35,6 +37,13 @@ def test_api_blocks_unauthenticated(client):
 def test_admin_blocks_non_admin(client):
     r = client.get("/admin", follow_redirects=False)
     assert r.status_code in (401, 302, 403)
+
+
+def test_register_page_explains_approval(client):
+    r = client.get("/register")
+    assert r.status_code == 200
+    assert b"already approved by an admin" in r.data
+    assert b"Submission Forms" in r.data
 
 
 def test_register_rejects_unapproved_email(client):
