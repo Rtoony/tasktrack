@@ -250,6 +250,36 @@
   .btn-danger { background:var(--danger); color:#fff; }
   .btn-danger:hover { background:var(--danger-hover); }
 
+  /* Project Workspace drawer — a read-only project cockpit backed by
+     /api/v1/projects/<id>/workspace. TaskTrack links operational work
+     here but does not become the GIS/source-data authority. */
+  .workspace-modal { max-width:920px; }
+  .workspace-shell { display:grid; grid-template-columns:minmax(230px,0.75fr) minmax(360px,1.25fr); gap:0.9rem; }
+  .workspace-card { border:1px solid var(--border); border-radius:var(--radius); background:color-mix(in srgb, var(--surface) 86%, var(--bg)); padding:0.8rem 0.9rem; }
+  .workspace-kicker { font-size:0.68rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.25rem; }
+  .workspace-title { font-size:1rem; font-weight:700; letter-spacing:-0.01em; }
+  .workspace-sub { font-size:0.78rem; color:var(--text-muted); margin-top:0.25rem; }
+  .workspace-meta { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:0.45rem; margin-top:0.75rem; }
+  .workspace-meta-item { border:1px solid var(--border-light); border-radius:var(--radius); padding:0.45rem 0.5rem; background:var(--bg); min-width:0; }
+  .workspace-meta-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; }
+  .workspace-meta-value { font-size:0.8rem; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:0.1rem; }
+  .workspace-actions { display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.75rem; }
+  .workspace-counts { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:0.45rem; }
+  .workspace-count { border:1px solid var(--border-light); border-radius:var(--radius); background:var(--bg); padding:0.5rem; }
+  .workspace-count-value { font-size:1.05rem; font-weight:700; color:var(--accent); }
+  .workspace-count-label { font-size:0.68rem; color:var(--text-muted); margin-top:0.05rem; }
+  .workspace-section { margin-top:0.75rem; }
+  .workspace-section:first-child { margin-top:0; }
+  .workspace-section-title { font-size:0.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.35rem; }
+  .workspace-list { display:flex; flex-direction:column; gap:0.35rem; }
+  .workspace-row { border:1px solid var(--border-light); border-radius:var(--radius); background:var(--bg); padding:0.5rem 0.6rem; display:flex; align-items:center; justify-content:space-between; gap:0.6rem; }
+  .workspace-row-main { min-width:0; }
+  .workspace-row-title { font-size:0.82rem; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .workspace-row-meta { font-size:0.7rem; color:var(--text-muted); margin-top:0.12rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .workspace-empty { font-size:0.76rem; color:var(--text-light); padding:0.45rem 0; }
+  .project-link-cell { color:var(--accent); font-family:'IBM Plex Mono',monospace; cursor:pointer; border-bottom:1px dotted color-mix(in srgb, var(--accent) 65%, transparent); }
+  .project-link-cell:hover { color:var(--accent-hover); }
+
   /* ── Intake ──────────────────────────────── */
   .intake-layout { display:grid; grid-template-columns:minmax(320px,1fr) minmax(320px,1.2fr); gap:1.25rem; }
   @media (max-width: 1040px) { .intake-layout { grid-template-columns:1fr; } }
@@ -390,6 +420,8 @@
     .dash-cols { grid-template-columns:1fr; }
     .search-input { width:160px; }
     .search-input:focus { width:220px; }
+    .workspace-shell { grid-template-columns:1fr; }
+    .workspace-counts { grid-template-columns:repeat(2, minmax(0,1fr)); }
   }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
@@ -748,6 +780,10 @@
       <input class="filter-select" id="map-client-filter" type="text"
              placeholder="Client contains…" style="min-width:160px"
              oninput="scheduleMapReload()">
+      <input class="filter-select" id="map-project-number-filter" type="text"
+             placeholder="Project # exact…" style="min-width:132px"
+             inputmode="numeric" maxlength="7" oninput="scheduleMapReload()">
+      <button class="btn btn-sm btn-export" id="map-clear-focus" type="button" onclick="clearMapProjectFocus()" style="display:none">Clear project focus</button>
       <label class="filter-select" style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
         <input type="checkbox" id="map-show-areas" onchange="reloadMap()" style="margin:0">
         <span style="font-size:0.78rem">Show project areas</span>
@@ -1159,6 +1195,25 @@
         <button class="btn btn-sm" type="button" id="promote-btn" onclick="doPromote()">Go</button>
       </span>
       <button class="btn btn-primary" onclick="saveRecord()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Project Workspace Modal ────────────────── -->
+<div class="modal-overlay" id="workspace-overlay">
+  <div class="modal workspace-modal">
+    <div class="modal-header">
+      <h3 id="workspace-title">Project Workspace</h3>
+      <button class="modal-close" onclick="closeProjectWorkspace()">&times;</button>
+    </div>
+    <div class="modal-body" id="workspace-body">
+      <div class="empty-card">Select a project to load its workspace.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeProjectWorkspace()">Close</button>
+      <button class="btn btn-export" id="workspace-focus-btn" onclick="workspaceFocusMap()">Focus on Map</button>
+      <button class="btn btn-export" id="workspace-task-btn" onclick="workspaceAddProjectTask()">+ Project Task</button>
+      <button class="btn btn-primary" id="workspace-event-btn" onclick="workspaceAddCalendarEvent()">+ Event</button>
     </div>
   </div>
 </div>
@@ -1584,6 +1639,7 @@ let mapLayer = null;
 let mapHullLayer = null;
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
+let mapProjectFocus = { id: '', number: '' };
 
 // Workflow status -> outline color. Pared to {active, dormant} to match
 // the Master Project List's binary Status column.
@@ -1609,7 +1665,27 @@ function mapStatusFilterValue()    { return document.getElementById('map-status-
 function mapComponentFilterValue() { return document.getElementById('map-component-filter')?.value || ''; }
 function mapPinColorFilterValue()  { return document.getElementById('map-pin-color-filter')?.value || ''; }
 function mapClientFilterValue()    { return document.getElementById('map-client-filter')?.value.trim() || ''; }
+function mapProjectNumberFilterValue() { return document.getElementById('map-project-number-filter')?.value.trim() || ''; }
 function mapShowAreasValue()       { return !!document.getElementById('map-show-areas')?.checked; }
+
+function normalizeMapProjectNumberInput() {
+  const input = document.getElementById('map-project-number-filter');
+  if (!input || input.dataset.normalized === '1') return;
+  input.dataset.normalized = '1';
+  input.addEventListener('input', () => {
+    let digits = input.value.replace(/\D/g, '').slice(0, 6);
+    if (digits.length > 4) digits = digits.slice(0, 4) + '.' + digits.slice(4);
+    input.value = digits;
+  });
+}
+
+function applyProjectIdentityMapFilter(params) {
+  if (mapProjectFocus.id) params.set('project_id', mapProjectFocus.id);
+  else {
+    const projectNumber = mapProjectNumberFilterValue();
+    if (projectNumber) params.set('project_number', projectNumber);
+  }
+}
 
 // Debounce the client text input so each keystroke doesn't fire a
 // fetch + repaint of thousands of markers.
@@ -1647,6 +1723,7 @@ async function reloadMap(fit) {
   if (component) params.set('component', component);
   if (pinColor)  params.set('pin_color', pinColor);
   if (client)    params.set('client', client);
+  applyProjectIdentityMapFilter(params);
   const qs = params.toString();
   const url = '/api/v1/projects/geojson' + (qs ? ('?' + qs) : '');
 
@@ -1708,6 +1785,10 @@ async function reloadMap(fit) {
           '<span style="padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span>' +
           (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
         '</div>' +
+        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceById(' + Number(p.project_id || 0) + ')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMap(' + Number(p.project_id || 0) + ')">Focus</button>' +
+        '</div>' +
         '</div>';
       layer.bindPopup(html);
     },
@@ -1737,6 +1818,7 @@ async function reloadMapHulls() {
   if (component) params.set('component', component);
   if (pinColor)  params.set('pin_color', pinColor);
   if (client)    params.set('client', client);
+  applyProjectIdentityMapFilter(params);
   const qs = params.toString();
   const url = '/api/v1/projects/hulls' + (qs ? ('?' + qs) : '');
   let geo;
@@ -1774,6 +1856,10 @@ async function reloadMapHulls() {
           p.site_count + ' site' + (p.site_count === 1 ? '' : 's') + ' · ' + escHtml(p.display_status) +
         '</div>' +
         '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
+        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceById(' + Number(p.project_id || 0) + ')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMap(' + Number(p.project_id || 0) + ')">Focus</button>' +
+        '</div>' +
         '</div>';
       layer.bindPopup(html);
     },
@@ -1784,7 +1870,27 @@ async function reloadMapHulls() {
   if (mapHullLayer.bringToBack) mapHullLayer.bringToBack();
 }
 
+function focusProjectOnMap(projectId) {
+  if (!projectId) { toast('Project is missing a registry id'); return; }
+  mapProjectFocus = { id: String(projectId), number: '' };
+  const projectNumberInput = document.getElementById('map-project-number-filter');
+  if (projectNumberInput) projectNumberInput.value = '';
+  const clear = document.getElementById('map-clear-focus');
+  if (clear) clear.style.display = 'inline-flex';
+  const btn = document.querySelector('.tab-btn[data-tab="map"]');
+  if (currentTab !== 'map' && btn) btn.click();
+  else reloadMap(true);
+}
+
+function clearMapProjectFocus() {
+  mapProjectFocus = { id: '', number: '' };
+  const clear = document.getElementById('map-clear-focus');
+  if (clear) clear.style.display = 'none';
+  reloadMap(true);
+}
+
 function initOrRefreshMap() {
+  normalizeMapProjectNumberInput();
   if (mapInstance) { setTimeout(() => mapInstance.invalidateSize(), 50); reloadMap(true); return; }
   if (!window.L) return; // Leaflet failed to load; map-empty will show
   // Finer zoom granularity for dense project areas (e.g. SF Bay has
@@ -2025,7 +2131,7 @@ async function loadTable(table) {
       tr.appendChild(makeActions(table,r.id,r.title));
     } else if (table==='project') {
       if (r.needs_review) tr.classList.add('ai-review');
-      tr.appendChild(makeCell(r.project_number,'cell-title'));
+      tr.appendChild(makeProjectNumberCell(r.project_number, r.project_id));
       tr.appendChild(makeCell(r.billing_phase,'cell-supporting'));
       tr.appendChild(makeCell(r.engineer,'cell-supporting'));
       tr.appendChild(makeCell(r.project_name,'cell-supporting'));
@@ -2049,7 +2155,7 @@ async function loadTable(table) {
       tr.appendChild(makeCell(r.title,'cell-title'));
       tr.appendChild(makeStatusBadge(formatEventType(r.event_type)));
       tr.appendChild(makeClickableStatus(table,r));
-      tr.appendChild(makeCell(r.project_number,'cell-supporting'));
+      tr.appendChild(makeProjectNumberCell(r.project_number, r.project_id));
       tr.appendChild(makeCell(r.location,'cell-supporting'));
       tr.appendChild(makeStatusBadge(r.visibility));
       tr.appendChild(makeActions(table,r.id,r.title));
@@ -2199,6 +2305,22 @@ function makeKanbanCard(r) {
 
 function makeCell(text,cls) { const td=document.createElement('td'); if(cls)td.className=cls; td.textContent=text||''; return td; }
 
+function makeProjectNumberCell(projectNumber, projectId) {
+  const td = document.createElement('td');
+  td.className = 'cell-title';
+  if (!projectNumber) return td;
+  const span = document.createElement('span');
+  span.className = 'project-link-cell';
+  span.textContent = projectNumber;
+  span.title = 'Open project workspace';
+  span.addEventListener('click', () => {
+    if (projectId) openProjectWorkspaceById(projectId);
+    else openProjectWorkspaceByNumber(projectNumber);
+  });
+  td.appendChild(span);
+  return td;
+}
+
 function makeTitleCell(title, reviewSource) {
   const td = document.createElement('td');
   td.className = 'cell-title';
@@ -2222,7 +2344,7 @@ function makeStatusBadge(val) { const td=document.createElement('td'); if(!val) 
 
 function formatEventType(val) {
   const raw = String(val || 'event');
-  return raw.replace(/_/g, ' ').replace(/\w/g, c => c.toUpperCase());
+  return raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function itemLabel(table) {
@@ -2365,6 +2487,288 @@ function makeActions(table,id,label) {
   del.addEventListener('click',()=>confirmDelete(table,id,label));
   td.appendChild(edit); td.appendChild(del);
   return td;
+}
+
+
+
+/* ── Project Workspace ───────────────────────
+   Read-only operator cockpit for a project. The backend owns project
+   identity and linked records; this view only aggregates and deep-links. */
+let workspaceState = null;
+const WORKSPACE_SECTIONS = [
+  { key:'project_work_tasks', label:'Project Tasks', tab:'project' },
+  { key:'calendar_events', label:'Calendar', tab:'calendar' },
+  { key:'work_tasks', label:'CAD Dev', tab:'work' },
+  { key:'training_tasks', label:'Training', tab:'training' },
+  { key:'personnel_issues', label:'Capabilities', tab:'personnel' },
+];
+
+function closeProjectWorkspace() {
+  document.getElementById('workspace-overlay').classList.remove('open');
+}
+
+function workspaceSetLoading(message) {
+  document.getElementById('workspace-title').textContent = 'Project Workspace';
+  const body = document.getElementById('workspace-body');
+  body.replaceChildren();
+  const empty = document.createElement('div');
+  empty.className = 'empty-card';
+  empty.textContent = message || 'Loading project workspace...';
+  body.appendChild(empty);
+}
+
+async function openProjectWorkspaceById(projectId) {
+  if (!projectId) { toast('Project is missing a registry id'); return; }
+  await openProjectWorkspace('/api/v1/projects/' + encodeURIComponent(projectId) + '/workspace');
+}
+
+async function openProjectWorkspaceByNumber(projectNumber) {
+  const pn = String(projectNumber || '').trim();
+  if (!pn) { toast('Project number is missing'); return; }
+  await openProjectWorkspace('/api/v1/projects/workspace?project_number=' + encodeURIComponent(pn));
+}
+
+async function openProjectWorkspace(path) {
+  document.getElementById('workspace-overlay').classList.add('open');
+  workspaceSetLoading();
+  const data = await api('GET', path);
+  if (!data || data.error) {
+    workspaceState = null;
+    workspaceSetLoading(data?.error || 'Project workspace unavailable');
+    return;
+  }
+  workspaceState = data;
+  renderProjectWorkspace(data);
+}
+
+function workspaceMetaItem(label, value) {
+  const item = document.createElement('div');
+  item.className = 'workspace-meta-item';
+  const l = document.createElement('div');
+  l.className = 'workspace-meta-label';
+  l.textContent = label;
+  const v = document.createElement('div');
+  v.className = 'workspace-meta-value';
+  v.textContent = value || '—';
+  item.appendChild(l); item.appendChild(v);
+  return item;
+}
+
+function workspaceCountItem(label, value) {
+  const item = document.createElement('div');
+  item.className = 'workspace-count';
+  const v = document.createElement('div');
+  v.className = 'workspace-count-value';
+  v.textContent = String(value || 0);
+  const l = document.createElement('div');
+  l.className = 'workspace-count-label';
+  l.textContent = label;
+  item.appendChild(v); item.appendChild(l);
+  return item;
+}
+
+function workspaceRowTitle(sectionKey, row) {
+  if (sectionKey === 'personnel_issues') return row.issue_description || row.person_name || ('#' + row.id);
+  if (sectionKey === 'calendar_events') return row.title || row.description || ('#' + row.id);
+  return row.title || row.project_name || row.name || ('#' + row.id);
+}
+
+function workspaceRowMeta(sectionKey, row) {
+  const bits = [];
+  if (row.status) bits.push(row.status);
+  if (row.priority) bits.push(row.priority);
+  if (row.severity) bits.push(row.severity);
+  if (row.event_type) bits.push(formatEventType(row.event_type));
+  const due = row.due_at || row.due_date || row.start_at || row.reported_date || '';
+  if (due) bits.push(formatDateTime(due));
+  return bits.join(' · ');
+}
+
+function workspaceLinkedRow(spec, row) {
+  const div = document.createElement('div');
+  div.className = 'workspace-row';
+  const main = document.createElement('div');
+  main.className = 'workspace-row-main';
+  const title = document.createElement('div');
+  title.className = 'workspace-row-title';
+  title.textContent = workspaceRowTitle(spec.key, row);
+  const meta = document.createElement('div');
+  meta.className = 'workspace-row-meta';
+  meta.textContent = workspaceRowMeta(spec.key, row) || spec.label;
+  main.appendChild(title); main.appendChild(meta);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn btn-ghost';
+  btn.textContent = 'Open';
+  btn.addEventListener('click', () => {
+    closeProjectWorkspace();
+    document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click();
+    setTimeout(() => editRecord(spec.tab, row.id), 150);
+  });
+  div.appendChild(main); div.appendChild(btn);
+  return div;
+}
+
+function workspaceSection(spec, rows) {
+  const section = document.createElement('div');
+  section.className = 'workspace-section workspace-card';
+  const title = document.createElement('div');
+  title.className = 'workspace-section-title';
+  title.textContent = spec.label + ' (' + rows.length + ')';
+  section.appendChild(title);
+  const list = document.createElement('div');
+  list.className = 'workspace-list';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'workspace-empty';
+    empty.textContent = 'No linked records yet.';
+    list.appendChild(empty);
+  } else {
+    rows.slice(0, 8).forEach(row => list.appendChild(workspaceLinkedRow(spec, row)));
+    if (rows.length > 8) {
+      const more = document.createElement('div');
+      more.className = 'workspace-empty';
+      more.textContent = (rows.length - 8) + ' more linked records not shown in this compact view.';
+      list.appendChild(more);
+    }
+  }
+  section.appendChild(list);
+  return section;
+}
+
+function renderProjectWorkspace(data) {
+  const p = data.project || {};
+  const counts = data.counts || {};
+  const linked = data.linked_records || {};
+  document.getElementById('workspace-title').textContent = 'Project Workspace · ' + (p.project_number || ('#' + p.id));
+  const body = document.getElementById('workspace-body');
+  body.replaceChildren();
+
+  const shell = document.createElement('div');
+  shell.className = 'workspace-shell';
+  const left = document.createElement('div');
+  const right = document.createElement('div');
+
+  const summary = document.createElement('div');
+  summary.className = 'workspace-card';
+  const kicker = document.createElement('div');
+  kicker.className = 'workspace-kicker';
+  kicker.textContent = p.project_number || 'Project';
+  const title = document.createElement('div');
+  title.className = 'workspace-title';
+  title.textContent = p.name || '(unnamed project)';
+  const sub = document.createElement('div');
+  sub.className = 'workspace-sub';
+  sub.textContent = [p.client, p.component, p.principal].filter(Boolean).join(' · ') || 'No master-list metadata yet.';
+  const meta = document.createElement('div');
+  meta.className = 'workspace-meta';
+  meta.appendChild(workspaceMetaItem('Status', p.display_status));
+  meta.appendChild(workspaceMetaItem('Billing', p.billing_phase_default));
+  meta.appendChild(workspaceMetaItem('Start', p.start_date));
+  meta.appendChild(workspaceMetaItem('Dormant', p.dormant_date));
+  meta.appendChild(workspaceMetaItem('External', [data.external?.system, data.external?.ref].filter(Boolean).join(' · ')));
+  meta.appendChild(workspaceMetaItem('Location', (p.lat != null && p.lng != null) ? (p.lat + ', ' + p.lng) : ''));
+  const actions = document.createElement('div');
+  actions.className = 'workspace-actions';
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button'; copyBtn.className = 'btn btn-sm btn-export'; copyBtn.textContent = 'Copy Project #';
+  copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(p.project_number || ''); toast('project number copied'); }
+    catch { toast('copy failed'); }
+  });
+  actions.appendChild(copyBtn);
+  summary.appendChild(kicker); summary.appendChild(title); summary.appendChild(sub); summary.appendChild(meta); summary.appendChild(actions);
+  left.appendChild(summary);
+
+  const countsCard = document.createElement('div');
+  countsCard.className = 'workspace-card';
+  const countsTitle = document.createElement('div');
+  countsTitle.className = 'workspace-section-title';
+  countsTitle.textContent = 'Linked Surface';
+  const grid = document.createElement('div');
+  grid.className = 'workspace-counts';
+  grid.appendChild(workspaceCountItem('Project tasks', counts.project_work_tasks));
+  grid.appendChild(workspaceCountItem('Calendar', counts.calendar_events));
+  grid.appendChild(workspaceCountItem('CAD dev', counts.work_tasks));
+  grid.appendChild(workspaceCountItem('Training', counts.training_tasks));
+  grid.appendChild(workspaceCountItem('Capabilities', counts.personnel_issues));
+  grid.appendChild(workspaceCountItem('Sites', counts.sites));
+  countsCard.appendChild(countsTitle); countsCard.appendChild(grid);
+  right.appendChild(countsCard);
+
+  const sites = data.sites || [];
+  const siteSection = document.createElement('div');
+  siteSection.className = 'workspace-section workspace-card';
+  const siteTitle = document.createElement('div');
+  siteTitle.className = 'workspace-section-title';
+  siteTitle.textContent = 'Project Sites (' + sites.length + ')';
+  siteSection.appendChild(siteTitle);
+  const siteList = document.createElement('div');
+  siteList.className = 'workspace-list';
+  if (!sites.length) {
+    const empty = document.createElement('div');
+    empty.className = 'workspace-empty';
+    empty.textContent = 'No Project Locator pins are linked to this project.';
+    siteList.appendChild(empty);
+  } else {
+    sites.slice(0, 5).forEach(site => {
+      const row = document.createElement('div');
+      row.className = 'workspace-row';
+      const main = document.createElement('div');
+      main.className = 'workspace-row-main';
+      const st = document.createElement('div');
+      st.className = 'workspace-row-title';
+      st.textContent = site.is_primary ? 'Primary pin' : 'Site pin';
+      const sm = document.createElement('div');
+      sm.className = 'workspace-row-meta';
+      sm.textContent = [site.pin_color, site.lat, site.lng].filter(v => v !== null && v !== undefined && v !== '').join(' · ');
+      main.appendChild(st); main.appendChild(sm); row.appendChild(main); siteList.appendChild(row);
+    });
+  }
+  siteSection.appendChild(siteList);
+  left.appendChild(siteSection);
+
+  WORKSPACE_SECTIONS.forEach(spec => {
+    right.appendChild(workspaceSection(spec, linked[spec.key] || []));
+  });
+
+  shell.appendChild(left); shell.appendChild(right); body.appendChild(shell);
+}
+
+function workspaceProject() { return workspaceState?.project || {}; }
+
+function workspaceFocusMap() {
+  const p = workspaceProject();
+  if (!p.id) { toast('No project loaded'); return; }
+  closeProjectWorkspace();
+  focusProjectOnMap(p.id);
+}
+
+function workspaceAddProjectTask() {
+  const p = workspaceProject();
+  if (!p.id && !p.project_number) { toast('No project loaded'); return; }
+  closeProjectWorkspace();
+  openModal('project', {
+    project_id: p.id || '',
+    project_number: p.project_number || '',
+    project_name: p.name || '',
+    title: '',
+    task_description: '',
+  });
+}
+
+function workspaceAddCalendarEvent() {
+  const p = workspaceProject();
+  if (!p.id && !p.project_number) { toast('No project loaded'); return; }
+  closeProjectWorkspace();
+  openModal('calendar', {
+    project_id: p.id || '',
+    project_number: p.project_number || '',
+    title: (p.project_number ? p.project_number + ' ' : '') + 'project event',
+    event_type: 'meeting',
+    status: 'scheduled',
+    visibility: 'internal',
+  });
 }
 
 /* ── Modal forms ───────────────────────────── */

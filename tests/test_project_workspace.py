@@ -121,3 +121,11 @@ def test_hulls_exact_project_filters(auth_client, temp_app):
 
     by_id = auth_client.get(f"/api/v1/projects/hulls?project_id={proj_id}").get_json()
     assert by_id["features"][0]["properties"]["project_id"] == proj_id
+
+def test_dashboard_exposes_project_workspace_ui(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert 'id="workspace-overlay"' in html
+    assert 'openProjectWorkspaceById' in html
+    assert 'id="map-project-number-filter"' in html
