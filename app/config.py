@@ -133,12 +133,12 @@ ALLOWED_TABLES = {
             "source_ref",
         ],
         "required": ["title", "category"],
-        "label": "Personal Item",
+        "label": "Internal Item",
         "status_flow": ["New", "In Progress", "Done", "Archived"],
     },
 }
 
-PERSONAL_CATEGORIES = ["Husband", "Father", "House", "Cars"]
+INTERNAL_ITEM_CATEGORIES = ["Follow-up", "Meetings", "Office", "Assets"]
 
 SIMPLE_SUBMISSION_CONFIGS = {
     "cad-development": {
@@ -250,23 +250,23 @@ ADMIN_WORKFLOW_VIEWS = {
     },
     "triage": {
         "title": "Triage",
-        "subtitle": "Quick captures from Telegram, voice memos, paperless, or any Nexus app — triage from here into the right tracker, or leave as a personal todo.",
+        "subtitle": "Quick captures from Telegram, voice memos, paperless, or any Nexus app — triage from here into the right tracker, or leave as an internal follow-up.",
     },
     "personal_husband": {
-        "title": "Husband",
-        "subtitle": "Personal items in the Husband category — relationship, anniversaries, partner-shared logistics.",
+        "title": "Follow-up",
+        "subtitle": "Internal follow-up items that do not belong in a project, CAD, training, or capability queue yet.",
     },
     "personal_father": {
-        "title": "Father",
-        "subtitle": "Personal items in the Father category — kids, school, family logistics.",
+        "title": "Meetings",
+        "subtitle": "Meeting prep, management follow-ups, and time-bound coordination notes.",
     },
     "personal_house": {
-        "title": "House",
-        "subtitle": "Personal items in the House category — home maintenance, projects, household logistics.",
+        "title": "Office",
+        "subtitle": "Office operations, workspace upkeep, and non-project administrative work.",
     },
     "personal_cars": {
-        "title": "Cars",
-        "subtitle": "Personal items in the Cars category — vehicle maintenance, modifications, registration, repairs.",
+        "title": "Assets",
+        "subtitle": "Assets, equipment, tools, and other operational upkeep items.",
     },
 }
 

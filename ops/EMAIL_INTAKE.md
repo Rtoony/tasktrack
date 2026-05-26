@@ -5,7 +5,7 @@ flagged `needs_review`. Runs as a systemd user timer every 5 minutes.
 
 ## Wiring (one-time setup)
 
-1. **Provision the mailbox.** Point personal + work email forwarding rules at a
+1. **Provision the mailbox.** Point selected email forwarding rules at a
    dedicated Nexus mailbox (e.g. `intake@roonytoony.dev` served by Proton Bridge
    on the AI PC, or a plain Gmail with an app password).
 

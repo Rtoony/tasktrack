@@ -1,6 +1,6 @@
 # MinIO object store backing TaskTrack attachments.
 #
-# Personal dev (Nexus): brought up by the user systemd unit
+# Private Nexus install: brought up by the user systemd unit
 # minio-tasktrack.service. Credentials live in deploy/minio.env (gitignored,
 # created from minio.env.example on first run).
 #

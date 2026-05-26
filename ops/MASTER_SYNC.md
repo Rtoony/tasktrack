@@ -3,7 +3,7 @@
 Daily systemd-driven sync of the firm's Master Project List (XLSX) +
 Project Locator (KMZ) into TaskTrack's `projects` + `project_sites`
 tables. Built as a **prototype** running off a USB drive on the
-operator's personal AI PC; designed so the eventual deployment to a
+operator's private AI PC; designed so the eventual deployment to a
 firm-owned VM with NAS access is a one-env-var change.
 
 ## Pieces

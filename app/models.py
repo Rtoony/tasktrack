@@ -66,7 +66,7 @@ class AppSetting(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
-# ── Trackers (Project Tasks / CAD Dev / Training / Capabilities / Personal) ─
+# ── Trackers (Project Tasks / CAD Dev / Training / Capabilities / Internal) ─
 
 class WorkTask(Base):
     __tablename__ = "work_tasks"
@@ -193,11 +193,12 @@ class PersonnelIssue(Base):
 
 
 class PersonalItem(Base):
-    """Personal-life items, categorized into Husband/Father/House/Cars.
+    """Internal follow-up items.
 
-    One table, one schema — the UI presents four filtered tabs (one per
-    category). Triage items can promote into this table with a category
-    override; the promote endpoint already plumbs that through.
+    The table name and legacy category values remain for migration safety.
+    One table, one schema — the UI presents four filtered internal queues.
+    Triage items can promote into this table with a category override; the
+    promote endpoint already plumbs that through.
     """
     __tablename__ = "personal_items"
 
@@ -225,7 +226,7 @@ class PersonalItem(Base):
 class InboxItem(Base):
     """Unified capture surface for the Nexus suite.
 
-    Lives forever as a personal todo OR gets promoted into one of the
+    Lives as an internal follow-up OR gets promoted into one of the
     five trackers via /api/v1/inbox/<id>/promote (which records where
     it went via promoted_to_table / promoted_to_id).
     """
@@ -335,7 +336,7 @@ class TelegramChatAccess(Base):
 class Employee(Base):
     """Person being tracked by TaskTrack.
 
-    Distinct from `User` (which is the login identity). Josh tracks
+    Distinct from `User` (which is the login identity). The operator tracks
     employees here regardless of whether they have TaskTrack accounts.
     """
     __tablename__ = "employees"

@@ -39,7 +39,7 @@ def list_categories():
     admin-only.
 
     On first call against an empty table, seeds the default rubric so
-    Josh doesn't have to type ten categories before using the matrix."""
+    the operator does not have to type ten categories before using the matrix."""
     sess = get_session()
     if sess.scalar(select(SkillCategory).limit(1)) is None:
         seed_default_categories(sess)

@@ -1,8 +1,8 @@
 # TaskTrack — Roadmap
 
-Single-user personal task tracker on Nexus. No company rollout, no
-multi-tenant, no RBAC. The five trackers stay; personal-life trackers
-may be added alongside them later.
+Private internal operations tracker on Nexus. Near-term focus is daily
+work coordination, project-linked follow-up, internal calendar, and
+management-ready reporting without waiting for the full OrdoCAD suite.
 
 ## Shipped
 
@@ -16,7 +16,7 @@ may be added alongside them later.
 - Full-text search across trackers.
 - CSV export.
 - AI Intake (LiteLLM) with cloud fallback.
-- Calendar widget reading Radicale `.ics` files.
+- Retired the old external calendar glance; internal calendar is planned as a first-class TaskTrack module.
 - Telegram capture bot (`@MyTrack_Tasks_Bot`).
 - Unified inbox capture (`/api/v1/inbox`) — single surface for
   Telegram, paperless, voice memos, and any other Nexus app to
@@ -40,12 +40,14 @@ To be decided after the post-cleanup regroup. Candidates:
 - Saved views and richer dashboard filters.
 - Image / PDF preview thumbnails for attachments.
 - AI autopilot polish — let triage do more of the work.
-- Personal-life tracker(s) added alongside the five firm-shaped ones.
+- Internal calendar module: events, meeting prep, project milestones, task due dates, report deadlines, and follow-ups.
+- Project workspace MVP: project detail panel, internal notes, linked tasks, and map/report actions.
+- Report engine MVP: management weekly, project status, portfolio/map summaries, and batch meeting packets.
 
 ## Explicitly out
 
-- Postgres migration (SQLite is fine for one user).
-- RBAC / multi-user permissions (one user).
+- Immediate Postgres rewrite. SQLite stays until project geometry/reporting needs justify Postgres/PostGIS.
+- Broad RBAC/productization. Add privacy/reporting tiers only where needed for operator safety.
 - M365 / Outlook integrations.
 - SLA timers tied to a customer-facing service desk.
 - BR Engineering branding or company-VM install machinery.
@@ -55,8 +57,8 @@ To be decided after the post-cleanup regroup. Candidates:
   GIS/aerial/LiDAR background data). All of this lands in OrdoCAD,
   not TaskTrack — see
   `~/projects/ordocad/docs/SEPARATION_AND_DEPLOY_PLAN.md` (2026-05-22).
-  TaskTrack stays a personal task tracker; project metadata richness
-  is owned by OrdoCAD when Codex deploys it.
+  TaskTrack stays the Flow/reporting cockpit; canonical project metadata
+  and spatial work areas are owned by Atlas/OrdoCAD as those links mature.
 
 ## Not yet decided
 

@@ -164,8 +164,6 @@ def test_probe_all_populates_state(monkeypatch):
     monkeypatch.delenv("LITELLM_HEALTH_URL", raising=False)
     monkeypatch.delenv("MINIO_ENDPOINT", raising=False)
     monkeypatch.delenv("MINIO_HEALTH_URL", raising=False)
-    monkeypatch.delenv("RADICALE_URL", raising=False)
-    monkeypatch.delenv("RADICALE_HEALTH_URL", raising=False)
     monkeypatch.setenv("VAULT_SESSION_FILE", "/nonexistent/path")
     snap = health.probe_all()
     assert "components" in snap
@@ -173,8 +171,8 @@ def test_probe_all_populates_state(monkeypatch):
     assert "checked_at" in snap
     state = health.current_state()
     assert state["components"]
-    # 4 probes
-    assert len(state["components"]) == 4
+    # LiteLLM, Vault session, and MinIO. The old external calendar probe was retired.
+    assert len(state["components"]) == 3
 
 
 def test_current_state_returns_copy():

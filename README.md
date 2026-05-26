@@ -1,8 +1,9 @@
 # TaskTrack
 
-Personal single-user task / ticket tracker. Five queues, comments, an
-activity audit log, full-text search, attachments via MinIO, a Telegram
-capture bot, and a Radicale calendar widget.
+Private internal task and operations tracker. Work queues, comments, an
+activity audit log, full-text search, attachments via MinIO, Telegram
+capture, project registry hooks, and reporting surfaces for management
+check-ins.
 
 The five trackers:
 
@@ -58,7 +59,7 @@ app/
 ├── db.py              SQLAlchemy engine + per-request session
 ├── models.py          Declarative models for all 13 tables + to_dict
 ├── auth.py            login_required / admin_required decorators
-├── tokens.py          Scoped API tokens (triage / personal / bot)
+├── tokens.py          Scoped API tokens (triage / inbox / bot)
 ├── logging_config.py  text + JSON formatters with request_id field
 ├── middleware.py      X-Request-Id round-trip + structured access log
 ├── cli.py             flask db-upgrade / init-db / create-admin
@@ -66,7 +67,6 @@ app/
 │   ├── audit.py       log_activity (writes to activity_log)
 │   ├── tickets.py     validate / extra fields / create_direct_record
 │   ├── triage.py      AI Intake (LiteLLM)
-│   ├── calendar.py    Radicale .ics reader
 │   └── attachments.py MinIO upload / list / delete / presigned URL
 └── routes/
     ├── auth.py        /login /register /logout
@@ -76,7 +76,6 @@ app/
     ├── admin.py       /admin /api/v1/admin/*
     ├── triage.py      /api/v1/triage
     ├── inbox.py       /api/v1/inbox  (unified capture surface)
-    ├── calendar.py    /api/v1/calendar/upcoming
     ├── telegram_api.py /api/v1/telegram/{pair,touch,tickets}
     └── attachments.py /api/v1/attachments/...
 

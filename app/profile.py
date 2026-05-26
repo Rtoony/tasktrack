@@ -1,8 +1,8 @@
-"""Single-user TaskTrack settings.
+"""Private TaskTrack settings.
 
-This used to be a deployment-profile selector with `personal` and `company`
-defaults. The company rollout was scrapped 2026-05-04 — TaskTrack is now a
-single-user personal tool, and there is exactly one set of settings.
+This used to be a deployment-profile selector with multiple runtime defaults.
+The company rollout was scrapped 2026-05-04; TaskTrack now runs as a private
+internal operations tool, and there is exactly one set of settings.
 
 Everything is still env-overridable for the few cases that need it (e.g.
 running tests with a tighter rate limit, or flipping SESSION_COOKIE_SECURE
@@ -49,7 +49,7 @@ LOG_FORMAT = _str("LOG_FORMAT", "text")
 
 # ── Intake forms ──────────────────────────────────────────────────────────
 # Per-IP cap on POSTs to /intake/* — keeps a runaway script from drowning
-# the form surface even on a personal install.
+# the form surface even on this private install.
 INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP = _int("INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP", 60)
 
 

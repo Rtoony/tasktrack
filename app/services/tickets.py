@@ -12,7 +12,7 @@ from flask import session
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..config import ALLOWED_TABLES, PERSONAL_CATEGORIES
+from ..config import ALLOWED_TABLES, INTERNAL_ITEM_CATEGORIES
 from ..models import (
     Employee,
     InboxItem,
@@ -221,8 +221,8 @@ def validate_record_data(table, data, creating=False):
             category = str(data.get("category") or "").strip()
             if not category:
                 return "'category' is required"
-            if category not in PERSONAL_CATEGORIES:
-                return f"category must be one of: {', '.join(PERSONAL_CATEGORIES)}"
+            if category not in INTERNAL_ITEM_CATEGORIES:
+                return f"category must be one of: {', '.join(INTERNAL_ITEM_CATEGORIES)}"
             data["category"] = category
         return None
 

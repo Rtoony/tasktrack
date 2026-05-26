@@ -241,7 +241,7 @@ def test_bridge_disallowed_pair(auth_client):
     """personal_items → work_tasks is not in BRIDGE_MAP — must reject."""
     src = auth_client.post("/api/v1/personal_items", json={
         "title": "buy milk",
-        "category": "House",
+        "category": "Office",
     }).get_json()
     r = auth_client.post(
         f"/api/v1/bridge/personal_items/{src['id']}/work_tasks",

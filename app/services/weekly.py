@@ -3,7 +3,7 @@
 Pure-data aggregator: takes a SQLAlchemy session and a `since` datetime
 and returns a structured dict the view layer can render any way it wants.
 No Flask, no template concerns — the deliberate split lets us swap the
-HTML format (which Josh's managers will inevitably re-spec) without
+HTML format (which management will inevitably re-spec) without
 touching the queries.
 
 Heuristics (documented because reasonable people will second-guess them):
@@ -43,7 +43,7 @@ BUCKET_LABELS = {
     "training_tasks":     "Training",
     "personnel_issues":   "Incidents / Capabilities",
     "inbox_items":        "Triage / Inbox",
-    "personal_items":     "Personal",
+    "personal_items":     "Internal",
 }
 
 # Limit the size of `items_*` lists so the JSON doesn't bloat.

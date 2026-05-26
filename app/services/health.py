@@ -119,17 +119,11 @@ def _build_probe_list() -> list[dict]:
         if endpoint:
             minio_url = endpoint + "/minio/health/live"
 
-    radicale_url = os.environ.get("RADICALE_HEALTH_URL", "")
-    if not radicale_url:
-        base = os.environ.get("RADICALE_URL", "").rstrip("/")
-        if base:
-            radicale_url = base + "/.well-known/caldav"
 
     return [
         _probe_http("litellm", "LiteLLM", litellm_url),
         _probe_vault_session(),
         _probe_http("minio", "MinIO", minio_url, method="HEAD"),
-        _probe_http("radicale", "Radicale", radicale_url),
     ]
 
 

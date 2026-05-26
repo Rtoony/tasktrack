@@ -1,4 +1,4 @@
-"""TaskTrack — single-user task tracker (app factory).
+"""TaskTrack — internal operations tracker (app factory).
 
 create_app() builds a fresh Flask instance, registers all blueprints,
 wires the SQLite teardown, configures logging, the request-ID
@@ -117,7 +117,6 @@ def create_app(db_path=None) -> Flask:
     from .routes.attachments import bp as attachments_bp
     from .routes.auth import bp as auth_bp
     from .routes.bridges import bp as bridges_bp
-    from .routes.calendar import bp as calendar_bp
     from .routes.competency import bp as competency_bp
     from .routes.health_pill import bp as health_pill_bp
     from .routes.inbox import bp as inbox_bp
@@ -139,7 +138,6 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(links_bp)
     app.register_blueprint(inbox_bp)
     app.register_blueprint(triage_bp)
-    app.register_blueprint(calendar_bp)
     app.register_blueprint(registry_bp)
     app.register_blueprint(competency_bp)
     app.register_blueprint(bridges_bp)

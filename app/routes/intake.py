@@ -36,8 +36,8 @@ def _intake_post_limit():
 
 
 def intake_auth_required(f):
-    """No-op decorator — intake is open. Kept as a seam in case the personal
-    install ever fronts intake URLs publicly and Josh wants to flip it."""
+    """No-op decorator — intake is open. Kept as a seam in case this
+    private install ever fronts intake URLs publicly and access needs to flip."""
 
     @wraps(f)
     def decorated(*args, **kwargs):
