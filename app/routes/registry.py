@@ -22,17 +22,13 @@ from sqlalchemy import func, select
 from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import (
-    CalendarEvent,
     Employee,
-    PersonnelIssue,
     Project,
     ProjectSite,
-    ProjectWorkTask,
-    TrainingTask,
-    WorkTask,
     to_dict,
 )
 from ..services.convex_hull import hull_geojson_ring
+from ..services.project_workspace import project_workspace_payload
 
 # Pared down to {active, dormant} to match the firm's Master Project List
 # spreadsheet, which is now the source of truth for project state. The
@@ -85,21 +81,6 @@ def _project_filter_stmt(stmt, *, include_inactive: bool, component: str = "",
         stmt = stmt.where(Project.project_number == project_number)
     return stmt
 
-
-def _linked_rows(sess, model, project_id: int, project_number: str, *, limit: int = 50):
-    stmt = select(model).where(
-        (model.project_id == project_id) | (model.project_number == project_number)
-    )
-    if model is CalendarEvent:
-        user_id = session.get("user_id")
-        if user_id is None:
-            stmt = stmt.where(model.visibility != "private")
-        else:
-            stmt = stmt.where(
-                (model.visibility != "private") | (model.created_by_user_id == user_id)
-            )
-    stmt = stmt.order_by(model.id.desc()).limit(limit)
-    return [to_dict(row) for row in sess.scalars(stmt).all()]
 
 bp = Blueprint("registry", __name__)
 
@@ -490,36 +471,6 @@ def projects_sync_status():
 
 
 
-def _project_workspace_payload(sess, proj: Project) -> dict:
-    sites = [
-        to_dict(row)
-        for row in sess.scalars(
-            select(ProjectSite)
-            .where(ProjectSite.project_id == proj.id)
-            .order_by(ProjectSite.is_primary.desc(), ProjectSite.id.asc())
-        ).all()
-    ]
-    linked = {
-        "work_tasks": _linked_rows(sess, WorkTask, proj.id, proj.project_number),
-        "project_work_tasks": _linked_rows(sess, ProjectWorkTask, proj.id, proj.project_number),
-        "training_tasks": _linked_rows(sess, TrainingTask, proj.id, proj.project_number),
-        "personnel_issues": _linked_rows(sess, PersonnelIssue, proj.id, proj.project_number),
-        "calendar_events": _linked_rows(sess, CalendarEvent, proj.id, proj.project_number),
-    }
-    return {
-        "project": to_dict(proj),
-        "sites": sites,
-        "linked_records": linked,
-        "counts": {key: len(value) for key, value in linked.items()} | {
-            "sites": len(sites),
-        },
-        "external": {
-            "system": proj.external_system or "",
-            "ref": proj.external_ref or "",
-        },
-    }
-
-
 @bp.route("/api/v1/projects/<int:proj_id>/workspace", methods=["GET"])
 @login_required
 def project_workspace_by_id(proj_id):
@@ -527,7 +478,7 @@ def project_workspace_by_id(proj_id):
     proj = sess.get(Project, proj_id)
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
-    return jsonify(_project_workspace_payload(sess, proj))
+    return jsonify(project_workspace_payload(sess, proj, user_id=session.get("user_id")))
 
 
 @bp.route("/api/v1/projects/workspace", methods=["GET"])
@@ -540,7 +491,8 @@ def project_workspace_by_number():
     proj = sess.scalar(select(Project).where(Project.project_number == project_number))
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
-    return jsonify(_project_workspace_payload(sess, proj))
+    return jsonify(project_workspace_payload(sess, proj, user_id=session.get("user_id")))
+
 
 @bp.route("/api/v1/projects", methods=["POST"])
 @admin_required

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Status - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37;
+    --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480;
+    --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+    --radius:6px;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1180px; margin:0 auto; padding:0 1.5rem; height:54px; display:flex; align-items:center; justify-content:space-between; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1180px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.5rem; font-weight:600; margin-bottom:0.25rem; }
+  .sub { color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem; }
+  .lookup { display:flex; gap:0.5rem; align-items:center; margin:0 0 1.25rem; }
+  .lookup input { width:130px; padding:0.35rem 0.5rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:'IBM Plex Mono', monospace; }
+  .lookup button,.btn { background:var(--accent); border:none; color:#0b1220; padding:0.36rem 0.75rem; border-radius:var(--radius); cursor:pointer; font-weight:600; text-decoration:none; font-size:0.78rem; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .hero { background:linear-gradient(135deg, rgba(56,189,248,0.14), rgba(24,33,43,0.96)); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem; margin-bottom:1rem; }
+  .hero-top { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+  .pn { color:var(--accent); font-family:'IBM Plex Mono', monospace; font-size:0.86rem; font-weight:600; }
+  .title { font-size:1.25rem; font-weight:700; margin-top:0.1rem; }
+  .meta { color:var(--text-muted); margin-top:0.25rem; }
+  .chips { display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.75rem; }
+  .chip { border:1px solid var(--border); background:rgba(17,22,29,0.65); border-radius:999px; padding:0.18rem 0.55rem; color:var(--text-muted); font-size:0.74rem; }
+  .grid { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.8rem; }
+  .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.66rem; }
+  .stat-value { font-size:1.45rem; font-weight:700; margin-top:0.25rem; color:var(--accent); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.95rem 1rem; margin-bottom:1rem; }
+  .card h2 { font-size:0.95rem; margin-bottom:0.55rem; }
+  .row { display:grid; grid-template-columns:1fr auto; gap:0.8rem; padding:0.42rem 0; border-bottom:1px solid var(--border); align-items:baseline; }
+  .row:last-child { border-bottom:none; }
+  .row-title { font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-meta { color:var(--text-muted); font-size:0.73rem; margin-top:0.12rem; }
+  .when { color:var(--text-dim); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; white-space:nowrap; }
+  .empty { color:var(--text-dim); font-style:italic; padding:0.3rem 0; }
+  .danger { color:var(--danger); }
+  .ok { color:var(--ok); }
+  .site-table { width:100%; border-collapse:collapse; font-size:0.78rem; }
+  .site-table th,.site-table td { text-align:left; padding:0.35rem 0.4rem; border-bottom:1px solid var(--border); }
+  .site-table th { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; }
+  .error { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.35); padding:0.9rem 1rem; border-radius:var(--radius); color:var(--danger); }
+  @media (max-width: 920px) { .cols { grid-template-columns:1fr; } .grid { grid-template-columns:repeat(2,1fr); } }
+  @media print {
+    body { background:#fff; color:#111827; }
+    header,.lookup,.nav,.btn { display:none !important; }
+    main { max-width:none; padding:0; }
+    .card,.hero,.stat { border-color:#d1d5db; background:#fff; break-inside:avoid; }
+    .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+    .row,.site-table th,.site-table td { border-color:#e5e7eb; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Project Status</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/weekly">Weekly</a>
+      {% if user_role == 'admin' %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <form class="lookup" method="get" action="/reports/project">
+    <label for="project-number" style="color:var(--text-muted);">Project #</label>
+    <input id="project-number" name="project_number" value="{{ project_number }}" placeholder="1234.56" maxlength="7">
+    <button type="submit">Open Report</button>
+  </form>
+
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% elif report %}
+    {% set p = report.project %}
+    <section class="hero">
+      <div class="hero-top">
+        <div>
+          <div class="pn">{{ p.project_number }}</div>
+          <div class="title">{{ p.name or '(unnamed project)' }}</div>
+          <div class="meta">{{ p.client or 'No client' }}{% if p.principal %} / {{ p.principal }}{% endif %}{% if p.component %} / {{ p.component }}{% endif %}</div>
+        </div>
+        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;justify-content:flex-end">
+          <a class="btn secondary" href="/?project_number={{ p.project_number }}">Dashboard</a>
+          <a class="btn secondary" href="/api/v1/reports/project?project_number={{ p.project_number }}">JSON</a>
+          <button class="btn" type="button" onclick="window.print()">Print</button>
+        </div>
+      </div>
+      <div class="chips">
+        <span class="chip">Status: {{ p.display_status or 'active' }}</span>
+        <span class="chip">Sites: {{ report.counts.sites }}</span>
+        {% if report.external.system or report.external.ref %}<span class="chip">External: {{ report.external.system }} {{ report.external.ref }}</span>{% endif %}
+        <span class="chip">Generated: {{ report.generated_at[:16] }}</span>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="stat"><div class="stat-label">Project Tasks</div><div class="stat-value">{{ report.counts.project_work_tasks }}</div></div>
+      <div class="stat"><div class="stat-label">Calendar</div><div class="stat-value">{{ report.counts.calendar_events }}</div></div>
+      <div class="stat"><div class="stat-label">CAD Dev</div><div class="stat-value">{{ report.counts.work_tasks }}</div></div>
+      <div class="stat"><div class="stat-label">Training</div><div class="stat-value">{{ report.counts.training_tasks }}</div></div>
+      <div class="stat"><div class="stat-label">Capabilities</div><div class="stat-value">{{ report.counts.personnel_issues }}</div></div>
+      <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value{% if report.overdue_items %} danger{% endif %}">{{ report.overdue_items|length }}</div></div>
+    </section>
+
+    <div class="cols">
+      <section class="card">
+        <h2>Upcoming Project Events</h2>
+        {% if report.upcoming_events %}
+          {% for event in report.upcoming_events %}
+          <div class="row">
+            <div>
+              <div class="row-title">{{ event.title }}</div>
+              <div class="row-meta">{{ event.event_type|replace('_', ' ') }} / {{ event.status }}{% if event.location %} / {{ event.location }}{% endif %}</div>
+            </div>
+            <div class="when">{{ event.start_at[:16] }}</div>
+          </div>
+          {% endfor %}
+        {% else %}<div class="empty">No upcoming project events.</div>{% endif %}
+      </section>
+
+      <section class="card">
+        <h2>Overdue / At Risk</h2>
+        {% if report.overdue_items %}
+          {% for item in report.overdue_items %}
+          <div class="row">
+            <div>
+              <div class="row-title">{{ item.title }}</div>
+              <div class="row-meta">{{ item.label }} / {{ item.status }}</div>
+            </div>
+            <div class="when danger">{{ item.due[:16] }}</div>
+          </div>
+          {% endfor %}
+        {% else %}<div class="empty ok">Nothing linked to this project is overdue.</div>{% endif %}
+      </section>
+    </div>
+
+    {% for table, label in report.labels.items() %}
+    <section class="card">
+      <h2>{{ label }} ({{ report.linked_records[table]|length }})</h2>
+      {% if report.linked_records[table] %}
+        {% for row in report.linked_records[table][:10] %}
+        <div class="row">
+          <div>
+            <div class="row-title">{{ row.title or row.project_name or row.issue_description or ('#' ~ row.id) }}</div>
+            <div class="row-meta">{{ row.status or '' }}{% if row.priority %} / {{ row.priority }}{% endif %}{% if row.severity %} / {{ row.severity }}{% endif %}</div>
+          </div>
+          <div class="when">{{ (row.due_at or row.due_date or row.follow_up_date or row.start_at or '')[:16] }}</div>
+        </div>
+        {% endfor %}
+      {% else %}<div class="empty">No linked {{ label|lower }} records.</div>{% endif %}
+    </section>
+    {% endfor %}
+
+    <section class="card">
+      <h2>Project Sites</h2>
+      {% if report.sites %}
+      <table class="site-table">
+        <thead><tr><th>Pin</th><th>Lat</th><th>Lng</th><th>Source</th></tr></thead>
+        <tbody>
+        {% for site in report.sites[:12] %}
+          <tr><td>{{ 'primary' if site.is_primary else (site.pin_color or 'site') }}</td><td>{{ site.lat }}</td><td>{{ site.lng }}</td><td>{{ site.source or '' }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}<div class="empty">No Project Locator pins are linked.</div>{% endif %}
+    </section>
+  {% endif %}
+</main>
+</body>
+</html>

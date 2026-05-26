@@ -1212,6 +1212,7 @@
     <div class="modal-footer">
       <button class="btn btn-cancel" onclick="closeProjectWorkspace()">Close</button>
       <button class="btn btn-export" id="workspace-focus-btn" onclick="workspaceFocusMap()">Focus on Map</button>
+      <button class="btn btn-export" id="workspace-report-btn" onclick="workspaceOpenReport()">Project Report</button>
       <button class="btn btn-export" id="workspace-task-btn" onclick="workspaceAddProjectTask()">+ Project Task</button>
       <button class="btn btn-primary" id="workspace-event-btn" onclick="workspaceAddCalendarEvent()">+ Event</button>
     </div>
@@ -2741,6 +2742,12 @@ function workspaceFocusMap() {
   if (!p.id) { toast('No project loaded'); return; }
   closeProjectWorkspace();
   focusProjectOnMap(p.id);
+}
+
+function workspaceOpenReport() {
+  const p = workspaceProject();
+  if (!p.project_number) { toast('No project loaded'); return; }
+  window.open('/reports/project?project_number=' + encodeURIComponent(p.project_number), '_blank', 'noopener');
 }
 
 function workspaceAddProjectTask() {
