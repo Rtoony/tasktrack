@@ -793,7 +793,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Projects Map</h2>
-        <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Click a pin to copy the project number. Edit on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
+        <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Use a pin to open Workspace, focus the map, or copy the project number. Edit source metadata on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
       </div>
       <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
         <option value="active" selected>Active</option>
@@ -1826,6 +1826,7 @@ async function reloadMap(fit) {
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
       const pin = p.pin_color ? `<span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:50%;background:${PIN_COLOR[p.pin_color] || '#94a3b8'};margin-right:0.3rem;vertical-align:middle"></span>${escHtml(p.pin_color)}` : '';
+      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
@@ -1841,8 +1842,8 @@ async function reloadMap(fit) {
           (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
         '</div>' +
         '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceById(' + Number(p.project_id || 0) + ')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMap(' + Number(p.project_id || 0) + ')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Focus</button>' +
         '</div>' +
         '</div>';
       layer.bindPopup(html);
@@ -1900,6 +1901,7 @@ async function reloadMapHulls() {
     },
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
+      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + ' <span style="color:var(--text-muted);font-weight:400">· area</span></div>' +
@@ -1912,8 +1914,8 @@ async function reloadMapHulls() {
         '</div>' +
         '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
         '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceById(' + Number(p.project_id || 0) + ')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMap(' + Number(p.project_id || 0) + ')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Focus</button>' +
         '</div>' +
         '</div>';
       layer.bindPopup(html);
@@ -1930,6 +1932,20 @@ function focusProjectOnMap(projectId) {
   mapProjectFocus = { id: String(projectId), number: '' };
   const projectNumberInput = document.getElementById('map-project-number-filter');
   if (projectNumberInput) projectNumberInput.value = '';
+  const clear = document.getElementById('map-clear-focus');
+  if (clear) clear.style.display = 'inline-flex';
+  const btn = document.querySelector('.tab-btn[data-tab="map"]');
+  if (currentTab !== 'map' && btn) btn.click();
+  else reloadMap(true);
+}
+
+function focusProjectOnMapSmart(projectId, projectNumber) {
+  if (projectId) { focusProjectOnMap(projectId); return; }
+  const pn = String(projectNumber || '').trim();
+  if (!pn) { toast('Project identity is missing'); return; }
+  mapProjectFocus = { id: '', number: pn };
+  const projectNumberInput = document.getElementById('map-project-number-filter');
+  if (projectNumberInput) projectNumberInput.value = pn;
   const clear = document.getElementById('map-clear-focus');
   if (clear) clear.style.display = 'inline-flex';
   const btn = document.querySelector('.tab-btn[data-tab="map"]');
@@ -2419,7 +2435,15 @@ function makeCalendarAgendaCard(r) {
 
   const meta = document.createElement('div'); meta.className = 'calendar-event-meta';
   const type = document.createElement('span'); type.className = 'calendar-chip'; type.textContent = formatEventType(r.event_type || 'event'); meta.appendChild(type);
-  if (r.project_number) { const p = document.createElement('span'); p.className = 'calendar-chip project'; p.textContent = r.project_number; meta.appendChild(p); }
+  if (r.project_number) {
+    const p = document.createElement('button');
+    p.className = 'calendar-chip project';
+    p.type = 'button';
+    p.textContent = r.project_number;
+    p.title = 'Open project workspace';
+    p.addEventListener('click', (ev) => { ev.stopPropagation(); openProjectWorkspaceSmart(r.project_id, r.project_number); });
+    meta.appendChild(p);
+  }
   if (r.location) { const loc = document.createElement('span'); loc.className = 'calendar-chip'; loc.textContent = r.location; meta.appendChild(loc); }
   if (r.reminder_date) { const rem = document.createElement('span'); rem.className = 'calendar-chip reminder'; rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date); meta.appendChild(rem); }
   main.appendChild(meta);
@@ -2566,10 +2590,7 @@ function makeProjectNumberCell(projectNumber, projectId) {
   span.className = 'project-link-cell';
   span.textContent = projectNumber;
   span.title = 'Open project workspace';
-  span.addEventListener('click', () => {
-    if (projectId) openProjectWorkspaceById(projectId);
-    else openProjectWorkspaceByNumber(projectNumber);
-  });
+  span.addEventListener('click', () => openProjectWorkspaceSmart(projectId, projectNumber));
   td.appendChild(span);
   return td;
 }
@@ -2809,6 +2830,11 @@ async function openProjectWorkspaceByNumber(projectNumber) {
   await openProjectWorkspace('/api/v1/projects/workspace?project_number=' + encodeURIComponent(pn));
 }
 
+async function openProjectWorkspaceSmart(projectId, projectNumber) {
+  if (projectId) { await openProjectWorkspaceById(projectId); return; }
+  await openProjectWorkspaceByNumber(projectNumber);
+}
+
 async function openProjectWorkspace(path) {
   document.getElementById('workspace-overlay').classList.add('open');
   workspaceSetLoading();
@@ -2835,9 +2861,16 @@ function workspaceMetaItem(label, value) {
   return item;
 }
 
-function workspaceCountItem(label, value) {
+function workspaceCountItem(label, value, targetKey) {
   const item = document.createElement('div');
   item.className = 'workspace-count';
+  if (targetKey) {
+    item.tabIndex = 0;
+    item.role = 'button';
+    item.title = 'Jump to ' + label;
+    item.addEventListener('click', () => document.getElementById('workspace-section-' + targetKey)?.scrollIntoView({behavior:'smooth', block:'start'}));
+    item.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); item.click(); } });
+  }
   const v = document.createElement('div');
   v.className = 'workspace-count-value';
   v.textContent = String(value || 0);
@@ -2849,7 +2882,7 @@ function workspaceCountItem(label, value) {
 }
 
 function workspaceRowTitle(sectionKey, row) {
-  if (sectionKey === 'personnel_issues') return row.issue_description || row.person_name || ('#' + row.id);
+  if (sectionKey === 'personnel_issues') return row.title || row.issue_description || row.person_name || ('#' + row.id);
   if (sectionKey === 'calendar_events') return row.title || row.description || ('#' + row.id);
   return row.title || row.project_name || row.name || ('#' + row.id);
 }
@@ -2886,17 +2919,33 @@ function workspaceLinkedRow(spec, row) {
     document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click();
     setTimeout(() => editRecord(spec.tab, row.id), 150);
   });
-  div.appendChild(main); div.appendChild(btn);
+  div.appendChild(main);
+  if (spec.key === 'calendar_events' && row.id) {
+    const packet = document.createElement('button');
+    packet.type = 'button';
+    packet.className = 'btn btn-export';
+    packet.textContent = 'Packet';
+    packet.addEventListener('click', (ev) => { ev.stopPropagation(); openMeetingPacketForEvent(row.id); });
+    div.appendChild(packet);
+  }
+  div.appendChild(btn);
   return div;
 }
 
 function workspaceSection(spec, rows) {
   const section = document.createElement('div');
   section.className = 'workspace-section workspace-card';
+  section.id = 'workspace-section-' + spec.key;
   const title = document.createElement('div');
   title.className = 'workspace-section-title';
   title.textContent = spec.label + ' (' + rows.length + ')';
   section.appendChild(title);
+  if (spec.key === 'personnel_issues' && workspaceState && workspaceState.capabilities_visible === false) {
+    const note = document.createElement('div');
+    note.className = 'workspace-empty';
+    note.textContent = 'Capability narratives are restricted here; counts and status remain visible.';
+    section.appendChild(note);
+  }
   const list = document.createElement('div');
   list.className = 'workspace-list';
   if (!rows.length) {
@@ -2968,18 +3017,19 @@ function renderProjectWorkspace(data) {
   countsTitle.textContent = 'Linked Surface';
   const grid = document.createElement('div');
   grid.className = 'workspace-counts';
-  grid.appendChild(workspaceCountItem('Project tasks', counts.project_work_tasks));
-  grid.appendChild(workspaceCountItem('Calendar', counts.calendar_events));
-  grid.appendChild(workspaceCountItem('CAD dev', counts.work_tasks));
-  grid.appendChild(workspaceCountItem('Training', counts.training_tasks));
-  grid.appendChild(workspaceCountItem('Capabilities', counts.personnel_issues));
-  grid.appendChild(workspaceCountItem('Sites', counts.sites));
+  grid.appendChild(workspaceCountItem('Project tasks', counts.project_work_tasks, 'project_work_tasks'));
+  grid.appendChild(workspaceCountItem('Calendar', counts.calendar_events, 'calendar_events'));
+  grid.appendChild(workspaceCountItem('CAD dev', counts.work_tasks, 'work_tasks'));
+  grid.appendChild(workspaceCountItem('Training', counts.training_tasks, 'training_tasks'));
+  grid.appendChild(workspaceCountItem('Capabilities', counts.personnel_issues, 'personnel_issues'));
+  grid.appendChild(workspaceCountItem('Sites', counts.sites, 'sites'));
   countsCard.appendChild(countsTitle); countsCard.appendChild(grid);
   right.appendChild(countsCard);
 
   const sites = data.sites || [];
   const siteSection = document.createElement('div');
   siteSection.className = 'workspace-section workspace-card';
+  siteSection.id = 'workspace-section-sites';
   const siteTitle = document.createElement('div');
   siteTitle.className = 'workspace-section-title';
   siteTitle.textContent = 'Project Sites (' + sites.length + ')';

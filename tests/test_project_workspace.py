@@ -193,4 +193,9 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     html = r.get_data(as_text=True)
     assert 'id="workspace-overlay"' in html
     assert 'openProjectWorkspaceById' in html
+    assert 'openProjectWorkspaceSmart' in html
+    assert 'focusProjectOnMapSmart' in html
+    assert 'openMeetingPacketForEvent' in html
+    assert 'Capability narratives are restricted here' in html
+    assert "section.id = 'workspace-section-'" in html
     assert 'id="map-project-number-filter"' in html
