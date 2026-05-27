@@ -1247,6 +1247,7 @@
         </select>
         <button class="btn btn-sm" type="button" id="promote-btn" onclick="doPromote()">Go</button>
       </span>
+      <button class="btn btn-export" type="button" id="meeting-packet-btn" onclick="openMeetingPacket()" style="display:none;">Meeting Packet</button>
       <button class="btn btn-primary" onclick="saveRecord()">Save</button>
     </div>
   </div>
@@ -2428,6 +2429,15 @@ function makeCalendarAgendaCard(r) {
   const status = document.createElement('span'); status.className = 'badge badge-' + String(r.status || '').toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-'); status.textContent = r.status || '';
   const vis = document.createElement('span'); vis.className = 'badge badge-' + String(r.visibility || 'internal').toLowerCase().replace(/\s+/g, '-'); vis.textContent = r.visibility || 'internal';
   actions.appendChild(status); actions.appendChild(vis);
+  if (r.id) {
+    const packet = document.createElement('button');
+    packet.className = 'btn btn-sm btn-export';
+    packet.type = 'button';
+    packet.textContent = 'Packet';
+    packet.title = 'Open meeting packet';
+    packet.addEventListener('click', (ev) => { ev.stopPropagation(); openMeetingPacketForEvent(r.id); });
+    actions.appendChild(packet);
+  }
 
   card.appendChild(time); card.appendChild(main); card.appendChild(actions);
   return card;
@@ -3739,8 +3749,28 @@ function openModal(table,data) {
 
   // Promote / Escalate dropdown — only meaningful on existing records.
   renderPromoteDropdown(table);
+  renderMeetingPacketButton(table, data || {});
 
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+function openMeetingPacketForEvent(eventId) {
+  if (!eventId) return;
+  window.open('/reports/meeting?event_id=' + encodeURIComponent(eventId), '_blank', 'noopener');
+}
+
+function renderMeetingPacketButton(table, data) {
+  const btn = document.getElementById('meeting-packet-btn');
+  if (!btn) return;
+  const show = table === 'calendar' && data && data.id;
+  btn.style.display = show ? 'inline-flex' : 'none';
+  btn.dataset.eventId = show ? String(data.id) : '';
+}
+
+function openMeetingPacket() {
+  const btn = document.getElementById('meeting-packet-btn');
+  const eventId = btn ? btn.dataset.eventId : '';
+  openMeetingPacketForEvent(eventId);
 }
 
 /* ── Promote / Escalate (Phase 3 bridges) ───────────────────────────────
@@ -3820,7 +3850,11 @@ async function doPromote() {
   // Refresh the source tab so the operator sees the bridge in activity log later.
   loadTable(editingTable);
 }
-function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); editingId=null; editingTable=null; }
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  renderMeetingPacketButton('', {});
+  editingId=null; editingTable=null;
+}
 
 async function editRecord(table,id) { const data=await api('GET','/api/v1/'+API_MAP[table]+'/'+id); if(data&&!data.error) openModal(table,data); }
 

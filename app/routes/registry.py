@@ -478,7 +478,10 @@ def project_workspace_by_id(proj_id):
     proj = sess.get(Project, proj_id)
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
-    return jsonify(project_workspace_payload(sess, proj, user_id=session.get("user_id")))
+    return jsonify(project_workspace_payload(
+        sess, proj, user_id=session.get("user_id"),
+        is_admin=session.get("user_role") == "admin",
+    ))
 
 
 @bp.route("/api/v1/projects/workspace", methods=["GET"])
@@ -491,7 +494,10 @@ def project_workspace_by_number():
     proj = sess.scalar(select(Project).where(Project.project_number == project_number))
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
-    return jsonify(project_workspace_payload(sess, proj, user_id=session.get("user_id")))
+    return jsonify(project_workspace_payload(
+        sess, proj, user_id=session.get("user_id"),
+        is_admin=session.get("user_role") == "admin",
+    ))
 
 
 @bp.route("/api/v1/projects", methods=["POST"])

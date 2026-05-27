@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import CalendarEvent, Project, ProjectSite, ProjectWorkTask, WorkTask
+from app.models import CalendarEvent, PersonnelIssue, Project, ProjectSite, ProjectWorkTask, WorkTask
 
 
 def _seed_report_project(sess):
@@ -35,6 +35,16 @@ def _seed_report_project(sess):
         project_number="7711.20",
         project_id=proj.id,
         status="In Progress",
+    ))
+    sess.add(PersonnelIssue(
+        person_name="Sensitive Employee",
+        issue_description="Sensitive report narrative",
+        incident_context="Private incident context",
+        recommended_training="Private training plan",
+        severity="High",
+        status="Observed",
+        project_number="7711.20",
+        project_id=proj.id,
     ))
     start = (datetime.now() + timedelta(days=2)).isoformat(timespec="minutes")
     sess.add(CalendarEvent(
@@ -95,6 +105,32 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "Late exhibit" in html
     assert "Public project review" in html
     assert "Private project prep" not in html
+
+
+def test_project_report_redacts_capability_narratives_for_non_admin(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_report_project(sess)
+
+    r = auth_client.get("/api/v1/reports/project?project_number=7711.20")
+    assert r.status_code == 200
+    body = r.get_json()
+    rows = body["linked_records"]["personnel_issues"]
+    assert rows[0]["title"] == "Capability note (restricted)"
+    assert rows[0]["redacted"] is True
+    assert "Sensitive report narrative" not in str(body)
+    assert "Sensitive Employee" not in str(body)
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    r = auth_client.get("/api/v1/reports/project?project_number=7711.20")
+    assert r.status_code == 200
+    body = r.get_json()
+    rows = body["linked_records"]["personnel_issues"]
+    assert rows[0]["issue_description"] == "Sensitive report narrative"
+    assert rows[0]["person_name"] == "Sensitive Employee"
 
 
 

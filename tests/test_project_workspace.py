@@ -37,7 +37,14 @@ def _seed_workspace(sess):
         project_id=proj.id,
     ))
     sess.add(TrainingTask(title="Brief team", project_number="8800.10", project_id=proj.id))
-    sess.add(PersonnelIssue(issue_description="Process issue", project_number="8800.10", project_id=proj.id))
+    sess.add(PersonnelIssue(
+        person_name="Sensitive Employee",
+        issue_description="Process issue",
+        incident_context="Private context",
+        recommended_training="Private training",
+        project_number="8800.10",
+        project_id=proj.id,
+    ))
     sess.add(CalendarEvent(
         title="Project review",
         event_type="review",
@@ -68,7 +75,24 @@ def test_project_workspace_by_id_and_number(auth_client, temp_app):
         assert body["counts"]["personnel_issues"] == 1
         assert body["counts"]["calendar_events"] == 1
         assert body["linked_records"]["project_work_tasks"][0]["title"] == "Draft exhibit"
+        capability = body["linked_records"]["personnel_issues"][0]
+        assert capability["title"] == "Capability note (restricted)"
+        assert capability["redacted"] is True
+        assert "issue_description" not in capability
+        assert "person_name" not in capability
 
+
+def test_project_workspace_shows_capability_narratives_to_admin(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj_id = _seed_workspace(sess)
+
+    r = admin_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    capability = body["linked_records"]["personnel_issues"][0]
+    assert capability["issue_description"] == "Process issue"
+    assert capability["person_name"] == "Sensitive Employee"
 
 
 def test_project_workspace_hides_private_calendar_events_from_other_users(auth_client, temp_app):

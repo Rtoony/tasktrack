@@ -6,9 +6,14 @@ from datetime import datetime
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import Project
+from ..models import CalendarEvent, Project, to_dict
 from .project_workspace import project_workspace_payload
-from .tickets import done_statuses_for_table, is_overdue_value, overdue_field_for_table
+from .tickets import (
+    done_statuses_for_table,
+    is_overdue_value,
+    overdue_field_for_table,
+    record_visible_to_user,
+)
 
 REPORT_TABLES = {
     "project_work_tasks": "Project Tasks",
@@ -33,8 +38,29 @@ def _parse_dt(raw) -> datetime | None:
 
 def _record_title(table: str, row: dict) -> str:
     if table == "personnel_issues":
-        return row.get("issue_description") or row.get("person_name") or f"#{row.get('id', '?')}"
+        return (
+            row.get("title")
+            or row.get("issue_description")
+            or row.get("person_name")
+            or f"#{row.get('id', '?')}"
+        )
     return row.get("title") or row.get("project_name") or f"#{row.get('id', '?')}"
+
+
+def _calendar_event_payload(row: CalendarEvent) -> dict:
+    payload = to_dict(row) or {}
+    payload.update({
+        "type": payload.get("event_type") or "",
+        "start": payload.get("start_at") or "",
+        "end": payload.get("end_at") or "",
+        "all_day": bool(payload.get("all_day")),
+        "location": payload.get("location") or "",
+        "description": payload.get("description") or "",
+        "project_number": payload.get("project_number") or "",
+        "related_table": payload.get("related_table") or "",
+        "reminder_date": payload.get("reminder_date") or "",
+    })
+    return payload
 
 
 def _record_when(table: str, row: dict) -> str:
@@ -110,6 +136,7 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
                           project_number: str = "",
                           user_id: int | None = None,
                           include_private: bool = False,
+                          is_admin: bool = False,
                           now: datetime | None = None) -> dict | None:
     """Build a single-project management report from the workspace payload."""
     if project_id is not None:
@@ -123,7 +150,9 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
 
     now = now or datetime.now()
     workspace_user_id = user_id if include_private else None
-    workspace = project_workspace_payload(sess, proj, user_id=workspace_user_id)
+    workspace = project_workspace_payload(
+        sess, proj, user_id=workspace_user_id, is_admin=is_admin
+    )
     linked = workspace["linked_records"]
 
     open_counts = {}
@@ -149,6 +178,47 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
         "upcoming_events": upcoming[:12],
         "linked_records": linked,
         "labels": REPORT_TABLES,
+        "capabilities_visible": bool(is_admin),
+    }
+
+
+def meeting_packet_report(sess: Session, *, event_id: int,
+                          user_id: int | None = None,
+                          include_private: bool = False,
+                          is_admin: bool = False,
+                          now: datetime | None = None) -> dict | None:
+    """Build a print-ready meeting packet from one visible calendar event."""
+    event = sess.get(CalendarEvent, event_id)
+    if event is None or not record_visible_to_user("calendar_events", event, user_id):
+        return None
+
+    now = now or datetime.now()
+    project_report = None
+    project_number = (event.project_number or "").strip()
+    if event.project_id is not None or project_number:
+        project_report = project_status_report(
+            sess,
+            project_id=event.project_id,
+            project_number=project_number,
+            user_id=user_id,
+            include_private=include_private,
+            is_admin=is_admin,
+            now=now,
+        )
+        if project_report is not None:
+            project_report["upcoming_events"] = [
+                row for row in project_report.get("upcoming_events", [])
+                if row.get("id") != event.id
+            ]
+
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "event": _calendar_event_payload(event),
+        "is_linked": project_report is not None,
+        "project": project_report.get("project") if project_report else None,
+        "project_report": project_report,
+        "include_private": bool(include_private),
+        "capabilities_visible": bool(is_admin),
     }
 
 
@@ -217,6 +287,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
 def portfolio_project_report(sess: Session, *, filters: dict | None = None,
                              user_id: int | None = None,
                              include_private: bool = False,
+                             is_admin: bool = False,
                              now: datetime | None = None) -> dict:
     """Build a print-friendly packet across multiple filtered projects."""
     filters = dict(filters or {})
@@ -232,6 +303,7 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
             project_id=proj.id,
             user_id=user_id,
             include_private=include_private,
+            is_admin=is_admin,
             now=now,
         )
         for proj in projects
@@ -257,11 +329,13 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
         "summary": _portfolio_summary(reports),
         "labels": REPORT_TABLES,
         "include_private": bool(include_private),
+        "capabilities_visible": bool(is_admin),
     }
 
 
 __all__ = [
     "project_status_report",
+    "meeting_packet_report",
     "portfolio_project_report",
     "REPORT_TABLES",
     "DEFAULT_PORTFOLIO_LIMIT",
