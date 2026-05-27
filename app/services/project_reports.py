@@ -6,8 +6,8 @@ from datetime import datetime
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import ActivityLog, CalendarEvent, Project, to_dict
-from .project_workspace import project_workspace_payload
+from ..models import CalendarEvent, Project, to_dict
+from .project_workspace import project_workspace_payload, recent_activity_for_linked_records
 from .tickets import (
     done_statuses_for_table,
     is_overdue_value,
@@ -117,46 +117,55 @@ def _upcoming_calendar(rows: list[dict], now: datetime) -> list[dict]:
 def _recent_activity_for_project(sess: Session, linked_records: dict[str, list[dict]],
                                  *, is_admin: bool = False,
                                  limit: int = 20) -> list[dict]:
-    """Recent activity for currently linked project rows.
+    return recent_activity_for_linked_records(
+        sess, linked_records, is_admin=is_admin, limit=limit
+    )
 
-    Non-admin packets omit capability/personnel activity entirely; summary
-    counts can remain visible, but old/new audit values are narrative-heavy.
-    """
-    out: list[dict] = []
-    seen: set[tuple[str, int]] = set()
-    for table, rows in linked_records.items():
-        if table == "personnel_issues" and not is_admin:
-            continue
-        for row in rows:
-            raw_id = row.get("id")
-            try:
-                record_id = int(raw_id)
-            except (TypeError, ValueError):
-                continue
-            key = (table, record_id)
-            if key in seen:
-                continue
-            seen.add(key)
-            activity_rows = sess.scalars(
-                select(ActivityLog)
-                .where(
-                    ActivityLog.table_name == table,
-                    ActivityLog.record_id == record_id,
-                )
-                .order_by(ActivityLog.created_at.desc())
-                .limit(5)
-            ).all()
-            record_title = _record_title(table, row)
-            label = REPORT_TABLES.get(table, table)
-            for activity in activity_rows:
-                payload = to_dict(activity) or {}
-                payload.update({
-                    "label": label,
-                    "record_title": record_title,
-                })
-                out.append(payload)
-    out.sort(key=lambda row: row.get("created_at") or "", reverse=True)
-    return out[:limit]
+
+def _project_open_total(report: dict) -> int:
+    return sum(int(value or 0) for value in (report.get("open_counts") or {}).values())
+
+
+def _plural(value: int, singular: str, plural: str | None = None) -> str:
+    return f"{value} {singular if value == 1 else (plural or singular + 's')}"
+
+
+def _project_management_brief(report: dict) -> dict:
+    overdue = list(report.get("overdue_items") or [])
+    upcoming = list(report.get("upcoming_events") or [])
+    open_count = _project_open_total(report)
+    next_event = upcoming[0] if upcoming else None
+
+    if overdue:
+        attention_level = "at_risk"
+        headline = (
+            f"{_plural(len(overdue), 'overdue linked item')} needs attention; "
+            f"{_plural(open_count, 'open linked item')} remain open."
+        )
+        recommendation = "Review the overdue list first, then assign a next action or new date."
+    elif next_event:
+        attention_level = "scheduled"
+        headline = f"Next project touchpoint: {next_event.get('title') or 'Untitled event'} on {(next_event.get('start_at') or '')[:16]}."
+        recommendation = "Use the upcoming event as the prep anchor for project follow-up."
+    elif open_count:
+        attention_level = "active"
+        headline = f"{_plural(open_count, 'open linked item')} remain active with no overdue linked work."
+        recommendation = "Keep the project moving by selecting the highest-leverage next action."
+    else:
+        attention_level = "quiet"
+        headline = "No open linked work, overdue items, or upcoming events are currently visible."
+        recommendation = "No immediate follow-up is indicated from TaskTrack records."
+
+    return {
+        "attention_level": attention_level,
+        "headline": headline,
+        "recommendation": recommendation,
+        "open_count": open_count,
+        "overdue_count": len(overdue),
+        "upcoming_event_count": len(upcoming),
+        "next_event": next_event,
+        "top_overdue": overdue[:3],
+    }
 
 
 def _clamp_limit(raw, default: int = DEFAULT_PORTFOLIO_LIMIT) -> int:
@@ -212,7 +221,7 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
 
     upcoming = _upcoming_calendar(linked.get("calendar_events", []), now)
 
-    return {
+    report = {
         "generated_at": now.isoformat(timespec="seconds"),
         "project": workspace["project"],
         "external": workspace["external"],
@@ -228,6 +237,8 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
         "labels": REPORT_TABLES,
         "capabilities_visible": bool(is_admin),
     }
+    report["management_brief"] = _project_management_brief(report)
+    return report
 
 
 def meeting_packet_report(sess: Session, *, event_id: int,
@@ -322,6 +333,10 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         for key in REPORT_TABLES:
             counts[key] += int(report.get("counts", {}).get(key) or 0)
             open_counts[key] += int(report.get("open_counts", {}).get(key) or 0)
+    attention_project_count = len([
+        report for report in reports
+        if (report.get("management_brief") or {}).get("attention_level") == "at_risk"
+    ])
     return {
         "project_count": len(reports),
         "site_count": site_count,
@@ -329,6 +344,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         "open_counts": open_counts,
         "overdue_count": overdue_count,
         "upcoming_event_count": upcoming_count,
+        "attention_project_count": attention_project_count,
     }
 
 

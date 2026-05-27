@@ -113,6 +113,7 @@ def test_meeting_packet_json_linked_event(auth_client, temp_app):
     assert body["is_linked"] is True
     assert body["project"]["project_number"] == "7711.20"
     assert body["project_report"]["counts"]["project_work_tasks"] == 1
+    assert body["project_report"]["management_brief"]["attention_level"] in {"active", "scheduled"}
     assert all(event["id"] != ids["meeting_id"] for event in body["project_report"]["upcoming_events"])
 
 
@@ -211,6 +212,7 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Meeting Packet" in html
+    assert "Project Management Brief" in html
     assert "Management sync" in html
     assert "7711.20" in html
     assert '/?workspace=7711.20' in html

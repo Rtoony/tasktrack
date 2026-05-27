@@ -123,6 +123,7 @@
     <div class="summary-card"><div class="summary-label">Project Tasks</div><div class="summary-value">{{ packet.summary.record_counts.project_work_tasks }}</div></div>
     <div class="summary-card"><div class="summary-label">Calendar</div><div class="summary-value">{{ packet.summary.record_counts.calendar_events }}</div></div>
     <div class="summary-card"><div class="summary-label">Upcoming</div><div class="summary-value">{{ packet.summary.upcoming_event_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">At Risk Projects</div><div class="summary-value{% if packet.summary.attention_project_count %} danger{% endif %}">{{ packet.summary.attention_project_count }}</div></div>
     <div class="summary-card"><div class="summary-label">Overdue</div><div class="summary-value{% if packet.summary.overdue_count %} danger{% endif %}">{{ packet.summary.overdue_count }}</div></div>
   </section>
 
@@ -148,6 +149,9 @@
           <a class="chip" href="/?map_project={{ p.project_number }}">map</a>
         </div>
       </div>
+      {% if report.management_brief %}
+      <div class="mini-meta" style="margin:0 0 0.75rem"><strong>Brief:</strong> {{ report.management_brief.headline }}</div>
+      {% endif %}
       <div class="cols">
         <section class="section">
           <h2>Upcoming Events</h2>

@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from app.db import get_session
 from app.models import (
+    ActivityLog,
     CalendarEvent,
     PersonnelIssue,
     Project,
@@ -93,6 +94,68 @@ def test_project_workspace_shows_capability_narratives_to_admin(admin_client, te
     capability = body["linked_records"]["personnel_issues"][0]
     assert capability["issue_description"] == "Process issue"
     assert capability["person_name"] == "Sensitive Employee"
+
+
+def test_project_workspace_recent_activity_respects_capability_privacy(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="8810.10", name="Activity workspace")
+        sess.add(proj)
+        sess.flush()
+        task = WorkTask(
+            title="Visible workspace activity",
+            project_number="8810.10",
+            project_id=proj.id,
+            status="In Progress",
+        )
+        issue = PersonnelIssue(
+            person_name="Workspace Employee",
+            issue_description="Sensitive workspace narrative",
+            project_number="8810.10",
+            project_id=proj.id,
+        )
+        sess.add_all([task, issue])
+        sess.flush()
+        sess.add_all([
+            ActivityLog(
+                table_name="work_tasks",
+                record_id=task.id,
+                action="updated",
+                field_name="status",
+                old_value="Not Started",
+                new_value="In Progress",
+                user_name="Tester",
+            ),
+            ActivityLog(
+                table_name="personnel_issues",
+                record_id=issue.id,
+                action="updated",
+                field_name="issue_description",
+                old_value="old sensitive workspace narrative",
+                new_value="Sensitive workspace narrative",
+                user_name="Admin User",
+            ),
+        ])
+        sess.commit()
+        proj_id = proj.id
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert any(row["record_title"] == "Visible workspace activity" for row in body["recent_activity"])
+    assert not any(row["table_name"] == "personnel_issues" for row in body["recent_activity"])
+    assert "Sensitive workspace narrative" not in str(body)
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert any(row["table_name"] == "personnel_issues" for row in body["recent_activity"])
+    assert "Sensitive workspace narrative" in str(body)
 
 
 def test_project_workspace_hides_private_calendar_events_from_other_users(auth_client, temp_app):
@@ -206,3 +269,5 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'normalizeProjectNumberCandidate' in html
     assert 'Project (registry)' not in html
     assert 'Project Number must use' not in html
+    assert 'workspaceActivitySection' in html
+    assert 'workspaceActivityRow' in html

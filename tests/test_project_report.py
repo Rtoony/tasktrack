@@ -87,6 +87,9 @@ def test_project_report_json_summary_and_privacy(auth_client, temp_app):
     assert body["counts"]["calendar_events"] == 1
     assert body["open_counts"]["project_work_tasks"] == 1
     assert [item["title"] for item in body["overdue_items"]] == ["Late exhibit"]
+    assert body["management_brief"]["attention_level"] == "at_risk"
+    assert body["management_brief"]["overdue_count"] == 1
+    assert body["management_brief"]["top_overdue"][0]["title"] == "Late exhibit"
     event_titles = {event["title"] for event in body["upcoming_events"]}
     assert "Public project review" in event_titles
     assert "Private project prep" not in event_titles
@@ -101,6 +104,7 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Project Status" in html
+    assert "Management Brief" in html
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
@@ -294,6 +298,7 @@ def test_portfolio_project_report_filters_summary_and_privacy(auth_client, temp_
     assert body["summary"]["project_count"] == 1
     assert body["summary"]["site_count"] == 1
     assert body["summary"]["overdue_count"] == 1
+    assert body["summary"]["attention_project_count"] == 1
     assert body["include_private"] is False
     report = body["reports"][0]
     assert report["project"]["project_number"] == "8800.10"
@@ -318,6 +323,8 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Portfolio Project Packet" in html
+    assert "At Risk Projects" in html
+    assert "Brief:" in html
     assert "Portfolio one" in html
     assert "Portfolio dormant" in html
     assert '/?workspace=8800.10' in html

@@ -2998,6 +2998,54 @@ function workspaceSection(spec, rows) {
   return section;
 }
 
+function workspaceActivityRow(row) {
+  const div = document.createElement('div');
+  div.className = 'workspace-row';
+  const main = document.createElement('div');
+  main.className = 'workspace-row-main';
+  const title = document.createElement('div');
+  title.className = 'workspace-row-title';
+  title.textContent = row.record_title || ('#' + (row.record_id || row.id || ''));
+  const meta = document.createElement('div');
+  meta.className = 'workspace-row-meta';
+  const bits = [row.label, row.action, row.field_name ? ('field: ' + row.field_name) : '', row.user_name ? ('by ' + row.user_name) : ''].filter(Boolean);
+  meta.textContent = bits.join(' · ') || 'Activity';
+  main.appendChild(title); main.appendChild(meta);
+  const when = document.createElement('div');
+  when.className = 'workspace-row-meta';
+  when.textContent = row.created_at ? formatDateTime(row.created_at) : '';
+  div.appendChild(main); div.appendChild(when);
+  return div;
+}
+
+function workspaceActivitySection(rows) {
+  const section = document.createElement('div');
+  section.className = 'workspace-section workspace-card';
+  section.id = 'workspace-section-recent-activity';
+  const title = document.createElement('div');
+  title.className = 'workspace-section-title';
+  title.textContent = 'Recent Activity (' + rows.length + ')';
+  section.appendChild(title);
+  const list = document.createElement('div');
+  list.className = 'workspace-list';
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'workspace-empty';
+    empty.textContent = 'No recent linked activity.';
+    list.appendChild(empty);
+  } else {
+    rows.slice(0, 8).forEach(row => list.appendChild(workspaceActivityRow(row)));
+    if (rows.length > 8) {
+      const more = document.createElement('div');
+      more.className = 'workspace-empty';
+      more.textContent = (rows.length - 8) + ' more activity items not shown in this compact view.';
+      list.appendChild(more);
+    }
+  }
+  section.appendChild(list);
+  return section;
+}
+
 function renderProjectWorkspace(data) {
   const p = data.project || {};
   const counts = data.counts || {};
@@ -3057,6 +3105,7 @@ function renderProjectWorkspace(data) {
   grid.appendChild(workspaceCountItem('Sites', counts.sites, 'sites'));
   countsCard.appendChild(countsTitle); countsCard.appendChild(grid);
   right.appendChild(countsCard);
+  right.appendChild(workspaceActivitySection(data.recent_activity || []));
 
   const sites = data.sites || [];
   const siteSection = document.createElement('div');
@@ -3619,6 +3668,10 @@ function getFormData(table) {
         }
       }
     });
+  if (table === 'calendar' && String(data.all_day) === '1') {
+    data.start_at = calendarDatePart(data.start_at);
+    if (data.end_at) data.end_at = calendarDatePart(data.end_at);
+  }
   return data;
 }
 
@@ -3628,6 +3681,42 @@ function getFormData(table) {
    user-supplied strings are passed through escHtml before reaching
    Leaflet's popup HTML. */
 let projectMiniMap = null;
+function calendarDatePart(value) {
+  const raw = String(value || '').trim();
+  return raw.length >= 10 ? raw.slice(0, 10) : '';
+}
+
+function calendarDateTimeValue(value, fallbackTime) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.includes('T')) return raw.slice(0, 16);
+  const date = calendarDatePart(raw);
+  return date ? date + fallbackTime : '';
+}
+
+function setupCalendarAllDayControls() {
+  const allDay = document.getElementById('f-all_day');
+  const start = document.getElementById('f-start_at');
+  const end = document.getElementById('f-end_at');
+  if (!allDay || !start || !end) return;
+  const sync = () => {
+    const isAllDay = String(allDay.value) === '1';
+    if (isAllDay) {
+      start.value = calendarDatePart(start.value);
+      end.value = calendarDatePart(end.value);
+      start.type = 'date';
+      end.type = 'date';
+    } else {
+      start.type = 'datetime-local';
+      end.type = 'datetime-local';
+      start.value = calendarDateTimeValue(start.value, 'T09:00');
+      if (end.value) end.value = calendarDateTimeValue(end.value, 'T10:00');
+    }
+  };
+  allDay.addEventListener('change', sync);
+  sync();
+}
+
 async function renderProjectMiniMap() {
   const host = document.getElementById('project-mini-map');
   if (!host || !window.L) return;
@@ -3903,6 +3992,8 @@ function openModal(table,data) {
     loadAttachments(table,editingId);
     loadLinks(table,editingId);
   }
+
+  if (table === 'calendar') setupCalendarAllDayControls();
 
   // Project mini-map (lazy — only meaningful when project_id is set).
   renderProjectMiniMap();

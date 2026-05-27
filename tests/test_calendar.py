@@ -340,6 +340,8 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'data-calendar-view="agenda"' in html
     assert 'renderCalendarAgenda' in html
     assert 'applyCalendarFilters' in html
+    assert 'setupCalendarAllDayControls' in html
+    assert 'calendarDatePart' in html
     assert 'tbody-calendar' in html
 
 def test_calendar_routes_require_login(client):

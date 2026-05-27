@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
+    ActivityLog,
     CalendarEvent,
     PersonnelIssue,
     Project,
@@ -15,6 +16,14 @@ from ..models import (
     to_dict,
 )
 from .tickets import record_visible_to_user
+
+WORKSPACE_TABLE_LABELS = {
+    "project_work_tasks": "Project Tasks",
+    "calendar_events": "Calendar",
+    "work_tasks": "CAD Dev",
+    "training_tasks": "Training",
+    "personnel_issues": "Capabilities",
+}
 
 
 def _redact_personnel_issue(row: dict) -> dict:
@@ -58,6 +67,63 @@ def linked_rows(sess: Session, model, project_id: int, project_number: str,
     return serialized
 
 
+def _record_title(table: str, row: dict) -> str:
+    if table == "personnel_issues":
+        return (
+            row.get("title")
+            or row.get("issue_description")
+            or row.get("person_name")
+            or f"#{row.get('id', '?')}"
+        )
+    return row.get("title") or row.get("project_name") or row.get("name") or f"#{row.get('id', '?')}"
+
+
+def recent_activity_for_linked_records(sess: Session, linked_records: dict[str, list[dict]],
+                                       *, is_admin: bool = False,
+                                       limit: int = 20) -> list[dict]:
+    """Recent activity for visible project-linked rows.
+
+    Capability/personnel audit rows are narrative-heavy, so non-admin
+    workspace/report surfaces omit them rather than trying to redact each
+    old/new value.
+    """
+    out: list[dict] = []
+    seen: set[tuple[str, int]] = set()
+    for table, rows in linked_records.items():
+        if table == "personnel_issues" and not is_admin:
+            continue
+        for row in rows:
+            raw_id = row.get("id")
+            try:
+                record_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            key = (table, record_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            activity_rows = sess.scalars(
+                select(ActivityLog)
+                .where(
+                    ActivityLog.table_name == table,
+                    ActivityLog.record_id == record_id,
+                )
+                .order_by(ActivityLog.created_at.desc())
+                .limit(5)
+            ).all()
+            record_title = _record_title(table, row)
+            label = WORKSPACE_TABLE_LABELS.get(table, table)
+            for activity in activity_rows:
+                payload = to_dict(activity) or {}
+                payload.update({
+                    "label": label,
+                    "record_title": record_title,
+                })
+                out.append(payload)
+    out.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+    return out[:limit]
+
+
 def project_workspace_payload(sess: Session, proj: Project,
                               *, user_id: int | None = None,
                               is_admin: bool = False,
@@ -93,8 +159,11 @@ def project_workspace_payload(sess: Session, proj: Project,
             "system": proj.external_system or "",
             "ref": proj.external_ref or "",
         },
+        "recent_activity": recent_activity_for_linked_records(
+            sess, linked, is_admin=is_admin, limit=20,
+        ),
         "capabilities_visible": bool(is_admin),
     }
 
 
-__all__ = ["linked_rows", "project_workspace_payload"]
+__all__ = ["linked_rows", "project_workspace_payload", "recent_activity_for_linked_records"]
