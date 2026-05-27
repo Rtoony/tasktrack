@@ -126,6 +126,8 @@
             <div class="meta">{{ p.client or 'No client' }}{% if p.principal %} / {{ p.principal }}{% endif %}{% if p.component %} / {{ p.component }}{% endif %}</div>
           </div>
           <div style="display:flex;gap:0.45rem;flex-wrap:wrap;justify-content:flex-end">
+            <a class="btn secondary" href="/?workspace={{ p.project_number }}">Workspace</a>
+            <a class="btn secondary" href="/?map_project={{ p.project_number }}">Map</a>
             <a class="btn secondary" href="/reports/project?project_number={{ p.project_number }}{% if packet.include_private %}&include_private=1{% endif %}">Project Report</a>
           </div>
         </div>

@@ -144,6 +144,8 @@
           <span class="chip">Sites: {{ report.counts.sites }}</span>
           <span class="chip">Open: {{ report.open_counts.project_work_tasks + report.open_counts.work_tasks + report.open_counts.training_tasks + report.open_counts.personnel_issues + report.open_counts.calendar_events }}</span>
           <a class="chip" href="/reports/project?project_number={{ p.project_number }}">single report</a>
+          <a class="chip" href="/?workspace={{ p.project_number }}">workspace</a>
+          <a class="chip" href="/?map_project={{ p.project_number }}">map</a>
         </div>
       </div>
       <div class="cols">

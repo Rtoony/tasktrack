@@ -1503,18 +1503,28 @@ async function api(method, path, body) {
 }
 
 /* ── Tabs ──────────────────────────────────── */
+function tabButtonFor(tabName) {
+  return Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.dataset.tab === tabName) || null;
+}
+
+function activateTab(tabName) {
+  const btn = tabButtonFor(tabName);
+  const section = document.getElementById('sec-' + tabName);
+  if (!btn || !section) return false;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTab = tabName;
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  section.classList.add('active');
+  if (currentTab === 'dashboard') loadDashboard();
+  if (currentTab === 'map') initOrRefreshMap();
+  if (currentTab === 'competency') loadCompetency();
+  if (API_MAP[currentTab]) loadTable(currentTab);
+  return true;
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    currentTab = btn.dataset.tab;
-    document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-    document.getElementById('sec-'+currentTab).classList.add('active');
-    if (currentTab === 'dashboard') loadDashboard();
-    if (currentTab === 'map') initOrRefreshMap();
-    if (currentTab === 'competency') loadCompetency();
-    if (API_MAP[currentTab]) loadTable(currentTab);
-  });
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
 
 /* ── Competency matrix (Phase 1) ───────────────────────────────────────
@@ -1927,6 +1937,16 @@ async function reloadMapHulls() {
   if (mapHullLayer.bringToBack) mapHullLayer.bringToBack();
 }
 
+function updateMapDeepLink(projectNumber) {
+  const pn = String(projectNumber || '').trim();
+  if (!pn) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('map_project', pn);
+  url.searchParams.delete('workspace');
+  url.hash = '';
+  history.replaceState(null, '', url);
+}
+
 function focusProjectOnMap(projectId) {
   if (!projectId) { toast('Project is missing a registry id'); return; }
   mapProjectFocus = { id: String(projectId), number: '' };
@@ -1934,22 +1954,23 @@ function focusProjectOnMap(projectId) {
   if (projectNumberInput) projectNumberInput.value = '';
   const clear = document.getElementById('map-clear-focus');
   if (clear) clear.style.display = 'inline-flex';
-  const btn = document.querySelector('.tab-btn[data-tab="map"]');
-  if (currentTab !== 'map' && btn) btn.click();
+  const btn = tabButtonFor('map');
+  if (currentTab !== 'map' && btn) activateTab('map');
   else reloadMap(true);
 }
 
 function focusProjectOnMapSmart(projectId, projectNumber) {
-  if (projectId) { focusProjectOnMap(projectId); return; }
   const pn = String(projectNumber || '').trim();
+  if (pn) updateMapDeepLink(pn);
+  if (projectId) { focusProjectOnMap(projectId); return; }
   if (!pn) { toast('Project identity is missing'); return; }
   mapProjectFocus = { id: '', number: pn };
   const projectNumberInput = document.getElementById('map-project-number-filter');
   if (projectNumberInput) projectNumberInput.value = pn;
   const clear = document.getElementById('map-clear-focus');
   if (clear) clear.style.display = 'inline-flex';
-  const btn = document.querySelector('.tab-btn[data-tab="map"]');
-  if (currentTab !== 'map' && btn) btn.click();
+  const btn = tabButtonFor('map');
+  if (currentTab !== 'map' && btn) activateTab('map');
   else reloadMap(true);
 }
 
@@ -2835,6 +2856,16 @@ async function openProjectWorkspaceSmart(projectId, projectNumber) {
   await openProjectWorkspaceByNumber(projectNumber);
 }
 
+function updateWorkspaceDeepLink(projectNumber) {
+  const pn = String(projectNumber || '').trim();
+  if (!pn) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set('workspace', pn);
+  url.searchParams.delete('map_project');
+  url.hash = '';
+  history.replaceState(null, '', url);
+}
+
 async function openProjectWorkspace(path) {
   document.getElementById('workspace-overlay').classList.add('open');
   workspaceSetLoading();
@@ -2846,6 +2877,7 @@ async function openProjectWorkspace(path) {
   }
   workspaceState = data;
   renderProjectWorkspace(data);
+  updateWorkspaceDeepLink(data.project?.project_number);
 }
 
 function workspaceMetaItem(label, value) {
@@ -3070,9 +3102,9 @@ function workspaceProject() { return workspaceState?.project || {}; }
 
 function workspaceFocusMap() {
   const p = workspaceProject();
-  if (!p.id) { toast('No project loaded'); return; }
+  if (!p.id && !p.project_number) { toast('No project loaded'); return; }
   closeProjectWorkspace();
-  focusProjectOnMap(p.id);
+  focusProjectOnMapSmart(p.id, p.project_number);
 }
 
 function workspaceOpenReport() {
@@ -4267,19 +4299,37 @@ function closeConfirm() { document.getElementById('confirm-overlay').classList.r
 /* Modal only closes via Cancel or Save — clicking outside does nothing */
 document.getElementById('confirm-overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeConfirm();});
 
+function startupRouteState() {
+  const params = new URLSearchParams(window.location.search);
+  const rawHash = decodeURIComponent((window.location.hash || '').replace(/^#\/?/, ''));
+  const hashParts = rawHash.split('/').filter(Boolean);
+  const hashTab = hashParts.length === 1 ? hashParts[0] : '';
+  return {
+    tab: params.get('tab') || hashTab || '',
+    workspace: params.get('workspace') || (hashParts[0] === 'workspace' ? hashParts.slice(1).join('/') : ''),
+    mapProject: params.get('map_project') || (hashParts[0] === 'map' ? hashParts.slice(1).join('/') : ''),
+  };
+}
+
+async function applyStartupRouteState() {
+  const state = startupRouteState();
+  if (STANDALONE_TAB) return;
+  if (state.tab && state.tab !== 'dashboard') activateTab(state.tab);
+  if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
+  if (state.workspace) await openProjectWorkspaceByNumber(state.workspace);
+}
+
 /* ── Init ──────────────────────────────────── */
 initIntake();
 if (STANDALONE_TAB) {
-  currentTab = STANDALONE_TAB;
-  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.getElementById('sec-' + STANDALONE_TAB)?.classList.add('active');
-  loadTable(STANDALONE_TAB);
+  activateTab(STANDALONE_TAB);
 } else {
   loadDashboard();
   loadTable('triage');
   loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
   loadTable('calendar');
   loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
+  applyStartupRouteState();
 }
 </script>
 </body>

@@ -213,6 +213,8 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert "Meeting Packet" in html
     assert "Management sync" in html
     assert "7711.20" in html
+    assert '/?workspace=7711.20' in html
+    assert '/?map_project=7711.20' in html
     assert "@media print" in html
     assert "Capability note (restricted)" in html
     assert "Sensitive capability narrative" not in html

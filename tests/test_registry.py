@@ -139,3 +139,16 @@ def test_list_projects_sorted_by_number(admin_client, temp_app):
     r = admin_client.get("/api/v1/projects")
     numbers = [row["project_number"] for row in r.get_json()]
     assert numbers == sorted(numbers)
+
+def test_admin_projects_page_links_to_workspace_map_and_reports(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Project(project_number="4455.66", name="Linked admin project"))
+        sess.commit()
+
+    r = admin_client.get("/admin/projects")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert '/?workspace=4455.66' in html
+    assert '/?map_project=4455.66' in html
+    assert '/reports/project?project_number=4455.66' in html

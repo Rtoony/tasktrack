@@ -104,6 +104,8 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
+    assert '/?workspace=7711.20' in html
+    assert '/?map_project=7711.20' in html
     assert "Private project prep" not in html
 
 
@@ -318,6 +320,8 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert "Portfolio Project Packet" in html
     assert "Portfolio one" in html
     assert "Portfolio dormant" in html
+    assert '/?workspace=8800.10' in html
+    assert '/?map_project=8800.10' in html
     assert "Soft deleted portfolio" not in html
     assert "Private portfolio prep" not in html
 

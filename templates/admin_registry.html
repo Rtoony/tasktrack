@@ -153,7 +153,7 @@
       <tbody>
       {% for r in rows %}
         <tr class="{{ 'inactive' if not r.active else '' }}" data-id="{{ r.id }}">
-          <td><code>{{ r.project_number }}</code></td>
+          <td><a href="/?workspace={{ r.project_number }}" title="Open project workspace"><code>{{ r.project_number }}</code></a></td>
           <td>{{ r.name }}</td>
           <td>{{ r.client }}</td>
           <td>{{ r.component }}</td>
@@ -168,6 +168,9 @@
           </td>
           <td><span class="pill {{ 'ok' if r.active else 'off' }}">{{ 'active' if r.active else 'inactive' }}</span></td>
           <td>
+            <a class="btn btn-sm" href="/?workspace={{ r.project_number }}">Workspace</a>
+            <a class="btn btn-sm" href="/?map_project={{ r.project_number }}">Map</a>
+            <a class="btn btn-sm" href="/reports/project?project_number={{ r.project_number }}">Report</a>
             {% if r.active %}
             <button class="btn btn-sm btn-danger" onclick="deactivate('projects', {{ r.id }})">Deactivate</button>
             {% else %}

@@ -196,6 +196,9 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'openProjectWorkspaceSmart' in html
     assert 'focusProjectOnMapSmart' in html
     assert 'openMeetingPacketForEvent' in html
+    assert 'startupRouteState' in html
+    assert "params.get('workspace')" in html
+    assert "params.get('map_project')" in html
     assert 'Capability narratives are restricted here' in html
     assert "section.id = 'workspace-section-'" in html
     assert 'id="map-project-number-filter"' in html
