@@ -85,19 +85,22 @@ def _row_created_since(row, since: datetime) -> bool:
     return False
 
 
-def _title_for(row, table: str) -> str:
-    """Best-guess display title — most trackers have `title`,
-    personnel_issues uses `person_name` + truncated description."""
+def _title_for(row, table: str, *, include_sensitive: bool = False) -> str:
+    """Best-guess display title with capability narratives gated."""
     if hasattr(row, "title") and row.title:
         return str(row.title)
     if table == "personnel_issues":
+        if not include_sensitive:
+            return "Capability note (restricted)"
         pn = (row.person_name or "(no person)") if hasattr(row, "person_name") else "?"
         desc = (row.issue_description or "")[:60]
         return f"{pn} — {desc}" if desc else pn
     return f"#{getattr(row, 'id', '?')}"
 
 
-def _bucket_for_table(sess: Session, table: str, since: datetime, user_id: int | None = None) -> dict:
+def _bucket_for_table(sess: Session, table: str, since: datetime,
+                      user_id: int | None = None,
+                      include_sensitive: bool = False) -> dict:
     Model = TABLE_MODELS.get(table)
     if Model is None:
         return {}
@@ -127,7 +130,7 @@ def _bucket_for_table(sess: Session, table: str, since: datetime, user_id: int |
                   or getattr(r, "reported_date", None))
             items_created.append({
                 "id": r.id,
-                "title": _title_for(r, table),
+                "title": _title_for(r, table, include_sensitive=include_sensitive),
                 "status": getattr(r, "status", None),
                 "created_at": (ts.isoformat(sep=" ")
                                if isinstance(ts, datetime) else str(ts or "")),
@@ -138,7 +141,7 @@ def _bucket_for_table(sess: Session, table: str, since: datetime, user_id: int |
                   or getattr(r, "updated_at", None))
             items_completed.append({
                 "id": r.id,
-                "title": _title_for(r, table),
+                "title": _title_for(r, table, include_sensitive=include_sensitive),
                 "completed_at": (ts.isoformat(sep=" ")
                                  if isinstance(ts, datetime) else str(ts or "")),
             })
@@ -199,9 +202,9 @@ def _skill_score_changes(sess: Session, since: datetime) -> list[dict]:
     return out[:ITEM_LIMIT]
 
 
-def _recent_incidents(sess: Session, since: datetime) -> list[dict]:
-    """personnel_issues rows whose created_at > since. Returns a small
-    summary; mainly for the dashboard headline."""
+def _recent_incidents(sess: Session, since: datetime, *,
+                      include_sensitive: bool = False) -> list[dict]:
+    """personnel_issues rows whose created_at > since, narrative-gated."""
     from ..models import PersonnelIssue
     rows = sess.scalars(select(PersonnelIssue)).all()
     out = []
@@ -209,16 +212,27 @@ def _recent_incidents(sess: Session, since: datetime) -> list[dict]:
         if not _row_created_since(r, since):
             continue
         ts = getattr(r, "reported_date", None)
-        out.append({
+        item = {
             "id": r.id,
-            "person_name": r.person_name or "(no person)",
-            "issue_description": (r.issue_description or "")[:140],
             "severity": r.severity,
             "status": r.status,
             "created_at": (ts.isoformat(sep=" ")
                            if isinstance(ts, datetime)
                            else str(ts or "")),
-        })
+        }
+        if include_sensitive:
+            item.update({
+                "person_name": r.person_name or "(no person)",
+                "issue_description": (r.issue_description or "")[:140],
+                "redacted": False,
+            })
+        else:
+            item.update({
+                "person_name": "Restricted",
+                "issue_description": "Capability narrative restricted",
+                "redacted": True,
+            })
+        out.append(item)
     out.sort(key=lambda d: d.get("created_at") or "", reverse=True)
     return out[:ITEM_LIMIT]
 
@@ -245,7 +259,10 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
     buckets: dict[str, dict] = {}
     totals = {"created": 0, "completed": 0, "active_now": 0, "overdue_now": 0}
     for table in ALLOWED_TABLES:
-        b = _bucket_for_table(sess, table, since_naive, user_id=user_id)
+        b = _bucket_for_table(
+            sess, table, since_naive, user_id=user_id,
+            include_sensitive=include_admin,
+        )
         if not b:
             continue
         buckets[table] = b
@@ -260,7 +277,9 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
         "days": days,
         "totals": totals,
         "buckets": buckets,
-        "incidents_recent": _recent_incidents(sess, since_naive),
+        "incidents_recent": _recent_incidents(
+            sess, since_naive, include_sensitive=include_admin,
+        ),
     }
     if include_admin:
         snapshot["skill_score_changes"] = _skill_score_changes(sess, since_naive)

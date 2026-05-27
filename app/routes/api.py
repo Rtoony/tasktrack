@@ -14,7 +14,7 @@ from sqlalchemy import desc, or_, select, text
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, CalendarEvent, Comment, to_dict
+from ..models import ActivityLog, CalendarEvent, Comment, PersonnelIssue, to_dict
 from ..services.audit import log_activity
 from ..services.tickets import (
     TABLE_MODELS,
@@ -117,15 +117,40 @@ _SEARCH_SQLS = (
         "WHERE title LIKE :p OR trainees LIKE :p OR requested_by LIKE :p "
         "OR skill_area LIKE :p OR training_goals LIKE :p OR additional_context LIKE :p OR notes LIKE :p"
     ),
-    text(
-        "SELECT id, 'personnel_issues' as source, person_name as label, "
-        "issue_description as detail, severity as priority, status, "
-        "follow_up_date as due_date FROM personnel_issues "
-        "WHERE person_name LIKE :p OR observed_by LIKE :p OR cad_skill_area LIKE :p "
-        "OR issue_description LIKE :p OR incident_context LIKE :p "
-        "OR recommended_training LIKE :p OR resolution_notes LIKE :p"
-    ),
 )
+
+
+def _is_admin() -> bool:
+    return session.get("user_role") == "admin"
+
+
+def _search_personnel_issues(sess, pattern: str) -> list[dict]:
+    """Admin-only capability search; non-admin reports stay narrative-safe."""
+    if not _is_admin():
+        return []
+    stmt = select(PersonnelIssue).where(
+        or_(
+            PersonnelIssue.person_name.ilike(pattern),
+            PersonnelIssue.observed_by.ilike(pattern),
+            PersonnelIssue.cad_skill_area.ilike(pattern),
+            PersonnelIssue.issue_description.ilike(pattern),
+            PersonnelIssue.incident_context.ilike(pattern),
+            PersonnelIssue.recommended_training.ilike(pattern),
+            PersonnelIssue.resolution_notes.ilike(pattern),
+        )
+    ).order_by(PersonnelIssue.id.desc()).limit(20)
+    return [
+        {
+            "id": row.id,
+            "source": "personnel_issues",
+            "label": row.person_name or "Capability note",
+            "detail": row.issue_description or "",
+            "priority": row.severity,
+            "status": row.status,
+            "due_date": row.follow_up_date or "",
+        }
+        for row in sess.scalars(stmt).all()
+    ]
 
 
 def _search_calendar_events(sess, pattern: str) -> list[dict]:
@@ -182,6 +207,7 @@ def search_records():
     for stmt in _SEARCH_SQLS:
         for row in sess.execute(stmt, {"p": pattern}).mappings().all():
             results.append(dict(row))
+    results.extend(_search_personnel_issues(sess, pattern))
     results.extend(_search_calendar_events(sess, pattern))
     return jsonify(results)
 

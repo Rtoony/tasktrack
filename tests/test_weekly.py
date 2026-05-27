@@ -126,7 +126,7 @@ def test_incidents_recent_includes_personnel_rows(temp_app):
             severity="High",
         ))
         sess.commit()
-        snap = weekly_snapshot(sess, days=7)
+        snap = weekly_snapshot(sess, days=7, include_admin=True)
     assert any(i["person_name"] == "Alice"
                for i in snap["incidents_recent"])
 
@@ -141,9 +141,29 @@ def test_zero_person_incidents_show_up_in_weekly(temp_app):
             issue_description="Process gap on standards rollout",
         ))
         sess.commit()
-        snap = weekly_snapshot(sess, days=7)
+        snap = weekly_snapshot(sess, days=7, include_admin=True)
     assert any(i["person_name"] == "(no person)"
                for i in snap["incidents_recent"])
+
+
+def test_weekly_redacts_capability_narratives_for_non_admin(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Sensitive Employee",
+            issue_description="Sensitive weekly narrative",
+            severity="High",
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, include_admin=False)
+    incidents = snap["incidents_recent"]
+    assert incidents[0]["person_name"] == "Restricted"
+    assert incidents[0]["issue_description"] == "Capability narrative restricted"
+    assert incidents[0]["redacted"] is True
+    titles = {i["title"] for i in snap["buckets"]["personnel_issues"]["items_created"]}
+    assert "Capability note (restricted)" in titles
+    assert "Sensitive weekly narrative" not in str(snap)
+    assert "Sensitive Employee" not in str(snap)
 
 
 
@@ -257,6 +277,24 @@ def test_html_page_renders(auth_client):
     assert "Week in Review" in html
     assert "Created" in html
     assert "Completed" in html
+
+
+def test_weekly_html_redacts_capability_narratives_for_non_admin(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Sensitive Employee",
+            issue_description="Sensitive weekly html narrative",
+            severity="High",
+        ))
+        sess.commit()
+
+    r = auth_client.get("/weekly")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Capability narrative restricted" in html
+    assert "Sensitive weekly html narrative" not in html
+    assert "Sensitive Employee" not in html
 
 
 def test_days_arg_clamps_to_max_90(auth_client):

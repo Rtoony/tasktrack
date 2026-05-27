@@ -15,6 +15,9 @@ contract the dashboard depends on:
 import csv
 import io
 
+from app.db import get_session
+from app.models import PersonnelIssue
+
 
 def _make_work_task(auth_client, **overrides):
     """Helper: create a work_tasks row via the API and return its id."""
@@ -139,6 +142,34 @@ def test_search_finds_records_across_tables(auth_client):
     # Search results carry the matched text in `label`, not `title`.
     assert any("gripper" in (row.get("label") or "").lower() for row in results)
 
+
+
+
+def test_search_hides_capability_narratives_from_non_admin(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Sensitive Employee",
+            issue_description="Sensitive global search narrative",
+            severity="High",
+        ))
+        sess.commit()
+
+    r = auth_client.get("/api/v1/search?q=Sensitive")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert not any(row["source"] == "personnel_issues" for row in rows)
+    assert "Sensitive global search narrative" not in str(rows)
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    r = auth_client.get("/api/v1/search?q=Sensitive")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert any(row["source"] == "personnel_issues" for row in rows)
+    assert "Sensitive global search narrative" in str(rows)
 
 def test_search_short_query_returns_empty(auth_client):
     r = auth_client.get("/api/v1/search?q=a")
