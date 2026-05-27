@@ -28,7 +28,7 @@ from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import Attachment, to_dict
 from ..services import attachments as att_svc
-from ..services.tickets import TABLE_MODELS
+from ..services.tickets import TABLE_MODELS, can_view_record_detail
 from ..tokens import check_scoped_token
 
 bp = Blueprint("attachments", __name__)
@@ -43,11 +43,22 @@ def _require_upload_auth():
     return check_scoped_token("triage")
 
 
-def _record_exists(sess, table: str, record_id: int) -> bool:
+def _is_admin() -> bool:
+    return session.get("user_role") == "admin"
+
+
+def _record_accessible(sess, table: str, record_id: int) -> bool:
     Model = TABLE_MODELS.get(table)
     if Model is None:
         return False
-    return sess.scalar(select(Model.id).where(Model.id == record_id)) is not None
+    row = sess.get(Model, record_id)
+    return can_view_record_detail(
+        table, row, session.get("user_id"), is_admin=_is_admin()
+    )
+
+
+def _attachment_accessible(sess, att: Attachment) -> bool:
+    return _record_accessible(sess, att.table_name, att.record_id)
 
 
 def _att_dict(att: Attachment) -> dict:
@@ -64,7 +75,7 @@ def list_attachments(table, record_id):
     if table not in ALLOWED_TABLES:
         return jsonify({"error": "Invalid table"}), 400
     sess = get_session()
-    if not _record_exists(sess, table, record_id):
+    if not _record_accessible(sess, table, record_id):
         return jsonify({"error": "Record not found"}), 404
     rows = att_svc.list_for(sess, table, record_id)
     return jsonify([_att_dict(a) for a in rows])
@@ -78,7 +89,7 @@ def upload_attachment(table, record_id):
     if table not in ALLOWED_TABLES:
         return jsonify({"error": "Invalid table"}), 400
     sess = get_session()
-    if not _record_exists(sess, table, record_id):
+    if not _record_accessible(sess, table, record_id):
         return jsonify({"error": "Record not found"}), 404
 
     file_storage = request.files.get("file")
@@ -100,7 +111,7 @@ def upload_attachment(table, record_id):
 def download_attachment(attachment_id):
     sess = get_session()
     att = sess.get(Attachment, attachment_id)
-    if att is None:
+    if att is None or not _attachment_accessible(sess, att):
         return jsonify({"error": "Attachment not found"}), 404
     try:
         url = att_svc.presigned_download_url(att)
@@ -113,6 +124,9 @@ def download_attachment(attachment_id):
 @login_required
 def delete_attachment(attachment_id):
     sess = get_session()
+    att = sess.get(Attachment, attachment_id)
+    if att is None or not _attachment_accessible(sess, att):
+        return jsonify({"error": "Attachment not found"}), 404
     try:
         att_svc.delete_attachment(sess, attachment_id)
     except att_svc.AttachmentError as e:

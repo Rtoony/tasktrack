@@ -9,7 +9,7 @@ import io
 import pytest
 
 from app.db import get_session
-from app.models import ActivityLog, Attachment, WorkTask
+from app.models import ActivityLog, Attachment, CalendarEvent, WorkTask
 from app.services import attachments as att_svc
 
 # ── Stub MinIO ────────────────────────────────────────────────────────────
@@ -123,6 +123,46 @@ def test_upload_list_download_delete_roundtrip(client, temp_app, patched_minio):
         assert sess.get(Attachment, att_id) is None
         assert "attachment_removed" in [a.action for a in sess.query(ActivityLog).all()]
     assert len(patched_minio.objects) == 0
+
+
+
+
+def test_private_calendar_attachment_hidden_from_non_owner(client, temp_app, patched_minio):
+    _login(client)
+    with temp_app.app_context():
+        sess = get_session()
+        event = CalendarEvent(
+            title="Private attachment event",
+            event_type="meeting",
+            start_at="2026-05-27T09:00",
+            visibility="private",
+            created_by_user_id=1,
+        )
+        sess.add(event)
+        sess.flush()
+        att = Attachment(
+            table_name="calendar_events",
+            record_id=event.id,
+            object_key=f"calendar_events/{event.id}/secret.pdf",
+            filename="secret.pdf",
+            content_type="application/pdf",
+            size_bytes=4,
+            sha256="abcd",
+            uploaded_by_user_id=1,
+        )
+        sess.add(att)
+        sess.commit()
+        event_id = event.id
+        att_id = att.id
+
+    with client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    assert client.get(f"/api/v1/attachments/calendar_events/{event_id}").status_code == 404
+    assert client.get(f"/api/v1/attachments/{att_id}/download").status_code == 404
+    assert client.delete(f"/api/v1/attachments/{att_id}").status_code == 404
 
 
 def test_upload_dedupe_returns_existing(client, temp_app, patched_minio):

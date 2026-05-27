@@ -131,6 +131,56 @@ def test_dashboard_returns_per_table_stats(auth_client):
 
 # ── Search ────────────────────────────────────────────────────────────────
 
+
+
+def test_capability_full_detail_limited_to_owner_or_admin(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        own = PersonnelIssue(
+            person_name="Owner Visible",
+            issue_description="Owner capability narrative",
+            severity="High",
+            created_by_user_id=1,
+        )
+        other = PersonnelIssue(
+            person_name="Other Hidden",
+            issue_description="Other capability narrative",
+            severity="Critical",
+            created_by_user_id=2,
+        )
+        sess.add_all([own, other])
+        sess.commit()
+        own_id = own.id
+        other_id = other.id
+
+    r = auth_client.get("/api/v1/personnel_issues")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert "Owner capability narrative" in str(body)
+    assert "Other capability narrative" not in str(body)
+
+    assert auth_client.get(f"/api/v1/personnel_issues/{own_id}").status_code == 200
+    assert auth_client.get(f"/api/v1/personnel_issues/{other_id}").status_code == 404
+
+    r = auth_client.get("/api/v1/personnel_issues/export.csv")
+    assert r.status_code == 200
+    csv_text = r.get_data(as_text=True)
+    assert "Owner capability narrative" in csv_text
+    assert "Other capability narrative" not in csv_text
+
+    r = auth_client.get("/api/v1/dashboard")
+    assert r.status_code == 200
+    dashboard = r.get_json()
+    assert "Other capability narrative" not in str(dashboard)
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    r = auth_client.get("/api/v1/personnel_issues")
+    assert r.status_code == 200
+    assert "Other capability narrative" in str(r.get_json())
+
 def test_search_finds_records_across_tables(auth_client):
     _make_work_task(auth_client, title="Calibrate the gripper")
     _make_work_task(auth_client, title="Order new bearings")

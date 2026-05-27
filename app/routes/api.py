@@ -21,8 +21,10 @@ from ..services.tickets import (
     done_statuses_for_table,
     enrich_with_fks,
     extra_create_fields,
+    can_view_record_detail,
     is_overdue_value,
     overdue_field_for_table,
+    record_to_user_dict,
     record_visible_to_user,
     validate_record_data,
 )
@@ -30,15 +32,42 @@ from ..services.tickets import (
 bp = Blueprint("api", __name__)
 
 
+def _is_admin() -> bool:
+    return session.get("user_role") == "admin"
+
+
 def _record_visible_to_current_user(table: str, row) -> bool:
     return record_visible_to_user(table, row, session.get("user_id"))
 
 
-def _calendar_target_visible(sess, table: str, record_id: int) -> bool:
-    if table != "calendar_events":
+def _record_detail_visible_to_current_user(table: str, row) -> bool:
+    return can_view_record_detail(
+        table, row, session.get("user_id"), is_admin=_is_admin()
+    )
+
+
+def _record_to_current_user_dict(table: str, row) -> dict:
+    return record_to_user_dict(
+        table, row, session.get("user_id"), is_admin=_is_admin()
+    )
+
+
+def _target_detail_visible(sess, table: str, record_id: int) -> bool:
+    Model = TABLE_MODELS.get(table)
+    if Model is None:
+        return False
+    row = sess.get(Model, record_id)
+    return row is not None and _record_detail_visible_to_current_user(table, row)
+
+
+def _activity_visible_to_current_user(sess, row: ActivityLog) -> bool:
+    Model = TABLE_MODELS.get(row.table_name)
+    if Model is None:
         return True
-    row = sess.get(TABLE_MODELS[table], record_id)
-    return row is not None and _record_visible_to_current_user(table, row)
+    target = sess.get(Model, row.record_id)
+    if target is None:
+        return True
+    return _record_detail_visible_to_current_user(row.table_name, target)
 
 
 # ── Dashboard ───────────────────────────────────────────────────────────────
@@ -54,7 +83,7 @@ def dashboard_stats():
             r for r in sess.scalars(select(Model)).all()
             if _record_visible_to_current_user(table, r)
         ]
-        all_rows = [to_dict(r) for r in model_rows]
+        all_rows = [_record_to_current_user_dict(table, r) for r in model_rows]
         done_statuses = done_statuses_for_table(table)
         active = [r for r in all_rows if r.get("status") not in done_statuses]
         overdue = []
@@ -85,9 +114,10 @@ def dashboard_stats():
     recent = [
         to_dict(r)
         for r in sess.scalars(
-            select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(20)
+            select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(50)
         ).all()
-    ]
+        if _activity_visible_to_current_user(sess, r)
+    ][:20]
     return jsonify({"stats": stats, "recent_activity": recent})
 
 
@@ -118,10 +148,6 @@ _SEARCH_SQLS = (
         "OR skill_area LIKE :p OR training_goals LIKE :p OR additional_context LIKE :p OR notes LIKE :p"
     ),
 )
-
-
-def _is_admin() -> bool:
-    return session.get("user_role") == "admin"
 
 
 def _search_personnel_issues(sess, pattern: str) -> list[dict]:
@@ -220,7 +246,7 @@ def list_comments(table, record_id):
     if table not in ALLOWED_TABLES:
         return jsonify({"error": "Invalid table"}), 400
     sess = get_session()
-    if not _calendar_target_visible(sess, table, record_id):
+    if not _target_detail_visible(sess, table, record_id):
         return jsonify({"error": "Not found"}), 404
     rows = sess.scalars(
         select(Comment)
@@ -241,7 +267,7 @@ def add_comment(table, record_id):
         return jsonify({"error": "Comment body is required"}), 400
     user = session.get("user_name", "Unknown")
     sess = get_session()
-    if not _calendar_target_visible(sess, table, record_id):
+    if not _target_detail_visible(sess, table, record_id):
         return jsonify({"error": "Not found"}), 404
     comment = Comment(
         table_name=table,
@@ -269,7 +295,7 @@ def cycle_status(table, record_id):
     sess = get_session()
     Model = TABLE_MODELS[table]
     row = sess.get(Model, record_id)
-    if row is None or not _record_visible_to_current_user(table, row):
+    if row is None or not _record_detail_visible_to_current_user(table, row):
         return jsonify({"error": "Not found"}), 404
     current = row.status
     try:
@@ -293,7 +319,7 @@ def record_activity(table, record_id):
     if table not in ALLOWED_TABLES:
         return jsonify({"error": "Invalid table"}), 400
     sess = get_session()
-    if not _calendar_target_visible(sess, table, record_id):
+    if not _target_detail_visible(sess, table, record_id):
         return jsonify({"error": "Not found"}), 404
     rows = sess.scalars(
         select(ActivityLog)
@@ -315,7 +341,7 @@ def export_csv(table):
     Model = TABLE_MODELS[table]
     rows = [
         r for r in sess.scalars(select(Model).order_by(Model.id)).all()
-        if _record_visible_to_current_user(table, r)
+        if _record_detail_visible_to_current_user(table, r)
     ]
     if not rows:
         return Response("No data", mimetype="text/plain")
@@ -352,7 +378,7 @@ def list_records(table):
     sess = get_session()
     sort_col = getattr(Model, sort)
     stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
-    rows = [r for r in sess.scalars(stmt).all() if _record_visible_to_current_user(table, r)]
+    rows = [r for r in sess.scalars(stmt).all() if _record_detail_visible_to_current_user(table, r)]
     return jsonify([to_dict(r) for r in rows])
 
 
@@ -395,7 +421,7 @@ def get_record(table, record_id):
     Model = TABLE_MODELS[table]
     sess = get_session()
     row = sess.get(Model, record_id)
-    if row is None or not _record_visible_to_current_user(table, row):
+    if row is None or not _record_detail_visible_to_current_user(table, row):
         return jsonify({"error": "Not found"}), 404
     return jsonify(to_dict(row))
 
@@ -410,7 +436,7 @@ def update_record(table, record_id):
     Model = TABLE_MODELS[table]
     sess = get_session()
     row = sess.get(Model, record_id)
-    if row is None or not _record_visible_to_current_user(table, row):
+    if row is None or not _record_detail_visible_to_current_user(table, row):
         return jsonify({"error": "Not found"}), 404
 
     validation_data = dict(data)
@@ -452,7 +478,7 @@ def delete_record(table, record_id):
     Model = TABLE_MODELS[table]
     sess = get_session()
     row = sess.get(Model, record_id)
-    if table == "calendar_events" and (row is None or not _record_visible_to_current_user(table, row)):
+    if row is None or not _record_detail_visible_to_current_user(table, row):
         return jsonify({"error": "Not found"}), 404
     label = ""
     if row is not None:

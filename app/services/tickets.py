@@ -25,6 +25,7 @@ from ..models import (
     PersonalItem,
     PersonnelIssue,
     Project,
+    to_dict,
     ProjectWorkTask,
     TrainingTask,
     WorkTask,
@@ -217,12 +218,49 @@ def done_statuses_for_table(table_name):
 
 
 def record_visible_to_user(table_name, row, user_id) -> bool:
-    """Shared record-visibility rule for private calendar events."""
+    """Shared row-presence rule, currently for private calendar events."""
     if table_name != "calendar_events":
         return True
     if getattr(row, "visibility", "") != "private":
         return True
     return user_id is not None and getattr(row, "created_by_user_id", None) == user_id
+
+
+def _is_owner(row, user_id) -> bool:
+    return user_id is not None and getattr(row, "created_by_user_id", None) == user_id
+
+
+def can_view_record_detail(table_name, row, user_id, *, is_admin: bool = False) -> bool:
+    """Whether the caller may receive full-detail JSON for a record."""
+    if row is None or not record_visible_to_user(table_name, row, user_id):
+        return False
+    if table_name == "personnel_issues":
+        return bool(is_admin or _is_owner(row, user_id))
+    return True
+
+
+def redacted_record_dict(table_name, row) -> dict:
+    """Return metadata-only JSON for sensitive rows on summary surfaces."""
+    if table_name != "personnel_issues":
+        return to_dict(row) or {}
+    return {
+        "id": getattr(row, "id", None),
+        "title": "Capability note (restricted)",
+        "status": getattr(row, "status", "") or "",
+        "severity": getattr(row, "severity", "") or "",
+        "reported_date": str(getattr(row, "reported_date", "") or ""),
+        "follow_up_date": getattr(row, "follow_up_date", "") or "",
+        "estimated_time_loss_minutes": getattr(row, "estimated_time_loss_minutes", 0) or 0,
+        "project_id": getattr(row, "project_id", None),
+        "project_number": getattr(row, "project_number", "") or "",
+        "redacted": True,
+    }
+
+
+def record_to_user_dict(table_name, row, user_id, *, is_admin: bool = False) -> dict:
+    if can_view_record_detail(table_name, row, user_id, is_admin=is_admin):
+        return to_dict(row) or {}
+    return redacted_record_dict(table_name, row)
 
 
 def is_overdue_value(raw_value):

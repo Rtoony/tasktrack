@@ -2,7 +2,7 @@
 import pytest
 
 from app.db import get_session
-from app.models import ActivityLog, Link, WorkTask
+from app.models import ActivityLog, CalendarEvent, Link, WorkTask
 from app.services import links as link_svc
 
 
@@ -92,6 +92,45 @@ def test_add_list_delete_roundtrip(client, temp_app):
         sess = get_session()
         assert sess.get(Link, link_id) is None
         assert "link_removed" in [a.action for a in sess.query(ActivityLog).all()]
+
+
+
+
+def test_private_calendar_links_hidden_from_non_owner(client, temp_app):
+    _login(client)
+    with temp_app.app_context():
+        sess = get_session()
+        event = CalendarEvent(
+            title="Private link event",
+            event_type="meeting",
+            start_at="2026-05-27T09:00",
+            visibility="private",
+            created_by_user_id=1,
+        )
+        sess.add(event)
+        sess.flush()
+        link = Link(
+            table_name="calendar_events",
+            record_id=event.id,
+            url="https://example.com/private",
+            label="Private link",
+        )
+        sess.add(link)
+        sess.commit()
+        event_id = event.id
+        link_id = link.id
+
+    with client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    assert client.get(f"/api/v1/links/calendar_events/{event_id}").status_code == 404
+    assert client.post(
+        f"/api/v1/links/calendar_events/{event_id}",
+        json={"url": "https://example.com/other"},
+    ).status_code == 404
+    assert client.delete(f"/api/v1/links/{link_id}").status_code == 404
 
 
 def test_add_dedupes_same_url(client, temp_app):
