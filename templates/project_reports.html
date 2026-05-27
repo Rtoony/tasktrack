@@ -152,6 +152,10 @@
       {% if report.management_brief %}
       <div class="mini-meta" style="margin:0 0 0.75rem"><strong>Brief:</strong> {{ report.management_brief.headline }}</div>
       {% endif %}
+      {% set overlay = report.operator_overlay or {} %}
+      {% if overlay.operator_status or overlay.priority or overlay.tags or overlay.next_review_date %}
+      <div class="mini-meta" style="margin:0 0 0.75rem"><strong>Overlay:</strong> {{ overlay.operator_status or 'Internal context' }}{% if overlay.priority %} / {{ overlay.priority }}{% endif %}{% if overlay.tags %} / {{ overlay.tags }}{% endif %}{% if overlay.next_review_date %} / review {{ overlay.next_review_date }}{% endif %}</div>
+      {% endif %}
       <div class="cols">
         <section class="section">
           <h2>Upcoming Events</h2>

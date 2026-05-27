@@ -696,6 +696,13 @@
     </div>
     {% if user_role == 'admin' %}
     <div class="dash-card" style="margin-bottom:1.25rem;">
+      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <span>Project List Sync</span>
+        <a class="btn btn-sm btn-export" href="/admin/projects">Projects</a>
+      </div>
+      <div class="dash-card-body" id="dash-sync-status"><div class="empty-card">Loading sync status...</div></div>
+    </div>
+    <div class="dash-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header">Admin Workflow Shortcuts</div>
       <div class="shortcut-grid">
         <a class="shortcut-link" href="/admin/workflow/triage">
@@ -2126,6 +2133,36 @@ async function loadDashboard() {
   }
   loadUpcomingOperations();
   loadCalendarReminders();
+  loadProjectSyncStatus();
+}
+
+function syncStatusSummary(data) {
+  if (!data || data.state === 'never_run') return 'The automated master-list sync has not run on this host yet.';
+  if (data.state === 'unreadable') return data.message || 'Sync state exists but could not be read.';
+  const r = data.last_report || {};
+  const parts = [];
+  if (r.created_count) parts.push(r.created_count + ' added');
+  if (r.updated_count) parts.push(r.updated_count + ' updated');
+  if (r.vanished_count) parts.push(r.vanished_count + ' vanished');
+  if (r.returned_count) parts.push(r.returned_count + ' returned');
+  return parts.length ? parts.join(' · ') : 'No project-level changes on the last sync.';
+}
+
+async function loadProjectSyncStatus() {
+  const host = document.getElementById('dash-sync-status');
+  if (!host) return;
+  const data = await api('GET','/api/v1/projects/sync-status');
+  if (!data) return;
+  host.replaceChildren();
+  const div = document.createElement('div');
+  div.className = 'activity-item';
+  const time = document.createElement('span');
+  time.className = 'activity-time';
+  time.textContent = data.last_run_at ? formatDateTime(data.last_run_at) : (data.state || 'unknown');
+  const txt = document.createElement('span');
+  txt.textContent = syncStatusSummary(data);
+  div.appendChild(time); div.appendChild(txt);
+  host.appendChild(div);
 }
 
 async function loadUpcomingOperations() {
@@ -3046,6 +3083,45 @@ function workspaceActivitySection(rows) {
   return section;
 }
 
+function workspaceOverlayCard(data) {
+  const overlay = data.operator_overlay || {};
+  const card = document.createElement('div');
+  card.className = 'workspace-card';
+  const title = document.createElement('div');
+  title.className = 'workspace-section-title';
+  title.textContent = 'TaskTrack Overlay';
+  card.appendChild(title);
+  const meta = document.createElement('div');
+  meta.className = 'workspace-meta';
+  meta.appendChild(workspaceMetaItem('Internal status', overlay.operator_status));
+  meta.appendChild(workspaceMetaItem('Priority', overlay.priority));
+  meta.appendChild(workspaceMetaItem('Tags', overlay.tags));
+  meta.appendChild(workspaceMetaItem('Next review', overlay.next_review_date));
+  card.appendChild(meta);
+  const notes = document.createElement('div');
+  notes.className = 'workspace-sub';
+  notes.textContent = overlay.internal_notes || 'No TaskTrack-only project notes yet. Imported master-list fields stay read-only by policy.';
+  card.appendChild(notes);
+  if (overlay.report_note) {
+    const reportNote = document.createElement('div');
+    reportNote.className = 'workspace-sub';
+    reportNote.textContent = 'Report note: ' + overlay.report_note;
+    card.appendChild(reportNote);
+  }
+  if (data.can_edit_overlay) {
+    const actions = document.createElement('div');
+    actions.className = 'workspace-actions';
+    const edit = document.createElement('button');
+    edit.type = 'button';
+    edit.className = 'btn btn-sm btn-export';
+    edit.textContent = 'Edit Overlay';
+    edit.addEventListener('click', workspaceEditOverlay);
+    actions.appendChild(edit);
+    card.appendChild(actions);
+  }
+  return card;
+}
+
 function renderProjectWorkspace(data) {
   const p = data.project || {};
   const counts = data.counts || {};
@@ -3089,6 +3165,7 @@ function renderProjectWorkspace(data) {
   actions.appendChild(copyBtn);
   summary.appendChild(kicker); summary.appendChild(title); summary.appendChild(sub); summary.appendChild(meta); summary.appendChild(actions);
   left.appendChild(summary);
+  left.appendChild(workspaceOverlayCard(data));
 
   const countsCard = document.createElement('div');
   countsCard.className = 'workspace-card';
@@ -3148,6 +3225,36 @@ function renderProjectWorkspace(data) {
 }
 
 function workspaceProject() { return workspaceState?.project || {}; }
+
+async function workspaceEditOverlay() {
+  const p = workspaceProject();
+  if (!p.id) { toast('No project loaded'); return; }
+  const current = workspaceState?.operator_overlay || {};
+  const operatorStatus = prompt('Internal status', current.operator_status || '');
+  if (operatorStatus === null) return;
+  const priority = prompt('Priority', current.priority || '');
+  if (priority === null) return;
+  const tags = prompt('Tags', current.tags || '');
+  if (tags === null) return;
+  const nextReview = prompt('Next review date (YYYY-MM-DD)', current.next_review_date || '');
+  if (nextReview === null) return;
+  const internalNotes = prompt('Internal notes', current.internal_notes || '');
+  if (internalNotes === null) return;
+  const reportNote = prompt('Report note', current.report_note || '');
+  if (reportNote === null) return;
+  const updated = await api('PATCH', '/api/v1/projects/' + encodeURIComponent(p.id) + '/overlay', {
+    operator_status: operatorStatus,
+    priority,
+    tags,
+    next_review_date: nextReview,
+    internal_notes: internalNotes,
+    report_note: reportNote,
+  });
+  if (!updated || updated.error) { toast(updated?.error || 'Overlay update failed'); return; }
+  workspaceState.operator_overlay = updated;
+  renderProjectWorkspace(workspaceState);
+  toast('Project overlay updated');
+}
 
 function workspaceFocusMap() {
   const p = workspaceProject();

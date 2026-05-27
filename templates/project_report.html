@@ -110,6 +110,22 @@
       </div>
     </section>
 
+    {% set overlay = report.operator_overlay or {} %}
+    {% if overlay.operator_status or overlay.priority or overlay.tags or overlay.next_review_date or overlay.internal_notes or overlay.report_note %}
+    <section class="card">
+      <h2>TaskTrack Overlay</h2>
+      <div class="row">
+        <div>
+          <div class="row-title">{{ overlay.operator_status or 'Internal project context' }}</div>
+          <div class="row-meta">{% if overlay.priority %}Priority: {{ overlay.priority }}{% endif %}{% if overlay.tags %}{% if overlay.priority %} / {% endif %}Tags: {{ overlay.tags }}{% endif %}{% if overlay.next_review_date %}{% if overlay.priority or overlay.tags %} / {% endif %}Next review: {{ overlay.next_review_date }}{% endif %}</div>
+        </div>
+        <div class="when">TaskTrack-only</div>
+      </div>
+      {% if overlay.report_note %}<div class="row-meta" style="margin-top:0.4rem">Report note: {{ overlay.report_note }}</div>{% endif %}
+      {% if overlay.internal_notes %}<div class="row-meta" style="margin-top:0.4rem">Internal notes: {{ overlay.internal_notes }}</div>{% endif %}
+    </section>
+    {% endif %}
+
     {% set brief = report.management_brief %}
     <section class="card">
       <h2>Management Brief</h2>

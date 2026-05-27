@@ -453,6 +453,28 @@ class Project(Base):
     )
 
 
+class ProjectOverlay(Base):
+    """TaskTrack-owned project metadata that importers must not overwrite."""
+    __tablename__ = "project_overlays"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int | None] = mapped_column(Integer)
+    project_number: Mapped[str] = mapped_column(Text, nullable=False)
+    operator_status: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    priority: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    tags: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    next_review_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    internal_notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    report_note: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_project_overlays_project_id", "project_id", unique=True),
+        Index("idx_project_overlays_project_number", "project_number", unique=True),
+    )
+
+
 class ProjectSite(Base):
     """One physical pin location for a project.
 
@@ -564,7 +586,7 @@ __all__ = [
     "PersonnelIssue", "PersonalItem", "InboxItem", "CalendarEvent",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
-    "Employee", "Project",
+    "Employee", "Project", "ProjectOverlay",
     "SkillCategory", "EmployeeSkillScore",
     "to_dict",
 ]

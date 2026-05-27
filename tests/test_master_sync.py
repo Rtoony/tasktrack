@@ -452,3 +452,12 @@ def test_sync_status_reads_state_file(auth_client, tmp_path, monkeypatch):
 def test_sync_status_requires_auth(client):
     r = client.get("/api/v1/projects/sync-status")
     assert r.status_code == 401
+
+
+def test_admin_dashboard_exposes_project_sync_status_card(admin_client):
+    r = admin_client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Project List Sync" in html
+    assert 'id="dash-sync-status"' in html
+    assert "loadProjectSyncStatus" in html

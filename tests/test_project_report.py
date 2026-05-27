@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectSite, ProjectWorkTask, WorkTask
+from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectSite, ProjectWorkTask, WorkTask
 
 
 def _seed_report_project(sess):
@@ -20,6 +20,16 @@ def _seed_report_project(sess):
     sess.add(proj)
     sess.flush()
     sess.add(ProjectSite(project_id=proj.id, lat=38.1, lng=-122.1, pin_color="yellow", is_primary=1))
+    sess.add(ProjectOverlay(
+        project_id=proj.id,
+        project_number="7711.20",
+        operator_status="Needs PM review",
+        priority="High",
+        tags="budget, meeting",
+        next_review_date="2026-06-01",
+        internal_notes="Internal-only project context",
+        report_note="Management-facing overlay note",
+    ))
     yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
     sess.add(ProjectWorkTask(
         project_name="Report project",
@@ -90,6 +100,8 @@ def test_project_report_json_summary_and_privacy(auth_client, temp_app):
     assert body["management_brief"]["attention_level"] == "at_risk"
     assert body["management_brief"]["overdue_count"] == 1
     assert body["management_brief"]["top_overdue"][0]["title"] == "Late exhibit"
+    assert body["operator_overlay"]["operator_status"] == "Needs PM review"
+    assert body["operator_overlay"]["priority"] == "High"
     event_titles = {event["title"] for event in body["upcoming_events"]}
     assert "Public project review" in event_titles
     assert "Private project prep" not in event_titles
@@ -105,6 +117,8 @@ def test_project_report_html_renders(auth_client, temp_app):
     html = r.get_data(as_text=True)
     assert "Project Status" in html
     assert "Management Brief" in html
+    assert "TaskTrack Overlay" in html
+    assert "Management-facing overlay note" in html
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
@@ -254,6 +268,13 @@ def _seed_portfolio_projects(sess):
     yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
     future = (datetime.now() + timedelta(days=3)).isoformat(timespec="minutes")
     sess.add(ProjectSite(project_id=p1.id, lat=38.5, lng=-122.5, pin_color="green", is_primary=1))
+    sess.add(ProjectOverlay(
+        project_id=p1.id,
+        project_number="8800.10",
+        operator_status="Portfolio watch",
+        priority="Medium",
+        tags="portfolio",
+    ))
     sess.add(ProjectWorkTask(
         project_name="Portfolio one",
         title="Portfolio late item",
@@ -325,6 +346,7 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert "Portfolio Project Packet" in html
     assert "At Risk Projects" in html
     assert "Brief:" in html
+    assert "Overlay:" in html
     assert "Portfolio one" in html
     assert "Portfolio dormant" in html
     assert '/?workspace=8800.10' in html

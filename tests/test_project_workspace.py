@@ -5,6 +5,7 @@ from app.db import get_session
 from app.models import (
     ActivityLog,
     CalendarEvent,
+    ProjectOverlay,
     PersonnelIssue,
     Project,
     ProjectSite,
@@ -158,6 +159,33 @@ def test_project_workspace_recent_activity_respects_capability_privacy(auth_clie
     assert "Sensitive workspace narrative" in str(body)
 
 
+def test_project_workspace_includes_operator_overlay(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="8820.10", name="Overlay workspace")
+        sess.add(proj)
+        sess.flush()
+        sess.add(ProjectOverlay(
+            project_id=proj.id,
+            project_number="8820.10",
+            operator_status="Needs meeting prep",
+            priority="High",
+            tags="budget, client",
+            next_review_date="2026-06-01",
+            internal_notes="Use internal context only",
+            report_note="Management-facing note",
+        ))
+        sess.commit()
+        proj_id = proj.id
+
+    r = admin_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["operator_overlay"]["operator_status"] == "Needs meeting prep"
+    assert body["operator_overlay"]["priority"] == "High"
+    assert body["can_edit_overlay"] is True
+
+
 def test_project_workspace_hides_private_calendar_events_from_other_users(auth_client, temp_app):
     with temp_app.app_context():
         sess = get_session()
@@ -271,3 +299,6 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'Project Number must use' not in html
     assert 'workspaceActivitySection' in html
     assert 'workspaceActivityRow' in html
+    assert 'workspaceOverlayCard' in html
+    assert 'workspaceEditOverlay' in html
+    assert 'loadProjectSyncStatus' in html

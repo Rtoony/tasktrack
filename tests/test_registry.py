@@ -5,7 +5,7 @@ deactivate / reactivate for both. Negative paths: anonymous → 401,
 regular user → 403, duplicate project_number → 409.
 """
 from app.db import get_session
-from app.models import Employee, Project
+from app.models import Employee, Project, ProjectOverlay
 
 # ── Auth gating ───────────────────────────────────────────────────────────
 
@@ -139,6 +139,47 @@ def test_list_projects_sorted_by_number(admin_client, temp_app):
     r = admin_client.get("/api/v1/projects")
     numbers = [row["project_number"] for row in r.get_json()]
     assert numbers == sorted(numbers)
+
+def test_project_overlay_api_is_tasktrack_owned(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="4466.77", name="Overlay project")
+        sess.add(proj)
+        sess.commit()
+        proj_id = proj.id
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/overlay")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["project_number"] == "4466.77"
+    assert body["operator_status"] == ""
+
+    denied = auth_client.patch(f"/api/v1/projects/{proj_id}/overlay", json={"operator_status": "Watch"})
+    assert denied.status_code == 403
+
+    with auth_client.session_transaction() as session_data:
+        session_data["user_id"] = 2
+        session_data["user_name"] = "Admin User"
+        session_data["user_role"] = "admin"
+
+    r = auth_client.patch(f"/api/v1/projects/{proj_id}/overlay", json={
+        "operator_status": "Watch",
+        "priority": "High",
+        "tags": "meeting, budget",
+        "next_review_date": "2026-06-01",
+        "internal_notes": "Private operator context",
+        "report_note": "Discuss at management sync",
+    })
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["operator_status"] == "Watch"
+    assert body["priority"] == "High"
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.query(ProjectOverlay).filter_by(project_id=proj_id).one()
+        assert row.report_note == "Discuss at management sync"
+
 
 def test_admin_projects_page_links_to_workspace_map_and_reports(admin_client, temp_app):
     with temp_app.app_context():

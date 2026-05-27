@@ -24,6 +24,7 @@ from ..db import get_session
 from ..models import (
     Employee,
     Project,
+    ProjectOverlay,
     ProjectSite,
     to_dict,
 )
@@ -36,6 +37,14 @@ from ..services.project_workspace import project_workspace_payload
 # and weren't actually in use (projects table was empty when the import
 # ran).
 _PROJECT_DISPLAY_STATUSES = {"active", "dormant"}
+_PROJECT_OVERLAY_FIELDS = (
+    "operator_status",
+    "priority",
+    "tags",
+    "next_review_date",
+    "internal_notes",
+    "report_note",
+)
 
 
 def _coerce_latlng(raw):
@@ -469,6 +478,66 @@ def projects_sync_status():
     return jsonify(payload)
 
 
+
+
+def _project_overlay_row(sess, proj: Project, *, create: bool = False) -> ProjectOverlay | None:
+    row = sess.scalar(select(ProjectOverlay).where(ProjectOverlay.project_id == proj.id))
+    if row is None:
+        row = sess.scalar(select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number))
+    if row is None and create:
+        row = ProjectOverlay(project_id=proj.id, project_number=proj.project_number)
+        sess.add(row)
+        sess.flush()
+    if row is not None:
+        row.project_id = proj.id
+        row.project_number = proj.project_number
+    return row
+
+
+def _project_overlay_dict(sess, proj: Project) -> dict:
+    row = _project_overlay_row(sess, proj)
+    if row is not None:
+        return to_dict(row) or {}
+    return {
+        "id": None,
+        "project_id": proj.id,
+        "project_number": proj.project_number or "",
+        "operator_status": "",
+        "priority": "",
+        "tags": "",
+        "next_review_date": "",
+        "internal_notes": "",
+        "report_note": "",
+        "created_at": "",
+        "updated_at": "",
+    }
+
+
+@bp.route("/api/v1/projects/<int:proj_id>/overlay", methods=["GET"])
+@login_required
+def get_project_overlay(proj_id):
+    sess = get_session()
+    proj = sess.get(Project, proj_id)
+    if proj is None:
+        return jsonify({"error": "not found", "request_id": _rid()}), 404
+    return jsonify(_project_overlay_dict(sess, proj))
+
+
+@bp.route("/api/v1/projects/<int:proj_id>/overlay", methods=["PATCH"])
+@admin_required
+def update_project_overlay(proj_id):
+    sess = get_session()
+    proj = sess.get(Project, proj_id)
+    if proj is None:
+        return jsonify({"error": "not found", "request_id": _rid()}), 404
+    data = request.get_json(silent=True) or {}
+    row = _project_overlay_row(sess, proj, create=True)
+    for col in _PROJECT_OVERLAY_FIELDS:
+        if col in data:
+            setattr(row, col, (data.get(col) or "").strip())
+    row.updated_at = datetime.utcnow()
+    sess.commit()
+    return jsonify(to_dict(row))
 
 
 @bp.route("/api/v1/projects/<int:proj_id>/workspace", methods=["GET"])
