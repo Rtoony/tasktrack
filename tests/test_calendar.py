@@ -165,7 +165,74 @@ def test_private_calendar_events_are_hidden_from_other_users(auth_client):
     assert "Private prep" not in titles
 
 
+def test_calendar_reminders_surface_due_visible_events(auth_client):
+    visible = _create_event(
+        auth_client,
+        title="Visible reminder",
+        start_at=_future(5),
+        reminder_date=_future(1),
+    )
+    _create_event(
+        auth_client,
+        title="Completed reminder",
+        start_at=_future(5),
+        reminder_date=_future(1),
+        status="done",
+    )
+    private = _create_event(
+        auth_client,
+        title="Private reminder",
+        start_at=_future(5),
+        reminder_date=_future(1),
+        visibility="private",
+    )
 
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    r = auth_client.get("/api/v1/calendar/reminders?days=7&limit=10")
+    assert r.status_code == 200
+    rows = r.get_json()["events"]
+    titles = {event["title"] for event in rows}
+    assert "Visible reminder" in titles
+    assert "Completed reminder" not in titles
+    assert "Private reminder" not in titles
+    reminder = next(event for event in rows if event["id"] == visible["id"])
+    assert reminder["reminder_at"] == visible["reminder_date"]
+    assert private["id"] not in {event["id"] for event in rows}
+
+
+def test_search_finds_calendar_events_and_hides_private(auth_client):
+    visible = _create_event(
+        auth_client,
+        title="Bridge review searchable",
+        description="Quarterly phase gate",
+        start_at=_future(3),
+    )
+    private = _create_event(
+        auth_client,
+        title="Private searchable calendar item",
+        visibility="private",
+        start_at=_future(3),
+    )
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    r = auth_client.get("/api/v1/search?q=searchable")
+    assert r.status_code == 200
+    rows = r.get_json()
+    labels = {row["label"] for row in rows}
+    assert "Bridge review searchable" in labels
+    assert "Private searchable calendar item" not in labels
+    match = next(row for row in rows if row["id"] == visible["id"])
+    assert match["source"] == "calendar_events"
+    assert match["status"] == "scheduled"
+    assert private["id"] not in {row["id"] for row in rows if row["source"] == "calendar_events"}
 
 
 def test_past_calendar_events_do_not_count_as_overdue(auth_client):
@@ -216,10 +283,12 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert r.status_code == 200
     html = r.data.decode("utf-8")
     assert "Upcoming Operations" in html
+    assert "Reminder Queue" in html
     assert 'data-tab="calendar"' in html
     assert 'id="sec-calendar"' in html
     assert 'tbody-calendar' in html
 
 def test_calendar_routes_require_login(client):
     assert client.get("/api/v1/calendar/upcoming").status_code == 401
+    assert client.get("/api/v1/calendar/reminders").status_code == 401
     assert client.get("/api/v1/calendar/events").status_code == 401

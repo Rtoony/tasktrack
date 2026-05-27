@@ -52,6 +52,10 @@ def _event_start(row: CalendarEvent) -> datetime | None:
     return _parse_iso_datetime(row.start_at)
 
 
+def _event_reminder(row: CalendarEvent) -> datetime | None:
+    return _parse_iso_datetime(row.reminder_date)
+
+
 def _visible_to_current_user(row: CalendarEvent) -> bool:
     return record_visible_to_user("calendar_events", row, session.get("user_id"))
 
@@ -110,6 +114,39 @@ def upcoming_events():
         "available": True,
         "events": [_serialize(row) for _, row in events[:limit]],
     })
+
+
+@bp.route("/api/v1/calendar/reminders")
+@login_required
+def reminder_events():
+    days = _clamp_int(request.args.get("days"), 14, 1, 365)
+    limit = _clamp_int(request.args.get("limit"), 8, 1, 50)
+    now = datetime.now()
+    end = now + timedelta(days=days)
+
+    events: list[tuple[datetime, datetime, CalendarEvent]] = []
+    for row in _base_rows():
+        if row.status in _DONE_STATUSES:
+            continue
+        start = _event_start(row)
+        reminder = _event_reminder(row)
+        if start is None or reminder is None:
+            continue
+        if row.all_day:
+            if start.date() < now.date():
+                continue
+        elif start < now:
+            continue
+        if reminder <= end:
+            events.append((reminder, start, row))
+    events.sort(key=lambda item: (item[0], item[1]))
+
+    payload = []
+    for reminder, _, row in events[:limit]:
+        data = _serialize(row)
+        data["reminder_at"] = row.reminder_date or reminder.isoformat(timespec="minutes")
+        payload.append(data)
+    return jsonify({"available": True, "events": payload})
 
 
 @bp.route("/api/v1/calendar/events")

@@ -9,12 +9,12 @@ import io
 from datetime import datetime
 
 from flask import Blueprint, Response, jsonify, request, session
-from sqlalchemy import desc, select, text
+from sqlalchemy import desc, or_, select, text
 
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, Comment, to_dict
+from ..models import ActivityLog, CalendarEvent, Comment, to_dict
 from ..services.audit import log_activity
 from ..services.tickets import (
     TABLE_MODELS,
@@ -128,6 +128,48 @@ _SEARCH_SQLS = (
 )
 
 
+def _search_calendar_events(sess, pattern: str) -> list[dict]:
+    """Calendar search path with the same private-event guard as CRUD."""
+    user_id = session.get("user_id")
+    stmt = select(CalendarEvent).where(
+        or_(
+            CalendarEvent.title.ilike(pattern),
+            CalendarEvent.description.ilike(pattern),
+            CalendarEvent.event_type.ilike(pattern),
+            CalendarEvent.project_number.ilike(pattern),
+            CalendarEvent.location.ilike(pattern),
+        )
+    )
+    if user_id is None:
+        stmt = stmt.where(CalendarEvent.visibility != "private")
+    else:
+        stmt = stmt.where(
+            or_(
+                CalendarEvent.visibility != "private",
+                CalendarEvent.created_by_user_id == user_id,
+            )
+        )
+    rows = sess.scalars(stmt.order_by(CalendarEvent.start_at.asc()).limit(20)).all()
+    results = []
+    for row in rows:
+        if not _record_visible_to_current_user("calendar_events", row):
+            continue
+        detail_bits = [
+            bit for bit in (row.event_type, row.project_number, row.location)
+            if bit
+        ]
+        results.append({
+            "id": row.id,
+            "source": "calendar_events",
+            "label": row.title,
+            "detail": row.description or " · ".join(detail_bits),
+            "priority": row.event_type,
+            "status": row.status,
+            "due_date": row.start_at,
+        })
+    return results
+
+
 @bp.route("/api/v1/search")
 @login_required
 def search_records():
@@ -140,6 +182,7 @@ def search_records():
     for stmt in _SEARCH_SQLS:
         for row in sess.execute(stmt, {"p": pattern}).mappings().all():
             results.append(dict(row))
+    results.extend(_search_calendar_events(sess, pattern))
     return jsonify(results)
 
 

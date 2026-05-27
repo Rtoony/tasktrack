@@ -661,6 +661,10 @@
       </div>
       <div class="dash-card-body" id="dash-upcoming"><div class="empty-card">No upcoming events</div></div>
     </div>
+    <div class="dash-card" style="margin-bottom:1.25rem;">
+      <div class="dash-card-header">Reminder Queue</div>
+      <div class="dash-card-body" id="dash-reminders"><div class="empty-card">No reminders due</div></div>
+    </div>
     {% if user_role == 'admin' %}
     <div class="dash-card" style="margin-bottom:1.25rem;">
       <div class="dash-card-header">Admin Workflow Shortcuts</div>
@@ -1957,7 +1961,11 @@ if (searchInput && searchResults) {
         div.addEventListener('click', () => {
           searchResults.classList.remove('open');
           searchInput.value = '';
-          const tabKey = {work_tasks:'work',project_work_tasks:'project',training_tasks:'training',personnel_issues:'personnel'}[r.source];
+          const tabKey = {
+            work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
+            personnel_issues:'personnel', calendar_events:'calendar'
+          }[r.source];
+          if (!tabKey) return;
           document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
           setTimeout(() => editRecord(tabKey, r.id), 200);
         });
@@ -2030,6 +2038,7 @@ async function loadDashboard() {
     });
   }
   loadUpcomingOperations();
+  loadCalendarReminders();
 }
 
 async function loadUpcomingOperations() {
@@ -2048,7 +2057,31 @@ async function loadUpcomingOperations() {
     const meta = document.createElement('span'); meta.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem';
     meta.textContent = formatEventType(r.event_type || r.type || 'event') + (r.project_number ? ' · ' + r.project_number : '');
     left.appendChild(title); left.appendChild(meta);
-    const when = document.createElement('span'); when.className='overdue-date'; when.textContent = formatDateTime(r.start_at || r.start || '');
+    const when = document.createElement('span'); when.className='overdue-date'; when.textContent = formatCalendarDateTime(r, 'start_at');
+    div.appendChild(left); div.appendChild(when);
+    div.addEventListener('click', () => { document.querySelector('.tab-btn[data-tab="calendar"]')?.click(); setTimeout(() => editRecord('calendar', r.id), 150); });
+    host.appendChild(div);
+  });
+}
+
+async function loadCalendarReminders() {
+  const host = document.getElementById('dash-reminders');
+  if (!host) return;
+  const data = await api('GET','/api/v1/calendar/reminders?days=14&limit=8');
+  if (!data) return;
+  const rows = Array.isArray(data.events) ? data.events : [];
+  host.replaceChildren();
+  if (!rows.length) { host.innerHTML='<div class="empty-card">No reminders due</div>'; return; }
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'overdue-item';
+    const left = document.createElement('div');
+    const title = document.createElement('span'); title.className='overdue-title'; title.textContent = r.title || '';
+    const meta = document.createElement('span'); meta.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem';
+    const start = formatCalendarDateTime(r, 'start_at');
+    meta.textContent = 'Reminder · ' + formatEventType(r.event_type || r.type || 'event') + (start ? ' · event ' + start : '');
+    left.appendChild(title); left.appendChild(meta);
+    const when = document.createElement('span'); when.className='overdue-date'; when.textContent = formatDateTime(r.reminder_at || r.reminder_date || '');
     div.appendChild(left); div.appendChild(when);
     div.addEventListener('click', () => { document.querySelector('.tab-btn[data-tab="calendar"]')?.click(); setTimeout(() => editRecord('calendar', r.id), 150); });
     host.appendChild(div);
@@ -2345,6 +2378,26 @@ function makeStatusBadge(val) { const td=document.createElement('td'); if(!val) 
 function formatEventType(val) {
   const raw = String(val || 'event');
   return raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function isAllDayEvent(r) {
+  return r && (r.all_day === true || r.all_day === 1 || r.all_day === '1');
+}
+
+function formatDateOnly(d) {
+  try {
+    const raw = String(d || '');
+    const dt = new Date(raw.length === 10 ? raw + 'T00:00:00' : raw);
+    if (isNaN(dt)) return raw;
+    return dt.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+  } catch {
+    return d || '';
+  }
+}
+
+function formatCalendarDateTime(r, field) {
+  const val = r?.[field] || (field === 'start_at' ? r?.start : '') || '';
+  return isAllDayEvent(r) ? formatDateOnly(val) : formatDateTime(val);
 }
 
 function itemLabel(table) {
@@ -2871,7 +2924,6 @@ const FORMS = {
     {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
     {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Project number also works and will be enriched when it matches.'},
     {key:'_row',fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
-    {key:'_row',fields:[{key:'related_table',label:'Related Table',type:'select',options:['','work_tasks','project_work_tasks','training_tasks','personnel_issues','inbox_items','personal_items']},{key:'related_id',label:'Related ID',type:'number'}]},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'links',label:'Links',type:'links'},
   ],
