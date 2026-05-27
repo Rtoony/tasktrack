@@ -3153,8 +3153,7 @@ const FORMS = {
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
-    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
-    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Leave blank if the project is not in the registry yet.'},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -3162,8 +3161,7 @@ const FORMS = {
   project:[
     {key:'project_name',label:'Project Name',type:'text',required:true},
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'_row',fields:[{key:'project_number',label:'Project Number',type:'text',required:true,placeholder:'1234.56'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
-    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK to the Projects registry. Carries over the text Project Number above.'},
+    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,placeholder:'Pick or type project #'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
     {key:'engineer',label:'Engineer',type:'text'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
@@ -3183,8 +3181,7 @@ const FORMS = {
     {key:'additional_context',label:'Additional Context',type:'textarea'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
-    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
-    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -3203,8 +3200,7 @@ const FORMS = {
     {key:'estimated_time_loss_minutes',label:'Estimated Time Loss (minutes)',type:'number',placeholder:'0'},
     {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
-    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
-    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK.'},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -3231,8 +3227,7 @@ const FORMS = {
         {value:'internal',label:'Internal'}, {value:'private',label:'Private'}, {value:'shared',label:'Shared'},
       ]},
     ]},
-    {key:'project_number',label:'Project Number',type:'text',placeholder:'1234.56 (optional)'},
-    {key:'project_id',label:'Project (registry)',type:'fk-select',endpoint:'/api/v1/projects',displayKey:'project_number',hint:'Optional FK. Project number also works and will be enriched when it matches.'},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'_row',fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'links',label:'Links',type:'links'},
@@ -3276,6 +3271,24 @@ async function loadFkOptions(endpoint) {
 }
 function invalidateFkCache() { for (const k of Object.keys(FK_OPTION_CACHE)) delete FK_OPTION_CACHE[k]; }
 
+function normalizeProjectNumberCandidate(value) {
+  const raw = String(value || '').trim();
+  if (/^\d{6}$/.test(raw)) return raw.slice(0, 4) + '.' + raw.slice(4);
+  if (/^\d{4}$/.test(raw)) return raw + '.00';
+  if (/^\d{1,4}\.\d$/.test(raw)) return raw + '0';
+  return raw;
+}
+
+function projectOptionLabel(project) {
+  return [project.project_number, project.name, project.client].filter(Boolean).join(' · ');
+}
+
+function findProjectByNumber(projects, projectNumber) {
+  const pn = String(projectNumber || '').trim().toLowerCase();
+  if (!pn) return null;
+  return projects.find(p => String(p.project_number || '').trim().toLowerCase() === pn) || null;
+}
+
 function renderField(f,value) {
   value=value||'';
   const wrap=document.createElement('div'); wrap.className='field';
@@ -3284,6 +3297,68 @@ function renderField(f,value) {
   if (f.type==='select') {
     input=document.createElement('select'); input.id='f-'+f.key;
     f.options.forEach(o=>{const opt=document.createElement('option');const optValue=(typeof o==='object')?o.value:o;const optLabel=(typeof o==='object')?o.label:o;opt.value=optValue;opt.textContent=optLabel;if(String(value)===String(optValue))opt.selected=true;input.appendChild(opt);});
+  } else if (f.type==='project-picker') {
+    input=document.createElement('input');
+    input.type='text';
+    input.id='f-project_number';
+    input.value=value || '';
+    input.placeholder=f.placeholder || 'Pick or type project #';
+    input.autocomplete='off';
+    input.setAttribute('list', 'project-picker-list');
+    if (f.required) input.required=true;
+
+    const hidden=document.createElement('input');
+    hidden.type='hidden';
+    hidden.id='f-project_id';
+    hidden.value=(document.getElementById('f-project_id')?.value || '');
+
+    const list=document.createElement('datalist');
+    list.id='project-picker-list';
+
+    const hint=document.createElement('div');
+    hint.className='fk-hint';
+    hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
+    hint.textContent='Pick a registry project to link workspace/map context, or type a project number manually.';
+
+    let projects=[];
+    const sync = () => {
+      const normalized = normalizeProjectNumberCandidate(input.value);
+      if (normalized !== input.value && document.activeElement !== input) input.value = normalized;
+      const match = findProjectByNumber(projects, normalized || input.value);
+      hidden.value = match ? match.id : '';
+      hint.textContent = match
+        ? 'Linked to registry: ' + projectOptionLabel(match)
+        : 'Manual project number; no registry link yet.';
+      const projectNameEl = document.getElementById('f-project_name');
+      if (match && projectNameEl && !projectNameEl.value.trim()) projectNameEl.value = match.name || '';
+      renderProjectMiniMap();
+    };
+
+    input.addEventListener('change', () => { input.value = normalizeProjectNumberCandidate(input.value); sync(); });
+    input.addEventListener('blur', () => { input.value = normalizeProjectNumberCandidate(input.value); sync(); });
+    input.addEventListener('input', sync);
+
+    loadFkOptions('/api/v1/projects').then(rows => {
+      projects = rows || [];
+      list.replaceChildren();
+      projects.forEach(project => {
+        const opt=document.createElement('option');
+        opt.value=project.project_number || '';
+        opt.label=projectOptionLabel(project);
+        list.appendChild(opt);
+      });
+      const existingId = String((window.__currentModalData || {}).project_id || '');
+      const byId = existingId ? projects.find(p => String(p.id) === existingId) : null;
+      if (byId && !input.value) input.value = byId.project_number || '';
+      if (byId) hidden.value = byId.id;
+      sync();
+    });
+
+    wrap.appendChild(input);
+    wrap.appendChild(hidden);
+    wrap.appendChild(list);
+    wrap.appendChild(hint);
+    return wrap;
   } else if (f.type==='fk-select') {
     /* Dual-column FK. value is the id (int). Renders as <select> with an
        empty option + rows from f.endpoint. Hint label notes which text
@@ -3536,7 +3611,12 @@ function getFormData(table) {
         const ids = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
         data[f.key] = JSON.stringify(ids);
       } else {
-        data[f.key] = el.value;
+        data[f.key] = f.type === 'project-picker' ? normalizeProjectNumberCandidate(el.value) : el.value;
+        if (f.type === 'project-picker') {
+          el.value = data[f.key];
+          const projectIdEl = document.getElementById('f-project_id');
+          data.project_id = projectIdEl ? projectIdEl.value : '';
+        }
       }
     });
   return data;
@@ -3591,8 +3671,8 @@ function validateForm(table, data) {
     return true;
   }
   if (table !== 'project') return true;
-  if (!/^\d{4}\.\d{2}$/.test(data.project_number || '')) {
-    toast('Project Number must use ####.##');
+  if (!String(data.project_number || '').trim()) {
+    toast('Project is required');
     return false;
   }
   if (data.billing_phase && !/^\d{2}$/.test(data.billing_phase)) {
@@ -3797,6 +3877,7 @@ async function loadLinks(table, recordId) {
 /* ── Modal open/close ──────────────────────── */
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
+  window.__currentModalData = data || {};
   const labels={
     work:'CAD Dev Task',
     project:'Project Task',
@@ -3935,6 +4016,7 @@ async function doPromote() {
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   renderMeetingPacketButton('', {});
+  window.__currentModalData = {};
   editingId=null; editingTable=null;
 }
 

@@ -202,3 +202,7 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'Capability narratives are restricted here' in html
     assert "section.id = 'workspace-section-'" in html
     assert 'id="map-project-number-filter"' in html
+    assert "type:'project-picker'" in html
+    assert 'normalizeProjectNumberCandidate' in html
+    assert 'Project (registry)' not in html
+    assert 'Project Number must use' not in html
