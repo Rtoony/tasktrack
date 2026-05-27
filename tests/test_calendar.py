@@ -333,8 +333,13 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'id="sec-calendar"' in html
     assert 'id="calendar-agenda-view"' in html
     assert 'id="calendar-table-view"' in html
+    assert 'id="filter-calendar-window"' in html
+    assert 'id="filter-calendar-project"' in html
+    assert 'id="filter-calendar-q"' in html
+    assert 'Next 30 Days' in html
     assert 'data-calendar-view="agenda"' in html
     assert 'renderCalendarAgenda' in html
+    assert 'applyCalendarFilters' in html
     assert 'tbody-calendar' in html
 
 def test_calendar_routes_require_login(client):

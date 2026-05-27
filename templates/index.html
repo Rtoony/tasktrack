@@ -1049,6 +1049,15 @@
         <option value="task_due">Task Due</option><option value="prep">Prep</option>
         <option value="reminder">Reminder</option><option value="other">Other</option>
       </select>
+      <select class="filter-select" id="filter-calendar-window" onchange="loadTable('calendar')">
+        <option value="next_30" selected>Next 30 Days</option>
+        <option value="next_7">Next 7 Days</option>
+        <option value="today">Today</option>
+        <option value="past_30">Past 30 Days</option>
+        <option value="all">All Dates</option>
+      </select>
+      <input class="filter-select" id="filter-calendar-project" type="text" placeholder="Project #" oninput="loadTable('calendar')" style="width:105px">
+      <input class="filter-select" id="filter-calendar-q" type="text" placeholder="Find agenda..." oninput="loadTable('calendar')" style="width:145px">
       <div class="view-toggle" aria-label="Calendar view">
         <button class="view-toggle-btn active" type="button" data-calendar-view="agenda" onclick="setCalendarView('agenda')">Agenda</button>
         <button class="view-toggle-btn" type="button" data-calendar-view="table" onclick="setCalendarView('table')">Table</button>
@@ -2160,6 +2169,7 @@ async function loadTable(table) {
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
   if (typeFilter && table === 'calendar') filtered = filtered.filter(r => r.event_type === typeFilter);
+  if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
 
   const tbody = document.getElementById('tbody-'+table);
@@ -2285,14 +2295,44 @@ function currentFilteredCalendarRows() {
   const typeFilter = document.getElementById('filter-calendar-type')?.value || '';
   if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
   if (typeFilter) rows = rows.filter(r => r.event_type === typeFilter);
-  return rows;
+  return applyCalendarFilters(rows);
+}
+
+function applyCalendarFilters(rows) {
+  const windowKey = document.getElementById('filter-calendar-window')?.value || 'next_30';
+  const project = (document.getElementById('filter-calendar-project')?.value || '').trim().toLowerCase();
+  const query = (document.getElementById('filter-calendar-q')?.value || '').trim().toLowerCase();
+  return (rows || []).filter(r => {
+    if (!calendarInWindow(r, windowKey)) return false;
+    if (project && !String(r.project_number || '').toLowerCase().includes(project)) return false;
+    if (query && !calendarTextMatches(r, query)) return false;
+    return true;
+  });
+}
+
+function calendarTextMatches(r, query) {
+  return [r.title, r.description, r.location, r.project_number, r.event_type, r.status]
+    .some(v => String(v || '').toLowerCase().includes(query));
 }
 
 function calendarStartDate(r) {
-  const raw = r?.start_at || r?.start || '';
+  const raw = String(r?.start_at || r?.start || '');
   if (!raw) return null;
-  const dt = new Date(raw);
+  const dt = new Date(raw.length === 10 ? raw + 'T00:00:00' : raw);
   return isNaN(dt) ? null : dt;
+}
+
+function calendarInWindow(r, windowKey) {
+  if (windowKey === 'all') return true;
+  const dt = calendarStartDate(r);
+  if (!dt) return false;
+  const day = new Date(dt); day.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const daysFromToday = Math.round((day - today) / 86400000);
+  if (windowKey === 'today') return daysFromToday === 0;
+  if (windowKey === 'next_7') return daysFromToday >= 0 && daysFromToday <= 7;
+  if (windowKey === 'past_30') return daysFromToday < 0 && daysFromToday >= -30;
+  return daysFromToday >= 0 && daysFromToday <= 30;
 }
 
 function calendarDateKey(r) {
