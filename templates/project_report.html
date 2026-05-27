@@ -150,6 +150,22 @@
       </section>
     </div>
 
+
+    <section class="card">
+      <h2>Recent Project Activity</h2>
+      {% if report.recent_activity %}
+        {% for row in report.recent_activity[:12] %}
+        <div class="row">
+          <div>
+            <div class="row-title">{{ row.record_title }}</div>
+            <div class="row-meta">{{ row.label }} / {{ row.action }}{% if row.field_name %} / {{ row.field_name }}{% endif %}{% if row.new_value %} / {{ row.new_value }}{% endif %}</div>
+          </div>
+          <div class="when">{{ row.created_at[:16] }}</div>
+        </div>
+        {% endfor %}
+      {% else %}<div class="empty">No recent linked activity.</div>{% endif %}
+    </section>
+
     {% for table, label in report.labels.items() %}
     <section class="card">
       <h2>{{ label }} ({{ report.linked_records[table]|length }})</h2>

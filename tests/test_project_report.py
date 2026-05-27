@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import CalendarEvent, PersonnelIssue, Project, ProjectSite, ProjectWorkTask, WorkTask
+from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectSite, ProjectWorkTask, WorkTask
 
 
 def _seed_report_project(sess):
@@ -132,6 +132,64 @@ def test_project_report_redacts_capability_narratives_for_non_admin(auth_client,
     assert rows[0]["issue_description"] == "Sensitive report narrative"
     assert rows[0]["person_name"] == "Sensitive Employee"
 
+
+
+def test_project_report_recent_activity_privacy(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="7722.10", name="Activity project")
+        sess.add(proj)
+        sess.flush()
+        task = WorkTask(
+            title="Visible activity task",
+            project_number="7722.10",
+            project_id=proj.id,
+            status="In Progress",
+        )
+        issue = PersonnelIssue(
+            person_name="Activity Employee",
+            issue_description="Sensitive activity narrative",
+            project_number="7722.10",
+            project_id=proj.id,
+        )
+        sess.add_all([task, issue])
+        sess.flush()
+        sess.add_all([
+            ActivityLog(
+                table_name="work_tasks",
+                record_id=task.id,
+                action="updated",
+                field_name="status",
+                old_value="Not Started",
+                new_value="In Progress",
+            ),
+            ActivityLog(
+                table_name="personnel_issues",
+                record_id=issue.id,
+                action="updated",
+                field_name="issue_description",
+                old_value="old sensitive activity narrative",
+                new_value="Sensitive activity narrative",
+            ),
+        ])
+        sess.commit()
+
+    r = auth_client.get("/api/v1/reports/project?project_number=7722.10")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert any(row["record_title"] == "Visible activity task" for row in body["recent_activity"])
+    assert "Sensitive activity narrative" not in str(body)
+    assert not any(row["table_name"] == "personnel_issues" for row in body["recent_activity"])
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    r = auth_client.get("/api/v1/reports/project?project_number=7722.10")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert any(row["table_name"] == "personnel_issues" for row in body["recent_activity"])
+    assert "Sensitive activity narrative" in str(body)
 
 
 def test_project_report_can_include_own_private_when_requested(auth_client, temp_app):

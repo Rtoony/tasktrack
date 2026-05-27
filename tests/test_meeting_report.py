@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import CalendarEvent, PersonnelIssue, Project, ProjectWorkTask
+from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectWorkTask
 
 
 def _future(days=2):
@@ -21,13 +21,23 @@ def _seed_meeting_packet(sess):
     )
     sess.add(proj)
     sess.flush()
-    sess.add(ProjectWorkTask(
+    task = ProjectWorkTask(
         project_name="Meeting project",
         title="Prepare management exhibit",
         task_description="Compile exhibits",
         project_number="7711.20",
         project_id=proj.id,
         status="In Progress",
+    )
+    sess.add(task)
+    sess.flush()
+    sess.add(ActivityLog(
+        table_name="project_work_tasks",
+        record_id=task.id,
+        action="updated",
+        field_name="status",
+        old_value="Not Started",
+        new_value="In Progress",
     ))
     sess.add(PersonnelIssue(
         person_name="Sensitive Employee",
@@ -104,6 +114,16 @@ def test_meeting_packet_json_linked_event(auth_client, temp_app):
     assert body["project"]["project_number"] == "7711.20"
     assert body["project_report"]["counts"]["project_work_tasks"] == 1
     assert all(event["id"] != ids["meeting_id"] for event in body["project_report"]["upcoming_events"])
+
+
+def test_meeting_packet_recent_project_activity(auth_client, temp_app):
+    ids = _ids(temp_app)
+
+    r = auth_client.get(f"/api/v1/reports/meeting?event_id={ids['meeting_id']}")
+    assert r.status_code == 200
+    activity = r.get_json()["project_report"]["recent_activity"]
+    assert any(row["record_title"] == "Prepare management exhibit" for row in activity)
+    assert any(row["new_value"] == "In Progress" for row in activity)
 
 
 def test_meeting_packet_json_unlinked_event(auth_client, temp_app):

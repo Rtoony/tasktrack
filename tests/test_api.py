@@ -181,6 +181,39 @@ def test_capability_full_detail_limited_to_owner_or_admin(auth_client, temp_app)
     assert r.status_code == 200
     assert "Other capability narrative" in str(r.get_json())
 
+def test_dashboard_hides_deleted_sensitive_activity_from_non_admin(auth_client):
+    created = auth_client.post("/api/v1/personnel_issues", json={
+        "person_name": "Deleted Leak",
+        "issue_description": "deleted sensitive narrative",
+    })
+    assert created.status_code == 201
+    record_id = created.get_json()["id"]
+
+    updated = auth_client.put(f"/api/v1/personnel_issues/{record_id}", json={
+        "issue_description": "deleted sensitive changed narrative",
+    })
+    assert updated.status_code == 200
+    deleted = auth_client.delete(f"/api/v1/personnel_issues/{record_id}")
+    assert deleted.status_code == 200
+
+    r = auth_client.get("/api/v1/dashboard")
+    assert r.status_code == 200
+    dashboard = str(r.get_json())
+    assert "deleted sensitive narrative" not in dashboard
+    assert "deleted sensitive changed narrative" not in dashboard
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+
+    r = auth_client.get("/api/v1/dashboard")
+    assert r.status_code == 200
+    dashboard = str(r.get_json())
+    assert "deleted sensitive narrative" in dashboard
+    assert "deleted sensitive changed narrative" in dashboard
+
+
 def test_search_finds_records_across_tables(auth_client):
     _make_work_task(auth_client, title="Calibrate the gripper")
     _make_work_task(auth_client, title="Order new bearings")

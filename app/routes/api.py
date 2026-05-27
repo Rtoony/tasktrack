@@ -60,12 +60,19 @@ def _target_detail_visible(sess, table: str, record_id: int) -> bool:
     return row is not None and _record_detail_visible_to_current_user(table, row)
 
 
+PROTECTED_ACTIVITY_TABLES = {"calendar_events", "personnel_issues"}
+
+
 def _activity_visible_to_current_user(sess, row: ActivityLog) -> bool:
     Model = TABLE_MODELS.get(row.table_name)
     if Model is None:
         return True
     target = sess.get(Model, row.record_id)
     if target is None:
+        # Deleted protected rows no longer carry enough context to prove
+        # owner/private visibility, so keep those audit values admin-only.
+        if row.table_name in PROTECTED_ACTIVITY_TABLES:
+            return _is_admin()
         return True
     return _record_detail_visible_to_current_user(row.table_name, target)
 

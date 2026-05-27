@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ..models import CalendarEvent, Project, to_dict
+from ..models import ActivityLog, CalendarEvent, Project, to_dict
 from .project_workspace import project_workspace_payload
 from .tickets import (
     done_statuses_for_table,
@@ -114,6 +114,51 @@ def _upcoming_calendar(rows: list[dict], now: datetime) -> list[dict]:
     return out
 
 
+def _recent_activity_for_project(sess: Session, linked_records: dict[str, list[dict]],
+                                 *, is_admin: bool = False,
+                                 limit: int = 20) -> list[dict]:
+    """Recent activity for currently linked project rows.
+
+    Non-admin packets omit capability/personnel activity entirely; summary
+    counts can remain visible, but old/new audit values are narrative-heavy.
+    """
+    out: list[dict] = []
+    seen: set[tuple[str, int]] = set()
+    for table, rows in linked_records.items():
+        if table == "personnel_issues" and not is_admin:
+            continue
+        for row in rows:
+            raw_id = row.get("id")
+            try:
+                record_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            key = (table, record_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            activity_rows = sess.scalars(
+                select(ActivityLog)
+                .where(
+                    ActivityLog.table_name == table,
+                    ActivityLog.record_id == record_id,
+                )
+                .order_by(ActivityLog.created_at.desc())
+                .limit(5)
+            ).all()
+            record_title = _record_title(table, row)
+            label = REPORT_TABLES.get(table, table)
+            for activity in activity_rows:
+                payload = to_dict(activity) or {}
+                payload.update({
+                    "label": label,
+                    "record_title": record_title,
+                })
+                out.append(payload)
+    out.sort(key=lambda row: row.get("created_at") or "", reverse=True)
+    return out[:limit]
+
+
 def _clamp_limit(raw, default: int = DEFAULT_PORTFOLIO_LIMIT) -> int:
     try:
         value = int(raw)
@@ -176,6 +221,9 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
         "open_counts": open_counts,
         "overdue_items": overdue,
         "upcoming_events": upcoming[:12],
+        "recent_activity": _recent_activity_for_project(
+            sess, linked, is_admin=is_admin, limit=20,
+        ),
         "linked_records": linked,
         "labels": REPORT_TABLES,
         "capabilities_visible": bool(is_admin),
