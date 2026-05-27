@@ -122,6 +122,51 @@ def test_range_events_filters_by_project_type_and_status(auth_client, temp_app):
     assert rows[0]["project_number"] == "2222.00"
 
 
+def test_range_events_support_date_window_all_day_and_sorting(auth_client):
+    target = (datetime.now() + timedelta(days=4)).date().isoformat()
+    all_day = _create_event(
+        auth_client,
+        title="All day site visit",
+        start_at=target,
+        all_day=True,
+    )
+    timed = _create_event(
+        auth_client,
+        title="Afternoon review",
+        start_at=target + "T14:30",
+    )
+
+    r = auth_client.get(f"/api/v1/calendar/events?from={target}&to={target}")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert [row["id"] for row in rows] == [all_day["id"], timed["id"]]
+    assert rows[0]["all_day"] is True
+    assert rows[0]["start_at"] == target
+    assert rows[1]["start_at"] == target + "T14:30"
+
+
+def test_range_events_hide_private_events_from_other_users(auth_client):
+    target = (datetime.now() + timedelta(days=2)).date().isoformat()
+    public = _create_event(auth_client, title="Public agenda item", start_at=target + "T09:00")
+    private = _create_event(
+        auth_client,
+        title="Private agenda item",
+        start_at=target + "T10:00",
+        visibility="private",
+    )
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    r = auth_client.get(f"/api/v1/calendar/events?from={target}&to={target}")
+    assert r.status_code == 200
+    ids = {row["id"] for row in r.get_json()}
+    assert public["id"] in ids
+    assert private["id"] not in ids
+
+
 def test_private_calendar_events_are_hidden_from_other_users(auth_client):
     private = _create_event(
         auth_client,
@@ -286,6 +331,10 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert "Reminder Queue" in html
     assert 'data-tab="calendar"' in html
     assert 'id="sec-calendar"' in html
+    assert 'id="calendar-agenda-view"' in html
+    assert 'id="calendar-table-view"' in html
+    assert 'data-calendar-view="agenda"' in html
+    assert 'renderCalendarAgenda' in html
     assert 'tbody-calendar' in html
 
 def test_calendar_routes_require_login(client):

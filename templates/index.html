@@ -81,6 +81,34 @@
   .kanban-card-tag.low      { color:#94a3b8; }
   .kanban-card-tag.overdue  { color:#f87171; border-color:rgba(248,113,113,0.5); background:rgba(248,113,113,0.08); }
   .kanban-card-pn { font-family:'IBM Plex Mono', monospace; font-size:0.7rem; color:var(--text-muted); }
+
+  /* Calendar agenda view — grouped by event day from the same filtered
+     rows used by the table. The table remains available as a data view. */
+  .calendar-agenda-wrap { margin-bottom:1rem; }
+  .calendar-agenda-board { display:flex; flex-direction:column; gap:0.75rem; }
+  .calendar-day { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; box-shadow:var(--shadow-sm); }
+  .calendar-day-head { display:flex; align-items:baseline; justify-content:space-between; gap:0.8rem; padding:0.65rem 0.85rem; border-bottom:1px solid var(--border-light); background:color-mix(in srgb, var(--surface) 82%, var(--bg)); }
+  .calendar-day-title { font-size:0.82rem; font-weight:700; color:var(--text); }
+  .calendar-day-sub { font-size:0.72rem; color:var(--text-light); font-family:'IBM Plex Mono', monospace; }
+  .calendar-event-list { display:flex; flex-direction:column; }
+  .calendar-event-card { display:grid; grid-template-columns:92px 1fr auto; gap:0.85rem; align-items:start; padding:0.7rem 0.85rem; border-bottom:1px solid var(--border-light); cursor:pointer; transition:background 0.15s, border-color 0.15s; }
+  .calendar-event-card:last-child { border-bottom:none; }
+  .calendar-event-card:hover { background:color-mix(in srgb, var(--surface) 78%, var(--bg)); }
+  .calendar-event-card.cancelled { opacity:0.64; }
+  .calendar-event-card.done { opacity:0.72; }
+  .calendar-event-time { color:var(--accent); font-family:'IBM Plex Mono', monospace; font-size:0.75rem; font-weight:700; white-space:nowrap; }
+  .calendar-event-main { min-width:0; }
+  .calendar-event-title { font-size:0.9rem; font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .calendar-event-meta { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.35rem; color:var(--text-muted); font-size:0.72rem; }
+  .calendar-event-desc { color:var(--text-muted); font-size:0.76rem; margin-top:0.35rem; max-width:720px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .calendar-event-actions { display:flex; flex-direction:column; align-items:flex-end; gap:0.35rem; min-width:86px; }
+  .calendar-chip { display:inline-flex; align-items:center; border:1px solid var(--border-light); border-radius:999px; padding:0.08rem 0.45rem; background:var(--bg); color:var(--text-muted); font-size:0.68rem; line-height:1.35; }
+  .calendar-chip.project { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 45%, var(--border)); font-family:'IBM Plex Mono', monospace; }
+  .calendar-chip.reminder { color:var(--warn); border-color:color-mix(in srgb, var(--warn) 45%, var(--border)); }
+  @media (max-width: 720px) {
+    .calendar-event-card { grid-template-columns:1fr; gap:0.45rem; }
+    .calendar-event-actions { align-items:flex-start; flex-direction:row; flex-wrap:wrap; }
+  }
   @media (max-width: 1100px) {
     .kanban-board { grid-template-columns:repeat(2, 1fr); }
   }
@@ -1021,10 +1049,21 @@
         <option value="task_due">Task Due</option><option value="prep">Prep</option>
         <option value="reminder">Reminder</option><option value="other">Other</option>
       </select>
+      <div class="view-toggle" aria-label="Calendar view">
+        <button class="view-toggle-btn active" type="button" data-calendar-view="agenda" onclick="setCalendarView('agenda')">Agenda</button>
+        <button class="view-toggle-btn" type="button" data-calendar-view="table" onclick="setCalendarView('table')">Table</button>
+      </div>
       <a class="btn btn-sm btn-export" href="/api/v1/calendar_events/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('calendar')">+ Add Event</button>
     </div>
-    <div class="table-wrap">
+    <div class="calendar-agenda-wrap" id="calendar-agenda-view">
+      <div class="calendar-agenda-board" id="calendar-agenda"></div>
+      <div class="empty-state" id="calendar-agenda-empty" style="display:none">
+        <div class="empty-title">No calendar agenda items</div>
+        <p class="empty-copy">Adjust filters or add a meeting, deadline, milestone, prep block, or reminder.</p>
+      </div>
+    </div>
+    <div class="table-wrap" id="calendar-table-view" style="display:none">
       <table><thead><tr>
         <th data-col="start_at" data-table="calendar">Start <span class="sort-arrow">&#9650;</span></th>
         <th data-col="title" data-table="calendar">Title <span class="sort-arrow">&#9650;</span></th>
@@ -2146,6 +2185,7 @@ async function loadTable(table) {
   }
 
   tbody.replaceChildren();
+  if (table === 'calendar') renderCalendarAgenda(filtered);
   if (!filtered.length) { empty.style.display='block'; return; }
   empty.style.display='none';
 
@@ -2185,7 +2225,7 @@ async function loadTable(table) {
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeActions(table,r.id,r.title));
     } else if (table==='calendar') {
-      tr.appendChild(makeDateCell(r.start_at));
+      tr.appendChild(makeCalendarDateCell(r, 'start_at'));
       tr.appendChild(makeCell(r.title,'cell-title'));
       tr.appendChild(makeStatusBadge(formatEventType(r.event_type)));
       tr.appendChild(makeClickableStatus(table,r));
@@ -2222,6 +2262,135 @@ async function loadTable(table) {
 
   // Phase-4: keep the Kanban view in sync with the same filtered set.
   if (table === 'project') renderProjectKanban(filtered);
+}
+
+/* ── Calendar agenda view ────────────────────────────────────────────── */
+let calendarViewMode = 'agenda';
+
+function setCalendarView(mode) {
+  calendarViewMode = mode;
+  document.querySelectorAll('#sec-calendar .view-toggle-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.calendarView === mode);
+  });
+  const agenda = document.getElementById('calendar-agenda-view');
+  const table = document.getElementById('calendar-table-view');
+  if (agenda) agenda.style.display = (mode === 'agenda') ? '' : 'none';
+  if (table) table.style.display = (mode === 'table') ? '' : 'none';
+  if (mode === 'agenda') renderCalendarAgenda(currentFilteredCalendarRows());
+}
+
+function currentFilteredCalendarRows() {
+  let rows = (tableCache.calendar || []).slice();
+  const statusFilter = document.getElementById('filter-calendar-status')?.value || '';
+  const typeFilter = document.getElementById('filter-calendar-type')?.value || '';
+  if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+  if (typeFilter) rows = rows.filter(r => r.event_type === typeFilter);
+  return rows;
+}
+
+function calendarStartDate(r) {
+  const raw = r?.start_at || r?.start || '';
+  if (!raw) return null;
+  const dt = new Date(raw);
+  return isNaN(dt) ? null : dt;
+}
+
+function calendarDateKey(r) {
+  const raw = String(r?.start_at || r?.start || '');
+  if (raw.length >= 10) return raw.slice(0, 10);
+  const dt = calendarStartDate(r);
+  return dt ? dt.toISOString().slice(0, 10) : 'undated';
+}
+
+function calendarDayTitle(key) {
+  if (key === 'undated') return 'Undated';
+  const dt = new Date(key + 'T00:00:00');
+  if (isNaN(dt)) return key;
+  return dt.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric'});
+}
+
+function calendarDaySub(key, count) {
+  if (key === 'undated') return count + ' item' + (count === 1 ? '' : 's');
+  const dt = new Date(key + 'T00:00:00');
+  if (isNaN(dt)) return count + ' item' + (count === 1 ? '' : 's');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const day = new Date(dt); day.setHours(0,0,0,0);
+  const diff = Math.round((day - today) / 86400000);
+  const rel = diff === 0 ? 'Today' : (diff === 1 ? 'Tomorrow' : (diff === -1 ? 'Yesterday' : (diff > 0 ? 'In ' + diff + ' days' : Math.abs(diff) + ' days ago')));
+  return rel + ' · ' + count + ' item' + (count === 1 ? '' : 's');
+}
+
+function calendarTimeLabel(r) {
+  if (isAllDayEvent(r)) return 'All day';
+  const dt = calendarStartDate(r);
+  if (!dt) return '—';
+  return dt.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+}
+
+function calendarAgendaSort(a, b) {
+  const ka = calendarDateKey(a), kb = calendarDateKey(b);
+  if (ka !== kb) return ka.localeCompare(kb);
+  if (isAllDayEvent(a) !== isAllDayEvent(b)) return isAllDayEvent(a) ? -1 : 1;
+  return String(a.start_at || '').localeCompare(String(b.start_at || ''));
+}
+
+function renderCalendarAgenda(rows) {
+  const host = document.getElementById('calendar-agenda');
+  const empty = document.getElementById('calendar-agenda-empty');
+  if (!host || !empty) return;
+  host.replaceChildren();
+  const sorted = (rows || []).slice().sort(calendarAgendaSort);
+  if (!sorted.length) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const groups = new Map();
+  sorted.forEach(r => {
+    const key = calendarDateKey(r);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  });
+
+  groups.forEach((items, key) => {
+    const day = document.createElement('section'); day.className = 'calendar-day';
+    const head = document.createElement('div'); head.className = 'calendar-day-head';
+    const title = document.createElement('div'); title.className = 'calendar-day-title'; title.textContent = calendarDayTitle(key);
+    const sub = document.createElement('div'); sub.className = 'calendar-day-sub'; sub.textContent = calendarDaySub(key, items.length);
+    head.appendChild(title); head.appendChild(sub); day.appendChild(head);
+    const list = document.createElement('div'); list.className = 'calendar-event-list';
+    items.forEach(r => list.appendChild(makeCalendarAgendaCard(r)));
+    day.appendChild(list);
+    host.appendChild(day);
+  });
+}
+
+function makeCalendarAgendaCard(r) {
+  const card = document.createElement('article');
+  card.className = 'calendar-event-card ' + String(r.status || '').toLowerCase().replace(/\s+/g, '-');
+  card.addEventListener('click', () => editRecord('calendar', r.id));
+
+  const time = document.createElement('div'); time.className = 'calendar-event-time'; time.textContent = calendarTimeLabel(r);
+  const main = document.createElement('div'); main.className = 'calendar-event-main';
+  const title = document.createElement('div'); title.className = 'calendar-event-title'; title.textContent = r.title || '(untitled event)';
+  main.appendChild(title);
+
+  const meta = document.createElement('div'); meta.className = 'calendar-event-meta';
+  const type = document.createElement('span'); type.className = 'calendar-chip'; type.textContent = formatEventType(r.event_type || 'event'); meta.appendChild(type);
+  if (r.project_number) { const p = document.createElement('span'); p.className = 'calendar-chip project'; p.textContent = r.project_number; meta.appendChild(p); }
+  if (r.location) { const loc = document.createElement('span'); loc.className = 'calendar-chip'; loc.textContent = r.location; meta.appendChild(loc); }
+  if (r.reminder_date) { const rem = document.createElement('span'); rem.className = 'calendar-chip reminder'; rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date); meta.appendChild(rem); }
+  main.appendChild(meta);
+  if (r.description) { const desc = document.createElement('div'); desc.className = 'calendar-event-desc'; desc.textContent = descriptionPreview(r.description); main.appendChild(desc); }
+
+  const actions = document.createElement('div'); actions.className = 'calendar-event-actions';
+  const status = document.createElement('span'); status.className = 'badge badge-' + String(r.status || '').toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-'); status.textContent = r.status || '';
+  const vis = document.createElement('span'); vis.className = 'badge badge-' + String(r.visibility || 'internal').toLowerCase().replace(/\s+/g, '-'); vis.textContent = r.visibility || 'internal';
+  actions.appendChild(status); actions.appendChild(vis);
+
+  card.appendChild(time); card.appendChild(main); card.appendChild(actions);
+  return card;
 }
 
 /* ── Kanban view (Phase 4) ─────────────────────────────────────────────
@@ -2435,6 +2604,14 @@ function makeDateCell(d) {
   const td = document.createElement('td');
   if (!d) { td.innerHTML='<span style="color:var(--text-light)">\u2014</span>'; return td; }
   td.textContent = formatDateTime(d);
+  return td;
+}
+
+function makeCalendarDateCell(r, field) {
+  const td = document.createElement('td');
+  const val = formatCalendarDateTime(r, field);
+  if (!val) { td.innerHTML='<span style="color:var(--text-light)">\u2014</span>'; return td; }
+  td.textContent = val;
   return td;
 }
 
