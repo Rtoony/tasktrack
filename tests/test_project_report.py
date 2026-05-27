@@ -94,7 +94,150 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
+    assert "Private project prep" not in html
 
+
+
+def test_project_report_can_include_own_private_when_requested(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_report_project(sess)
+
+    r = auth_client.get("/api/v1/reports/project?project_number=7711.20")
+    assert r.status_code == 200
+    default_titles = {event["title"] for event in r.get_json()["upcoming_events"]}
+    assert "Private project prep" not in default_titles
+
+    r = auth_client.get("/api/v1/reports/project?project_number=7711.20&include_private=1")
+    assert r.status_code == 200
+    titles = {event["title"] for event in r.get_json()["upcoming_events"]}
+    assert "Public project review" in titles
+    assert "Private project prep" in titles
+
+
+def _seed_portfolio_projects(sess):
+    p1 = Project(
+        project_number="8800.10",
+        name="Portfolio one",
+        client="Acme Water",
+        component="Site Improvement Plans",
+        principal="Long, David",
+        display_status="active",
+    )
+    p2 = Project(
+        project_number="8800.20",
+        name="Portfolio dormant",
+        client="Acme Water",
+        component="Topographic Mapping",
+        principal="Long, David",
+        display_status="dormant",
+    )
+    p3 = Project(
+        project_number="9900.30",
+        name="Other client project",
+        client="Other District",
+        component="Site Improvement Plans",
+        principal="Ng, Maya",
+        display_status="active",
+    )
+    p4 = Project(
+        project_number="8800.40",
+        name="Soft deleted portfolio",
+        client="Acme Water",
+        component="Site Improvement Plans",
+        principal="Long, David",
+        display_status="active",
+        active=0,
+    )
+    sess.add_all([p1, p2, p3, p4])
+    sess.flush()
+    yesterday = (datetime.now() - timedelta(days=1)).date().isoformat()
+    future = (datetime.now() + timedelta(days=3)).isoformat(timespec="minutes")
+    sess.add(ProjectSite(project_id=p1.id, lat=38.5, lng=-122.5, pin_color="green", is_primary=1))
+    sess.add(ProjectWorkTask(
+        project_name="Portfolio one",
+        title="Portfolio late item",
+        project_number="8800.10",
+        project_id=p1.id,
+        task_description="Finish packet",
+        status="In Progress",
+        due_at=yesterday + "T17:00",
+    ))
+    sess.add(CalendarEvent(
+        title="Public portfolio review",
+        event_type="review",
+        start_at=future,
+        project_number="8800.10",
+        project_id=p1.id,
+        visibility="internal",
+        created_by_user_id=1,
+    ))
+    sess.add(CalendarEvent(
+        title="Private portfolio prep",
+        event_type="prep",
+        start_at=future,
+        project_number="8800.10",
+        project_id=p1.id,
+        visibility="private",
+        created_by_user_id=1,
+    ))
+    sess.commit()
+
+
+def test_portfolio_project_report_filters_summary_and_privacy(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    r = auth_client.get(
+        "/api/v1/reports/projects?client=Acme&component=Site%20Improvement%20Plans"
+        "&display_status=active&limit=5"
+    )
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["summary"]["project_count"] == 1
+    assert body["summary"]["site_count"] == 1
+    assert body["summary"]["overdue_count"] == 1
+    assert body["include_private"] is False
+    report = body["reports"][0]
+    assert report["project"]["project_number"] == "8800.10"
+    titles = {event["title"] for event in report["upcoming_events"]}
+    assert "Public portfolio review" in titles
+    assert "Private portfolio prep" not in titles
+
+    r = auth_client.get(
+        "/api/v1/reports/projects?project_numbers=8800.10&include_private=1&limit=5"
+    )
+    assert r.status_code == 200
+    titles = {event["title"] for event in r.get_json()["reports"][0]["upcoming_events"]}
+    assert "Private portfolio prep" in titles
+
+
+def test_portfolio_project_report_html_renders(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    r = auth_client.get("/reports/projects?client=Acme&limit=5")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Portfolio Project Packet" in html
+    assert "Portfolio one" in html
+    assert "Portfolio dormant" in html
+    assert "Soft deleted portfolio" not in html
+    assert "Private portfolio prep" not in html
+
+
+def test_portfolio_project_report_auth_and_dashboard_link(client, auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert 'href="/reports/projects"' in html
+
+    with client.session_transaction() as s:
+        s.clear()
+    assert client.get("/api/v1/reports/projects").status_code == 401
+    assert client.get("/reports/projects").status_code == 302
 
 def test_project_report_errors_and_auth(client, auth_client):
     assert auth_client.get("/api/v1/reports/project").status_code == 400
