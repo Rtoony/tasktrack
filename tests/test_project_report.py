@@ -600,6 +600,53 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     assert "deletePortfolioPreset" in html
     assert 'id="attention_level"' in html
 
+def test_today_brief_json_and_html(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+        today = (datetime.now() + timedelta(minutes=15)).isoformat(timespec="minutes")
+        proj = sess.query(Project).filter_by(project_number="8800.10").one()
+        sess.add(CalendarEvent(
+            title="Today project sync",
+            event_type="meeting",
+            status="scheduled",
+            start_at=today,
+            project_number="8800.10",
+            project_id=proj.id,
+            visibility="internal",
+            created_by_user_id=1,
+        ))
+        sess.add(CalendarEvent(
+            title="Private today prep",
+            event_type="prep",
+            status="scheduled",
+            start_at=today,
+            project_number="8800.10",
+            project_id=proj.id,
+            visibility="private",
+            created_by_user_id=1,
+        ))
+        sess.commit()
+
+    r = auth_client.get("/api/v1/reports/today")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["meetings"]["count"] >= 1
+    assert any(packet["event"]["title"] == "Today project sync" for packet in body["meetings"]["packets"])
+    assert any(row["project_number"] == "8800.10" for row in body["action_projects"])
+    assert "Private today prep" not in str(body)
+
+    r = auth_client.get("/reports/today")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Today Brief" in html
+    assert "TaskTrack Today Brief" in html
+    assert "Today project sync" in html
+    assert "At-Risk Action Queue" in html
+    assert "Private today prep" not in html
+    assert "@page { size: letter" in html
+
+
 def test_portfolio_action_queue_csv_export(auth_client, temp_app):
     with temp_app.app_context():
         sess = get_session()
@@ -628,6 +675,7 @@ def test_reports_home_renders_command_center(client, auth_client):
     html = r.get_data(as_text=True)
     assert "Report Center" in html
     assert "Project Status One-Pager" in html
+    assert "Today Brief" in html
     assert "At-Risk Queue" in html
     assert "attention_level=at_risk" in html
     assert "At-Risk CSV" in html

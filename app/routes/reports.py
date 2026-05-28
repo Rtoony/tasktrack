@@ -255,6 +255,53 @@ def reports_home():
     )
 
 
+def _today_brief_packet(sess):
+    include_private = _bool_arg("include_private")
+    meeting_days = _int_arg("days", 1, 1, 14)
+    meeting_limit = _int_arg("meeting_limit", 8, 1, 25)
+    project_limit = _int_arg("project_limit", 8, 1, MAX_PORTFOLIO_LIMIT)
+    meetings = meeting_packet_batch_report(
+        sess,
+        days=meeting_days,
+        limit=meeting_limit,
+        user_id=session.get("user_id"),
+        include_private=include_private,
+        is_admin=_is_admin(),
+    )
+    portfolio = portfolio_project_report(
+        sess,
+        filters={"attention_level": "at_risk", "limit": project_limit},
+        user_id=session.get("user_id"),
+        include_private=include_private,
+        is_admin=_is_admin(),
+    )
+    return {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "days": meeting_days,
+        "include_private": include_private,
+        "meetings": meetings,
+        "at_risk": portfolio,
+        "action_projects": portfolio.get("summary", {}).get("action_projects", []),
+    }
+
+
+@bp.route("/api/v1/reports/today", methods=["GET"])
+@login_required
+def today_brief_json():
+    return jsonify(_today_brief_packet(get_session()))
+
+
+@bp.route("/reports/today", methods=["GET"])
+@login_required
+def today_brief_page():
+    return render_template(
+        "reports_today.html",
+        packet=_today_brief_packet(get_session()),
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
 @bp.route("/api/v1/reports/presets", methods=["GET"])
 @login_required
 def report_presets_list():
