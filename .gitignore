@@ -7,6 +7,7 @@ tracker.db
 tracker.db-shm
 tracker.db-wal
 tracker.db.before-*
+backups/
 *.bak
 *.bak-*
 
