@@ -74,3 +74,28 @@ def test_legacy_submit_path_redirects_to_intake(client):
 def test_capability_intake_returns_404(client):
     r = client.get("/intake/capability")
     assert r.status_code == 404
+
+
+
+def test_printable_intake_packet_renders_for_paper_and_remarkable(client):
+    r = client.get("/intake/printable")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Printable Intake Forms" in html
+    assert "Print / Save PDF" in html
+    assert "OCR intake block" in html
+    assert "TT-PROJECT-WORK-REQUEST" in html
+    assert "TT-CAD-ISSUE-REQUEST" in html
+    assert "TT-TRAINING-IMPROVEMENT-REQUEST" in html
+    assert "TARGET_TABLE=project_work_tasks" in html
+    assert "/capture/ocr" in html
+    assert "reMarkable layout" in html
+
+    single = client.get("/intake/printable?form=cad-development&layout=remarkable")
+    assert single.status_code == 200
+    single_html = single.get_data(as_text=True)
+    assert "TT-CAD-ISSUE-REQUEST" in single_html
+    assert "TT-PROJECT-WORK-REQUEST" not in single_html
+    assert 'class="page remarkable"' in single_html
+
+    assert client.get("/intake/printable?form=missing").status_code == 404

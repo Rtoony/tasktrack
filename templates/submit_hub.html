@@ -33,6 +33,8 @@
   .process ol { margin-left:1.2rem; color:var(--text-muted); line-height:1.55; }
   .process li { padding-left:0.2rem; margin-bottom:0.35rem; }
   .process strong { color:var(--text); }
+  .quick-links { display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.8rem; }
+  .btn.secondary { background:#fff; color:var(--accent); border:1px solid #bfdbfe; }
   .back { display:inline-block; margin-top:1rem; color:var(--accent); text-decoration:none; font-weight:600; }
 </style>
 </head>
@@ -42,6 +44,11 @@
       <div class="brand"><span>//</span> TaskTrack</div>
       <h1>Submission Forms</h1>
       <p class="intro">TaskTrack is the front door for work requests. Choose the closest form; each submission becomes a tracked record for review instead of living in email or hallway follow-up.</p>
+      <div class="quick-links">
+        <a class="btn secondary" href="/intake/printable">Print PDF Packet</a>
+        <a class="btn secondary" href="/intake/printable?layout=remarkable">reMarkable Packet</a>
+        <a class="btn secondary" href="/capture/ocr">OCR Capture</a>
+      </div>
     </section>
     <section class="grid">
       {% for form in forms %}
@@ -60,7 +67,7 @@
     <section class="process" aria-label="What happens after submission">
       <h2>What happens after submission</h2>
       <ol>
-        <li><strong>Capture:</strong> TaskTrack saves the request in the matching queue.</li>
+        <li><strong>Capture:</strong> TaskTrack saves the request in the matching queue, or the printable packet gives paper/reMarkable users the same field structure for later OCR capture.</li>
         <li><strong>Triage:</strong> the dashboard owner reviews priority, missing context, and assignment.</li>
         <li><strong>Follow-through:</strong> status, comments, attachments, and history stay with the record.</li>
       </ol>

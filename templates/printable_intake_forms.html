@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Printable Intake Forms | TaskTrack</title>
+<style>
+  :root { --ink:#111827; --muted:#4b5563; --line:#111827; --soft:#e5e7eb; --paper:#fff; --bg:#f3f4f6; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial, Helvetica, sans-serif; font-size:10.5pt; }
+  .toolbar { position:sticky; top:0; z-index:5; background:#111827; color:#f9fafb; padding:0.75rem 1rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem; flex-wrap:wrap; }
+  .toolbar strong { font-size:0.95rem; }
+  .toolbar a,.toolbar button,.toolbar select { border:1px solid #374151; background:#1f2937; color:#f9fafb; border-radius:8px; padding:0.42rem 0.65rem; text-decoration:none; font:inherit; font-size:0.82rem; }
+  .toolbar button { cursor:pointer; background:#38bdf8; color:#06111f; border-color:#38bdf8; font-weight:700; }
+  .toolbar .group { display:flex; gap:0.45rem; align-items:center; flex-wrap:wrap; }
+  .screen-note { max-width:8.5in; margin:0.75rem auto; color:#374151; background:#fff; border:1px solid #d1d5db; border-radius:10px; padding:0.75rem 0.9rem; }
+  .page { width:8.5in; min-height:11in; margin:0.75rem auto; background:var(--paper); padding:0.42in; box-shadow:0 18px 42px rgba(0,0,0,0.18); page-break-after:always; }
+  .page.remarkable { width:7.25in; min-height:9.7in; padding:0.34in; }
+  .mast { display:grid; grid-template-columns:1fr 1.35in; gap:0.2in; border-bottom:2px solid var(--line); padding-bottom:0.12in; margin-bottom:0.15in; }
+  .brand { font-weight:700; letter-spacing:0.08em; font-size:8.5pt; text-transform:uppercase; color:var(--muted); }
+  h1 { font-size:18pt; line-height:1.05; margin:0.05in 0 0; }
+  .meta-code { border:1.5px solid var(--line); padding:0.08in; font-family:Courier New, monospace; font-size:8pt; line-height:1.35; }
+  .sub { color:var(--muted); font-size:9.2pt; margin-top:0.06in; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:0.12in; margin-bottom:0.1in; }
+  .row.three { grid-template-columns:1fr 1fr 1fr; }
+  .field { border:1.5px solid var(--line); min-height:0.36in; padding:0.04in 0.06in; }
+  .label { display:block; font-size:7pt; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); margin-bottom:0.03in; }
+  .line { height:0.17in; border-bottom:1px solid var(--soft); }
+  .box { border:1.5px solid var(--line); margin-bottom:0.1in; padding:0.06in; }
+  .box h2 { font-size:8pt; text-transform:uppercase; letter-spacing:0.05em; margin:0 0 0.05in; color:var(--muted); }
+  .writing { background:repeating-linear-gradient(to bottom, transparent 0, transparent 0.235in, var(--soft) 0.242in); min-height:1.25in; }
+  .writing.tall { min-height:2.05in; }
+  .check-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.05in 0.12in; font-size:9pt; }
+  .check { display:flex; gap:0.06in; align-items:flex-start; min-height:0.18in; }
+  .square { width:0.12in; height:0.12in; border:1.4px solid var(--line); flex:0 0 auto; margin-top:0.02in; }
+  .ocr { border:2px solid var(--line); padding:0.07in; margin-top:0.1in; font-family:Courier New, monospace; font-size:8.3pt; line-height:1.38; }
+  .ocr-title { font-family:Arial, Helvetica, sans-serif; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; font-size:7.3pt; margin-bottom:0.04in; }
+  .footer { display:flex; justify-content:space-between; color:var(--muted); border-top:1px solid var(--line); padding-top:0.05in; font-size:7.4pt; margin-top:0.08in; }
+  @media (max-width: 900px) { .page,.page.remarkable { width:calc(100vw - 1rem); min-height:auto; } .row,.row.three,.mast { grid-template-columns:1fr; } }
+  @media print {
+    @page { size: letter; margin:0; }
+    body { background:#fff; }
+    .toolbar,.screen-note { display:none !important; }
+    .page,.page.remarkable { width:8.5in; min-height:11in; margin:0; padding:0.42in; box-shadow:none; page-break-after:always; }
+  }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <strong>TaskTrack Printable Intake Forms</strong>
+    <div class="group">
+      <a href="/intake">Intake Hub</a>
+      <a href="/capture/ocr">OCR Capture</a>
+      <a href="/?capture_source=paper-form">Dashboard Capture</a>
+      <select onchange="if (this.value) window.location=this.value" aria-label="Printable form selector">
+        <option value="/intake/printable" {% if selected_key == 'packet' %}selected{% endif %}>Full packet</option>
+        {% for row in all_forms %}<option value="/intake/printable?form={{ row.key }}" {% if selected_key == row.key %}selected{% endif %}>{{ row.title }}</option>{% endfor %}
+      </select>
+      <a href="/intake/printable{% if selected_key != 'packet' %}?form={{ selected_key }}&{% else %}?{% endif %}layout=remarkable">reMarkable layout</a>
+      <button type="button" onclick="window.print()">Print / Save PDF</button>
+    </div>
+  </div>
+  <div class="screen-note">
+    Print this page to PDF for paper use or import the PDF into reMarkable. The OCR block uses stable labels so a later TaskTrack ingestion tool can read scanned handwriting and route the request into the correct queue.
+  </div>
+
+  {% for form in forms %}
+  <section class="page {{ 'remarkable' if layout == 'remarkable' else '' }}">
+    <header class="mast">
+      <div>
+        <div class="brand">TaskTrack intake form</div>
+        <h1>{{ form.title }}</h1>
+        <div class="sub">Examples: {{ form.examples }}</div>
+      </div>
+      <div class="meta-code">
+        TT_FORM_ID={{ form.form_id }}<br>
+        TARGET_TABLE={{ form.target_table }}<br>
+        SOURCE={{ form.source }}
+      </div>
+    </header>
+
+    <div class="row three">
+      <div class="field"><span class="label">Requestor name</span><div class="line"></div></div>
+      <div class="field"><span class="label">Date</span><div class="line"></div></div>
+      <div class="field"><span class="label">Priority</span><div class="line"></div></div>
+    </div>
+    <div class="row three">
+      <div class="field"><span class="label">Project number</span><div class="line"></div></div>
+      <div class="field"><span class="label">Due date / needed by</span><div class="line"></div></div>
+      <div class="field"><span class="label">Best follow-up contact</span><div class="line"></div></div>
+    </div>
+
+    <div class="box">
+      <h2>{{ form.summary_label }}</h2>
+      <div class="writing"></div>
+    </div>
+    <div class="box">
+      <h2>{{ form.action_label }}</h2>
+      <div class="writing tall"></div>
+    </div>
+
+    <div class="row">
+      <div class="box">
+        <h2>Context checklist</h2>
+        <div class="check-grid">
+          {% for section in form.sections %}<div class="check"><span class="square"></span><span>{{ section }}</span></div>{% endfor %}
+        </div>
+      </div>
+      <div class="box">
+        <h2>Attachments / references</h2>
+        <div class="writing"></div>
+      </div>
+    </div>
+
+    <div class="ocr">
+      <div class="ocr-title">OCR intake block - TaskTrack use</div>
+      FORM_ID: {{ form.form_id }}<br>
+      TARGET_TABLE: {{ form.target_table }}<br>
+      SOURCE: {{ form.source }}<br>
+      REQUESTOR:<br>
+      PROJECT_NUMBER:<br>
+      PRIORITY:<br>
+      DUE_DATE:<br>
+      REQUEST_SUMMARY:<br>
+      REQUESTED_ACTION:<br>
+      FOLLOW_UP_QUESTIONS:
+    </div>
+
+    <footer class="footer">
+      <span>TaskTrack printable intake / browser PDF / reMarkable-ready</span>
+      <span>Scan or OCR, then paste into /capture/ocr</span>
+    </footer>
+  </section>
+  {% endfor %}
+</body>
+</html>

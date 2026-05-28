@@ -40,6 +40,8 @@ def test_admin_panel_serves_admin(admin_client):
     assert "Meeting Packet Batch" in html
     assert "Weekly Review" in html
     assert "Submission Forms" in html
+    assert "Printable Intake Packet" in html
+    assert "/intake/printable" in html
     assert "/reports/today" in html
     assert "/reports/meetings?days=14&limit=12" in html
 

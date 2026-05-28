@@ -16,6 +16,7 @@ from functools import wraps
 
 from flask import (
     Blueprint,
+    abort,
     render_template,
     request,
     session,
@@ -29,6 +30,82 @@ from ..db import get_session
 from ..services.tickets import build_weekly_submission_rows, create_direct_record
 
 bp = Blueprint("intake", __name__)
+
+
+PRINTABLE_REQUEST_FORMS = [
+    {
+        "key": "project-work",
+        "form_id": "TT-PROJECT-WORK-REQUEST",
+        "title": "Project Work Request",
+        "target_table": "project_work_tasks",
+        "source": "paper-form",
+        "summary_label": "What project work is being requested?",
+        "action_label": "Requested action / expected deliverable",
+        "examples": "plan revision, submittal prep, exhibit update, agency response, project follow-up",
+        "sections": [
+            "Project number / project name",
+            "Billing phase or task area",
+            "Engineer / reviewer / requested by",
+            "Due date or meeting date",
+            "Background and constraints",
+            "Definition of done",
+        ],
+    },
+    {
+        "key": "cad-development",
+        "form_id": "TT-CAD-ISSUE-REQUEST",
+        "title": "CAD / Detailing Issue Request",
+        "target_table": "work_tasks",
+        "source": "paper-form",
+        "summary_label": "What CAD/detailing issue needs attention?",
+        "action_label": "Requested fix, standard, or improvement",
+        "examples": "Civil 3D issue, sheet/detail correction, template problem, plotting issue, Bluebeam markup",
+        "sections": [
+            "Project number, file, sheet, or detail reference",
+            "Software involved",
+            "Observed problem",
+            "Impact / urgency",
+            "Known workaround",
+            "Screenshots, markups, or attachments referenced",
+        ],
+    },
+    {
+        "key": "training",
+        "form_id": "TT-TRAINING-IMPROVEMENT-REQUEST",
+        "title": "Training / Improvement Request",
+        "target_table": "training_tasks",
+        "source": "paper-form",
+        "summary_label": "What training, coaching, or improvement is needed?",
+        "action_label": "Desired outcome",
+        "examples": "standard clarification, repeated mistake, workflow improvement, software coaching, documentation request",
+        "sections": [
+            "Person/team affected",
+            "Skill area or workflow",
+            "Observed gap or opportunity",
+            "Suggested training format",
+            "Priority / timing",
+            "How success should be measured",
+        ],
+    },
+    {
+        "key": "general-follow-up",
+        "form_id": "TT-GENERAL-FOLLOW-UP",
+        "title": "General Follow-Up / Operations Note",
+        "target_table": "personal_items",
+        "source": "paper-form",
+        "summary_label": "What needs follow-up?",
+        "action_label": "Next action requested",
+        "examples": "meeting follow-up, management question, office process, asset/equipment note, reminder",
+        "sections": [
+            "People involved",
+            "Project or topic",
+            "Question / decision needed",
+            "Deadline or reminder date",
+            "Notes / context",
+            "Preferred follow-up method",
+        ],
+    },
+]
 
 
 def _intake_post_limit():
@@ -49,6 +126,14 @@ def intake_auth_required(f):
 @intake_auth_required
 def submit_hub():
     forms = [
+        {
+            "title": "Printable PDF / reMarkable Intake Packet",
+            "copy": "Print a standard request form packet, save it as PDF, or import it into reMarkable for handwriting-first capture.",
+            "queue": "Routes through OCR Capture",
+            "next_step": "Scan/OCR the completed form and paste the text into the OCR landing page for TaskTrack triage.",
+            "href": "/intake/printable",
+            "auth_required": False,
+        },
         {
             "title": "Weekly Project Work Submission",
             "copy": "Use this on Friday to submit next week’s project tasks in one batch.",
@@ -83,6 +168,31 @@ def submit_hub():
         },
     ]
     return render_template("submit_hub.html", forms=forms)
+
+
+@bp.route("/intake/printable")
+@intake_auth_required
+def printable_request_forms():
+    """Printable intake packet for paper/PDF/reMarkable workflows."""
+    requested = (request.args.get("form") or "packet").strip()
+    if requested in ("", "packet", "all"):
+        selected_forms = PRINTABLE_REQUEST_FORMS
+        selected_key = "packet"
+    else:
+        selected_forms = [row for row in PRINTABLE_REQUEST_FORMS if row["key"] == requested]
+        if not selected_forms:
+            abort(404)
+        selected_key = requested
+    layout = (request.args.get("layout") or "letter").strip().lower()
+    if layout not in {"letter", "remarkable"}:
+        layout = "letter"
+    return render_template(
+        "printable_intake_forms.html",
+        forms=selected_forms,
+        all_forms=PRINTABLE_REQUEST_FORMS,
+        selected_key=selected_key,
+        layout=layout,
+    )
 
 
 @bp.route("/intake/project-work", methods=["GET", "POST"])
