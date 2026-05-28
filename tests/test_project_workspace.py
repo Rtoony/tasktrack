@@ -183,7 +183,34 @@ def test_project_workspace_includes_operator_overlay(admin_client, temp_app):
     body = r.get_json()
     assert body["operator_overlay"]["operator_status"] == "Needs meeting prep"
     assert body["operator_overlay"]["priority"] == "High"
+    assert body["operator_overlay"]["internal_notes"] == "Use internal context only"
     assert body["can_edit_overlay"] is True
+
+
+def test_project_workspace_hides_internal_notes_from_non_admin(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="8820.20", name="Overlay privacy workspace")
+        sess.add(proj)
+        sess.flush()
+        sess.add(ProjectOverlay(
+            project_id=proj.id,
+            project_number="8820.20",
+            operator_status="Watch",
+            priority="High",
+            internal_notes="Workspace internal secret",
+            report_note="Workspace report note",
+        ))
+        sess.commit()
+        proj_id = proj.id
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/workspace")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["operator_overlay"]["operator_status"] == "Watch"
+    assert body["operator_overlay"]["report_note"] == "Workspace report note"
+    assert body["operator_overlay"]["internal_notes"] == ""
+    assert "Workspace internal secret" not in str(body)
 
 
 def test_project_workspace_hides_private_calendar_events_from_other_users(auth_client, temp_app):

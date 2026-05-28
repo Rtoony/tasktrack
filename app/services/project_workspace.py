@@ -125,16 +125,7 @@ def recent_activity_for_linked_records(sess: Session, linked_records: dict[str, 
     return out[:limit]
 
 
-def project_overlay_payload(sess: Session, proj: Project) -> dict:
-    row = sess.scalar(
-        select(ProjectOverlay).where(ProjectOverlay.project_id == proj.id)
-    )
-    if row is None:
-        row = sess.scalar(
-            select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number)
-        )
-    if row is not None:
-        return to_dict(row) or {}
+def _empty_project_overlay(proj: Project) -> dict:
     return {
         "id": None,
         "project_id": proj.id,
@@ -148,6 +139,26 @@ def project_overlay_payload(sess: Session, proj: Project) -> dict:
         "created_at": "",
         "updated_at": "",
     }
+
+
+def _overlay_to_dict(row: ProjectOverlay, *, is_admin: bool = False) -> dict:
+    payload = to_dict(row) or {}
+    if not is_admin:
+        payload["internal_notes"] = ""
+    return payload
+
+
+def project_overlay_payload(sess: Session, proj: Project, *, is_admin: bool = False) -> dict:
+    row = sess.scalar(
+        select(ProjectOverlay).where(ProjectOverlay.project_id == proj.id)
+    )
+    if row is None:
+        row = sess.scalar(
+            select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number)
+        )
+    if row is not None:
+        return _overlay_to_dict(row, is_admin=is_admin)
+    return _empty_project_overlay(proj)
 
 
 def project_workspace_payload(sess: Session, proj: Project,
@@ -185,7 +196,7 @@ def project_workspace_payload(sess: Session, proj: Project,
             "system": proj.external_system or "",
             "ref": proj.external_ref or "",
         },
-        "operator_overlay": project_overlay_payload(sess, proj),
+        "operator_overlay": project_overlay_payload(sess, proj, is_admin=is_admin),
         "can_edit_overlay": bool(is_admin),
         "recent_activity": recent_activity_for_linked_records(
             sess, linked, is_admin=is_admin, limit=20,

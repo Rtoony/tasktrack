@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectWorkTask
+from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectWorkTask
 
 
 def _future(days=2):
@@ -21,6 +21,14 @@ def _seed_meeting_packet(sess):
     )
     sess.add(proj)
     sess.flush()
+    sess.add(ProjectOverlay(
+        project_id=proj.id,
+        project_number="7711.20",
+        operator_status="Meeting prep watch",
+        priority="High",
+        internal_notes="Meeting internal secret",
+        report_note="Meeting report note",
+    ))
     task = ProjectWorkTask(
         project_name="Meeting project",
         title="Prepare management exhibit",
@@ -114,6 +122,9 @@ def test_meeting_packet_json_linked_event(auth_client, temp_app):
     assert body["project"]["project_number"] == "7711.20"
     assert body["project_report"]["counts"]["project_work_tasks"] == 1
     assert body["project_report"]["management_brief"]["attention_level"] in {"active", "scheduled"}
+    assert body["project_report"]["operator_overlay"]["report_note"] == "Meeting report note"
+    assert body["project_report"]["operator_overlay"]["internal_notes"] == ""
+    assert "Meeting internal secret" not in str(body)
     assert all(event["id"] != ids["meeting_id"] for event in body["project_report"]["upcoming_events"])
 
 
@@ -213,6 +224,8 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     html = r.get_data(as_text=True)
     assert "Meeting Packet" in html
     assert "Project Management Brief" in html
+    assert "Meeting report note" in html
+    assert "Meeting internal secret" not in html
     assert "Management sync" in html
     assert "7711.20" in html
     assert '/?workspace=7711.20' in html

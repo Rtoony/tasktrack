@@ -174,6 +174,28 @@ def test_project_overlay_api_is_tasktrack_owned(auth_client, temp_app):
     body = r.get_json()
     assert body["operator_status"] == "Watch"
     assert body["priority"] == "High"
+    assert body["internal_notes"] == "Private operator context"
+
+    with auth_client.session_transaction() as session_data:
+        session_data["user_id"] = 1
+        session_data["user_name"] = "Tester"
+        session_data["user_role"] = "user"
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/overlay")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["report_note"] == "Discuss at management sync"
+    assert body["internal_notes"] == ""
+    assert "Private operator context" not in str(body)
+
+    with auth_client.session_transaction() as session_data:
+        session_data["user_id"] = 2
+        session_data["user_name"] = "Admin User"
+        session_data["user_role"] = "admin"
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/overlay")
+    assert r.status_code == 200
+    assert r.get_json()["internal_notes"] == "Private operator context"
 
     with temp_app.app_context():
         sess = get_session()

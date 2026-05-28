@@ -29,7 +29,7 @@ from ..models import (
     to_dict,
 )
 from ..services.convex_hull import hull_geojson_ring
-from ..services.project_workspace import project_workspace_payload
+from ..services.project_workspace import project_overlay_payload, project_workspace_payload
 
 # Pared down to {active, dormant} to match the firm's Master Project List
 # spreadsheet, which is now the source of truth for project state. The
@@ -494,23 +494,8 @@ def _project_overlay_row(sess, proj: Project, *, create: bool = False) -> Projec
     return row
 
 
-def _project_overlay_dict(sess, proj: Project) -> dict:
-    row = _project_overlay_row(sess, proj)
-    if row is not None:
-        return to_dict(row) or {}
-    return {
-        "id": None,
-        "project_id": proj.id,
-        "project_number": proj.project_number or "",
-        "operator_status": "",
-        "priority": "",
-        "tags": "",
-        "next_review_date": "",
-        "internal_notes": "",
-        "report_note": "",
-        "created_at": "",
-        "updated_at": "",
-    }
+def _project_overlay_dict(sess, proj: Project, *, is_admin: bool = False) -> dict:
+    return project_overlay_payload(sess, proj, is_admin=is_admin)
 
 
 @bp.route("/api/v1/projects/<int:proj_id>/overlay", methods=["GET"])
@@ -520,7 +505,9 @@ def get_project_overlay(proj_id):
     proj = sess.get(Project, proj_id)
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
-    return jsonify(_project_overlay_dict(sess, proj))
+    return jsonify(_project_overlay_dict(
+        sess, proj, is_admin=session.get("user_role") == "admin"
+    ))
 
 
 @bp.route("/api/v1/projects/<int:proj_id>/overlay", methods=["PATCH"])

@@ -102,6 +102,9 @@ def test_project_report_json_summary_and_privacy(auth_client, temp_app):
     assert body["management_brief"]["top_overdue"][0]["title"] == "Late exhibit"
     assert body["operator_overlay"]["operator_status"] == "Needs PM review"
     assert body["operator_overlay"]["priority"] == "High"
+    assert body["operator_overlay"]["report_note"] == "Management-facing overlay note"
+    assert body["operator_overlay"]["internal_notes"] == ""
+    assert "Internal-only project context" not in str(body)
     event_titles = {event["title"] for event in body["upcoming_events"]}
     assert "Public project review" in event_titles
     assert "Private project prep" not in event_titles
@@ -119,6 +122,7 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "Management Brief" in html
     assert "TaskTrack Overlay" in html
     assert "Management-facing overlay note" in html
+    assert "Internal-only project context" not in html
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
