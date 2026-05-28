@@ -15,6 +15,7 @@ from ..models import ReportPreset
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
     incident_csv_rows,
+    incident_detail_report,
     incident_report,
 )
 from ..services.project_reports import (
@@ -276,6 +277,7 @@ def reports_home():
 
 def _today_brief_packet(sess):
     include_private = _bool_arg("include_private")
+    is_admin = _is_admin()
     meeting_days = _int_arg("days", 1, 1, 14)
     meeting_limit = _int_arg("meeting_limit", 8, 1, 25)
     project_limit = _int_arg("project_limit", 8, 1, MAX_PORTFOLIO_LIMIT)
@@ -285,15 +287,19 @@ def _today_brief_packet(sess):
         limit=meeting_limit,
         user_id=session.get("user_id"),
         include_private=include_private,
-        is_admin=_is_admin(),
+        is_admin=is_admin,
     )
     portfolio = portfolio_project_report(
         sess,
         filters={"attention_level": "at_risk", "limit": project_limit},
         user_id=session.get("user_id"),
         include_private=include_private,
-        is_admin=_is_admin(),
+        is_admin=is_admin,
     )
+    incidents = incident_report(
+        sess,
+        filters={"open_only": True, "limit": 5, "days": 365},
+    ) if is_admin else None
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "days": meeting_days,
@@ -301,6 +307,7 @@ def _today_brief_packet(sess):
         "meetings": meetings,
         "at_risk": portfolio,
         "action_projects": portfolio.get("summary", {}).get("action_projects", []),
+        "incidents": incidents,
     }
 
 
@@ -417,6 +424,29 @@ def incident_report_page():
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )
+
+
+@bp.route("/api/v1/reports/incidents/<int:incident_id>", methods=["GET"])
+@admin_required
+def incident_detail_report_json(incident_id: int):
+    packet = incident_detail_report(get_session(), incident_id=incident_id)
+    if packet is None:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(packet)
+
+
+@bp.route("/reports/incidents/<int:incident_id>", methods=["GET"])
+@admin_required
+def incident_detail_report_page(incident_id: int):
+    packet = incident_detail_report(get_session(), incident_id=incident_id)
+    status = 200 if packet is not None else 404
+    return render_template(
+        "incident_report.html",
+        packet=packet,
+        error=None if packet is not None else "not found",
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    ), status
 
 
 @bp.route("/api/v1/reports/project", methods=["GET"])

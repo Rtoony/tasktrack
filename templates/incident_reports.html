@@ -155,6 +155,7 @@
         <span class="chip{% if row.is_high_severity %} danger{% endif %}">{{ row.severity or 'Unspecified' }}</span>
         <span class="chip">{{ row.status or 'Unspecified' }}</span>
         {% if row.follow_up_due %}<span class="chip danger">follow-up due</span>{% endif %}
+        <a class="chip" href="/reports/incidents/{{ row.id }}">one-pager</a>
         {% if row.project_report_url %}<a class="chip" href="{{ row.project_report_url }}">project report</a>{% endif %}
       </div>
     </div>

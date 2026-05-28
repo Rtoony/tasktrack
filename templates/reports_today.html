@@ -112,6 +112,28 @@
     <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value{% if packet.at_risk.summary.overdue_count %} danger{% endif %}">{{ packet.at_risk.summary.overdue_count }}</div></div>
   </section>
 
+  {% if user_role == 'admin' and packet.incidents %}
+  <section class="card">
+    <h2>Open Incident Follow-Ups</h2>
+    <div class="meta" style="margin-bottom:0.5rem">{{ packet.incidents.summary.open_count }} open / {{ packet.incidents.summary.high_severity_count }} high severity / {{ packet.incidents.summary.follow_up_due_count }} follow-up due</div>
+    {% if packet.incidents.incidents %}
+      {% for row in packet.incidents.incidents %}
+        <div class="row">
+          <div>
+            <div class="row-title"><a href="/reports/incidents/{{ row.id }}" style="color:inherit;text-decoration:none">{{ row.issue_description or row.title }}</a></div>
+            <div class="meta">{{ row.person_name or 'No person assigned' }}{% if row.project_number %} / {{ row.project_number }}{% endif %}{% if row.cad_skill_area %} / {{ row.cad_skill_area }}{% endif %}</div>
+          </div>
+          <div class="when{% if row.follow_up_due or row.is_high_severity %} danger{% endif %}">{{ row.severity or 'Unspecified' }}{% if row.follow_up_due %} / due{% endif %}</div>
+        </div>
+      {% endfor %}
+    {% else %}<div class="empty">No open incidents are currently recorded.</div>{% endif %}
+    <div class="actions" style="margin-top:0.75rem;justify-content:flex-start">
+      <a class="btn secondary" href="/reports/incidents?open_only=1">Open Incident Report</a>
+      <a class="btn secondary" href="/reports/incidents?follow_up_due=1">Follow-Up Due</a>
+    </div>
+  </section>
+  {% endif %}
+
   <div class="grid">
     <section class="card">
       <h2>Upcoming Event Packets</h2>

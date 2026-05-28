@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident One-Pager - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --danger:#f87171; --warn:#fbbf24; --ok:#34d399; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(248,113,113,0.12), transparent 32rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:rgba(24,33,43,0.94); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1050px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1050px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  .hero,.card,.stat { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); }
+  .hero { padding:1rem 1.1rem; margin-bottom:1rem; display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+  .eyebrow { color:var(--accent); font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.3rem; }
+  h1 { font-size:1.45rem; line-height:1.15; margin-bottom:0.25rem; }
+  .meta { color:var(--text-muted); font-size:0.8rem; margin-top:0.16rem; }
+  .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.42rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .stats { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .stat { padding:0.75rem; }
+  .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .stat-value { color:var(--accent); font-size:1rem; font-weight:700; margin-top:0.25rem; overflow-wrap:anywhere; }
+  .stat-value.danger { color:var(--danger); }
+  .grid { display:grid; grid-template-columns:1.1fr 0.9fr; gap:1rem; align-items:start; }
+  .card { padding:1rem; margin-bottom:1rem; break-inside:avoid; }
+  .card h2 { font-size:0.96rem; margin-bottom:0.55rem; }
+  .note { color:var(--text-muted); white-space:pre-wrap; line-height:1.48; }
+  .empty { color:var(--text-dim); font-style:italic; }
+  .danger { color:var(--danger); }
+  .print-only { display:none; }
+  .print-masthead { border-bottom:1px solid var(--border); margin-bottom:1rem; padding-bottom:0.7rem; }
+  .print-eyebrow { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.68rem; }
+  .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
+  .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
+  .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
+  @media (max-width: 900px) { .grid,.stats { grid-template-columns:1fr; } .hero { flex-direction:column; } .actions { justify-content:flex-start; } }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:9.6pt; line-height:1.28; }
+    header,.nav,.btn { display:none !important; }
+    main { max-width:none; padding:0 0 0.15in; }
+    .print-only { display:block !important; }
+    .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
+    .print-eyebrow,.print-meta { color:#4b5563; }
+    .print-title { color:#111827; }
+    .print-footer { color:#4b5563; border-color:#d1d5db; }
+    .hero,.card,.stat { border-color:#d1d5db; background:#fff; box-shadow:none; }
+    .hero,.card { padding:0.12in; margin-bottom:0.12in; }
+    .stats { grid-template-columns:repeat(5,1fr); gap:0.08in; margin-bottom:0.12in; }
+    .stat { padding:0.08in; }
+    .stat-value { font-size:10pt; color:#111827; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Incident One-Pager</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/reports/incidents?open_only=1">Incidents</a>
+      <a href="/admin">Admin</a>
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  {% if error %}
+    <section class="card"><h1>Incident not found</h1><p class="note">{{ error }}</p></section>
+  {% else %}
+  {% set row = packet.incident %}
+  <section class="print-masthead print-only" aria-label="Printable report header">
+    <div>
+      <div class="print-eyebrow">TaskTrack Incident One-Pager</div>
+      <div class="print-title">Incident #{{ row.id }} / {{ row.severity or 'Unspecified' }} / {{ row.status or 'Unspecified' }}</div>
+    </div>
+    <div class="print-meta">Generated {{ packet.generated_at[:16] }}<br>{% if row.project_number %}Project {{ row.project_number }}{% else %}Unlinked incident{% endif %}</div>
+  </section>
+
+  <section class="hero">
+    <div>
+      <div class="eyebrow">Incident #{{ row.id }}</div>
+      <h1>{{ row.issue_description or row.title }}</h1>
+      <div class="meta">{{ row.person_name or 'No person assigned' }}{% if row.project_number %} / Project {{ row.project_number }}{% endif %}{% if row.cad_skill_area %} / {{ row.cad_skill_area }}{% endif %}</div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/api/v1/reports/incidents/{{ row.id }}">JSON</a>
+      {% if packet.project_report_url %}<a class="btn secondary" href="{{ packet.project_report_url }}">Project Report</a>{% endif %}
+      <a class="btn secondary" href="{{ packet.incident_list_url }}">Open Incidents</a>
+      <button class="btn" type="button" onclick="window.print()">Print</button>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><div class="stat-label">Severity</div><div class="stat-value{% if row.is_high_severity %} danger{% endif %}">{{ row.severity or 'Unspecified' }}</div></div>
+    <div class="stat"><div class="stat-label">Status</div><div class="stat-value">{{ row.status or 'Unspecified' }}</div></div>
+    <div class="stat"><div class="stat-label">Follow-Up</div><div class="stat-value{% if row.follow_up_due %} danger{% endif %}">{{ row.follow_up_date or 'Not set' }}</div></div>
+    <div class="stat"><div class="stat-label">Days Open</div><div class="stat-value">{{ row.days_open }}</div></div>
+    <div class="stat"><div class="stat-label">Time Loss</div><div class="stat-value">{{ row.estimated_time_loss_minutes or 0 }} min</div></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Incident Context</h2>
+      <div class="note">{{ row.incident_context or 'No context recorded.' }}</div>
+      <h2 style="margin-top:0.9rem">Immediate Solution</h2>
+      <div class="note">{{ row.immediate_solution or 'No immediate solution recorded.' }}</div>
+    </section>
+    <section class="card">
+      <h2>Follow-Up / Training</h2>
+      <div class="note">{{ row.recommended_training or 'No recommended training recorded.' }}</div>
+      <h2 style="margin-top:0.9rem">Resolution Notes</h2>
+      <div class="note">{{ row.resolution_notes or 'No resolution notes recorded.' }}</div>
+    </section>
+  </div>
+
+  <section class="print-footer print-only">TaskTrack incident one-pager generated {{ packet.generated_at[:16] }}. Admin-only sensitive narrative report.</section>
+  {% endif %}
+</main>
+</body>
+</html>

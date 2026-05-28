@@ -77,6 +77,7 @@ def test_incident_report_admin_json_html_csv(admin_client, temp_app):
     assert "Peer review before resubmittal" in page
     assert "@page { size: letter" in page
     assert "/api/v1/reports/incidents.csv?open_only=1" in page
+    assert "/reports/incidents/" in page
     assert "Resolved plotting issue" not in page
 
     csv_resp = admin_client.get("/api/v1/reports/incidents.csv?open_only=1")
@@ -113,13 +114,17 @@ def test_incident_report_filters(admin_client, temp_app):
 def test_incident_report_admin_only(auth_client):
     assert auth_client.get("/api/v1/reports/incidents").status_code == 403
     assert auth_client.get("/api/v1/reports/incidents.csv").status_code == 403
+    assert auth_client.get("/api/v1/reports/incidents/1").status_code == 403
     assert auth_client.get("/reports/incidents", follow_redirects=False).status_code == 302
+    assert auth_client.get("/reports/incidents/1", follow_redirects=False).status_code == 302
 
     with auth_client.session_transaction() as s:
         s.clear()
     assert auth_client.get("/api/v1/reports/incidents").status_code == 401
     assert auth_client.get("/api/v1/reports/incidents.csv").status_code == 401
+    assert auth_client.get("/api/v1/reports/incidents/1").status_code == 401
     assert auth_client.get("/reports/incidents", follow_redirects=False).status_code == 302
+    assert auth_client.get("/reports/incidents/1", follow_redirects=False).status_code == 302
 
 
 def test_incident_report_links_from_report_center_and_admin(auth_client):
@@ -158,3 +163,66 @@ def test_incident_report_links_from_report_center_and_admin(auth_client):
     assert "High Severity Incidents" in admin_html
     assert "Incident CSV" in admin_html
     assert "/reports/incidents?open_only=1" in admin_html
+
+
+def test_single_incident_report_admin_json_html(admin_client, temp_app):
+    with temp_app.app_context():
+        ids = _seed_incidents(get_session())
+
+    r = admin_client.get(f"/api/v1/reports/incidents/{ids['open_id']}")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["incident"]["id"] == ids["open_id"]
+    assert body["incident"]["issue_description"] == "Sensitive grading issue"
+    assert body["incident"]["incident_context"] == "Private incident context"
+    assert body["project_report_url"] == "/reports/project?project_number=9911.10"
+
+    html = admin_client.get(f"/reports/incidents/{ids['open_id']}")
+    assert html.status_code == 200
+    page = html.get_data(as_text=True)
+    assert "Incident One-Pager" in page
+    assert "Sensitive grading issue" in page
+    assert "Private incident context" in page
+    assert "Peer review before resubmittal" in page
+    assert "/api/v1/reports/incidents/" in page
+    assert "@page { size: letter" in page
+
+    assert admin_client.get("/api/v1/reports/incidents/999999").status_code == 404
+    assert admin_client.get("/reports/incidents/999999").status_code == 404
+
+
+def test_today_brief_admin_incident_summary(auth_client, temp_app):
+    with temp_app.app_context():
+        _seed_incidents(get_session())
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+
+    r = auth_client.get("/api/v1/reports/today")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["incidents"]["summary"]["open_count"] == 1
+    assert body["incidents"]["summary"]["high_severity_count"] == 1
+    assert body["incidents"]["incidents"][0]["issue_description"] == "Sensitive grading issue"
+
+    html = auth_client.get("/reports/today")
+    assert html.status_code == 200
+    page = html.get_data(as_text=True)
+    assert "Open Incident Follow-Ups" in page
+    assert "Sensitive grading issue" in page
+    assert "/reports/incidents/" in page
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 1
+        s["user_name"] = "Tester"
+        s["user_role"] = "user"
+
+    r = auth_client.get("/api/v1/reports/today")
+    assert r.status_code == 200
+    assert r.get_json()["incidents"] is None
+
+    html = auth_client.get("/reports/today")
+    assert html.status_code == 200
+    assert "Open Incident Follow-Ups" not in html.get_data(as_text=True)

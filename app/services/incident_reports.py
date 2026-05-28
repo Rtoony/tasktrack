@@ -203,6 +203,23 @@ def incident_report(sess: Session, *, filters: dict | None = None,
     }
 
 
+def incident_detail_report(sess: Session, *, incident_id: int,
+                           now: datetime | None = None) -> dict | None:
+    """Build one printable admin-only incident packet."""
+    row = sess.get(PersonnelIssue, incident_id)
+    if row is None:
+        return None
+    now = now or datetime.now()
+    incident = _incident_payload(row, today=now.date())
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "incident": incident,
+        "project_report_url": incident.get("project_report_url") or "",
+        "incident_report_url": f"/reports/incidents/{incident_id}",
+        "incident_list_url": "/reports/incidents?open_only=1",
+    }
+
+
 INCIDENT_CSV_FIELDS = [
     "id", "reported_at", "person_name", "project_number", "severity", "status",
     "follow_up_date", "follow_up_due", "days_open", "estimated_time_loss_minutes",
@@ -219,4 +236,9 @@ def incident_csv_rows(packet: dict) -> list[dict]:
     return rows
 
 
-__all__ = ["incident_report", "incident_csv_rows", "INCIDENT_CSV_FIELDS"]
+__all__ = [
+    "incident_report",
+    "incident_detail_report",
+    "incident_csv_rows",
+    "INCIDENT_CSV_FIELDS",
+]
