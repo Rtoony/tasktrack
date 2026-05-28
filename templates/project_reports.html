@@ -162,6 +162,7 @@
     </div>
     <div class="actions">
       <a class="btn secondary" href="/api/v1/reports/projects?{{ request.query_string.decode('utf-8') }}">JSON</a>
+      <a class="btn secondary" href="/api/v1/reports/projects/actions.csv?{{ request.query_string.decode('utf-8') }}">Actions CSV</a>
       <button class="btn" type="button" onclick="window.print()">Print</button>
     </div>
   </section>

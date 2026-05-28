@@ -381,6 +381,7 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert 'id="attention_level"' in html
     assert "Management Action Queue" in html
     assert "What to discuss first" in html
+    assert "Actions CSV" in html
     assert "Resolve overdue Project Tasks: Portfolio late item" in html
     assert "Brief:" in html
     assert "Overlay:" in html
@@ -599,6 +600,22 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     assert "deletePortfolioPreset" in html
     assert 'id="attention_level"' in html
 
+def test_portfolio_action_queue_csv_export(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    r = auth_client.get("/api/v1/reports/projects/actions.csv?client=Acme&attention_level=at_risk&limit=5")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers.get("Content-Type", "")
+    body = r.get_data(as_text=True)
+    assert "project_number,name,client,attention_level,primary_action" in body
+    assert "8800.10,Portfolio one,Acme Water,at_risk" in body
+    assert "Resolve overdue Project Tasks: Portfolio late item" in body
+    assert "/reports/project?project_number=8800.10" in body
+    assert "Private portfolio prep" not in body
+
+
 def test_reports_home_renders_command_center(client, auth_client):
     preset = auth_client.post("/api/v1/reports/presets", json={
         "name": "Management review",
@@ -613,6 +630,7 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert "Project Status One-Pager" in html
     assert "At-Risk Queue" in html
     assert "attention_level=at_risk" in html
+    assert "At-Risk CSV" in html
     assert "Upcoming Meeting Packets" in html
     assert "Batch Meeting Packets" in html
     assert "/reports/meetings?days=14&limit=12" in html

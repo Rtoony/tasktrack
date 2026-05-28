@@ -1,10 +1,12 @@
 """Management report routes."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 from datetime import datetime
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, Response, jsonify, render_template, request, session
 from sqlalchemy import or_, select
 
 from ..auth import login_required
@@ -380,6 +382,42 @@ def portfolio_report_json():
     )
     packet["selected_preset"] = _preset_to_dict(selected, include_filters=False) if selected else None
     return jsonify(packet)
+
+
+@bp.route("/api/v1/reports/projects/actions.csv", methods=["GET"])
+@login_required
+def portfolio_actions_csv():
+    sess = get_session()
+    filters, include_private, selected, error, status = _portfolio_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    packet = portfolio_project_report(
+        sess,
+        filters=filters,
+        user_id=session.get("user_id"),
+        include_private=include_private,
+        is_admin=_is_admin(),
+    )
+    fields = [
+        "project_number", "name", "client", "attention_level", "primary_action",
+        "primary_action_detail", "headline", "overdue_count", "open_count",
+        "next_due", "project_report_url", "workspace_url", "map_url",
+    ]
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=fields)
+    writer.writeheader()
+    for row in packet.get("summary", {}).get("action_projects", []):
+        project_number = row.get("project_number") or ""
+        payload = {key: row.get(key, "") for key in fields}
+        payload["project_report_url"] = f"/reports/project?project_number={project_number}"
+        payload["workspace_url"] = f"/?workspace={project_number}"
+        payload["map_url"] = f"/?map_project={project_number}"
+        writer.writerow(payload)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=portfolio_action_queue_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
 
 
 @bp.route("/reports/projects", methods=["GET"])
