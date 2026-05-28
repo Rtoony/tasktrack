@@ -49,6 +49,12 @@
   .cols { display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; }
   .section { background:rgba(17,22,29,0.35); padding:0.75rem; }
   .section h2 { font-size:0.88rem; margin-bottom:0.45rem; }
+  .action-queue { border-left:3px solid var(--danger); }
+  .queue-row { display:grid; grid-template-columns:1fr auto; gap:0.75rem; padding:0.55rem 0; border-bottom:1px solid var(--border); align-items:baseline; }
+  .queue-row:last-child { border-bottom:none; }
+  .queue-title { font-weight:700; }
+  .queue-meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.14rem; }
+  .queue-links { display:flex; gap:0.35rem; flex-wrap:wrap; justify-content:flex-end; }
   .note { color:var(--text-muted); white-space:pre-wrap; }
   .empty { color:var(--text-dim); font-style:italic; padding:0.4rem 0; }
   .danger { color:var(--danger); }
@@ -58,7 +64,7 @@
   .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
   .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
   .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
-  @media (max-width: 1000px) { .filters,.summary-grid,.preset-row { grid-template-columns:repeat(2,1fr); } .cols { grid-template-columns:1fr; } .hero,.incident-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
+  @media (max-width: 1000px) { .filters,.summary-grid,.preset-row { grid-template-columns:repeat(2,1fr); } .cols,.queue-row { grid-template-columns:1fr; } .hero,.incident-head { flex-direction:column; } .chips,.actions,.queue-links { justify-content:flex-start; } }
   @media print {
     @page { size: letter; margin: 0.45in; }
     body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
@@ -157,6 +163,32 @@
     <div class="summary-card"><div class="summary-label">Follow-Up Due</div><div class="summary-value{% if packet.summary.follow_up_due_count %} danger{% endif %}">{{ packet.summary.follow_up_due_count }}</div></div>
     <div class="summary-card"><div class="summary-label">Time Loss</div><div class="summary-value">{{ packet.summary.estimated_time_loss_minutes }}</div></div>
   </section>
+
+
+  {% if packet.action_queue %}
+  <section class="incident-card action-queue">
+    <div class="incident-head">
+      <div>
+        <div class="incident-id">Management Action Queue</div>
+        <div class="incident-title">What to address first</div>
+        <div class="meta">Prioritized by follow-up due, severity, and age.</div>
+      </div>
+    </div>
+    {% for action in packet.action_queue %}
+    <div class="queue-row">
+      <div>
+        <div class="queue-title">{{ action.title }}</div>
+        <div class="queue-meta">{{ action.reason }} / {{ action.status }} / {{ action.severity }}{% if action.person_name %} / {{ action.person_name }}{% endif %}{% if action.project_number %} / Project {{ action.project_number }}{% endif %}</div>
+        <div class="queue-meta">{{ action.recommendation }}</div>
+      </div>
+      <div class="queue-links">
+        <a class="chip" href="{{ action.incident_report_url }}">one-pager</a>
+        {% if action.project_report_url %}<a class="chip" href="{{ action.project_report_url }}">project</a>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   {% if not packet.incidents %}
     <section class="incident-card"><div class="empty">No incidents matched these filters.</div></section>

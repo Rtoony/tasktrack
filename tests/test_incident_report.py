@@ -63,6 +63,9 @@ def test_incident_report_admin_json_html_csv(admin_client, temp_app):
     assert body["summary"]["high_severity_count"] == 1
     assert body["summary"]["follow_up_due_count"] == 1
     assert body["summary"]["estimated_time_loss_minutes"] == 45
+    assert body["action_queue"][0]["title"] == "Sensitive grading issue"
+    assert body["action_queue"][0]["reason"] == "follow-up due / high severity"
+    assert body["action_queue"][0]["incident_report_url"].startswith("/reports/incidents/")
     assert body["incidents"][0]["issue_description"] == "Sensitive grading issue"
     assert body["incidents"][0]["incident_context"] == "Private incident context"
     assert body["incidents"][0]["project_report_url"] == "/reports/project?project_number=9911.10"
@@ -75,6 +78,9 @@ def test_incident_report_admin_json_html_csv(admin_client, temp_app):
     assert "Sensitive grading issue" in page
     assert "Private incident context" in page
     assert "Peer review before resubmittal" in page
+    assert "Management Action Queue" in page
+    assert "What to address first" in page
+    assert "Complete or reschedule the follow-up" in page
     assert "@page { size: letter" in page
     assert "/api/v1/reports/incidents.csv?open_only=1" in page
     assert "/reports/incidents/" in page
@@ -259,6 +265,7 @@ def test_incident_report_presets_admin_apply_and_html_controls(admin_client, tem
     assert report.status_code == 200
     body = report.get_json()
     assert body["selected_preset"]["id"] == preset["id"]
+    assert body["action_queue"][0]["title"] == "Sensitive grading issue"
     assert body["filters"]["severity"] == "High"
     assert body["filters"]["open_only"] is True
     assert [row["issue_description"] for row in body["incidents"]] == ["Sensitive grading issue"]

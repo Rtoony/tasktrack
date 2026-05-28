@@ -112,6 +112,58 @@ def _incident_payload(row: PersonnelIssue, *, today: date) -> dict:
     return payload
 
 
+def _incident_action_queue(incidents: list[dict]) -> list[dict]:
+    """Management-facing first actions derived from visible incident rows."""
+    actions: list[dict] = []
+    for row in incidents:
+        if row.get("is_resolved"):
+            continue
+        reasons: list[str] = []
+        if row.get("follow_up_due"):
+            reasons.append("follow-up due")
+        if row.get("is_high_severity"):
+            reasons.append("high severity")
+        if int(row.get("days_open") or 0) >= 14:
+            reasons.append(f"{row.get('days_open')} days open")
+        if not reasons:
+            reasons.append("open incident")
+
+        if row.get("follow_up_due"):
+            recommendation = "Complete or reschedule the follow-up and document the next owner/action."
+        elif row.get("is_high_severity"):
+            recommendation = "Review containment, coaching/training need, and whether management needs a brief."
+        else:
+            recommendation = "Confirm the next action, owner, and target follow-up date."
+
+        actions.append({
+            "id": row.get("id"),
+            "title": row.get("title") or row.get("issue_description") or f"Incident #{row.get('id', '')}",
+            "person_name": row.get("person_name") or "",
+            "project_number": row.get("project_number") or "",
+            "severity": row.get("severity") or "Unspecified",
+            "status": row.get("status") or "Unspecified",
+            "reason": " / ".join(reasons),
+            "recommendation": recommendation,
+            "follow_up_date": row.get("follow_up_date") or "",
+            "days_open": int(row.get("days_open") or 0),
+            "incident_report_url": f"/reports/incidents/{row.get('id')}",
+            "project_report_url": row.get("project_report_url") or "",
+            "rank": (
+                0 if row.get("follow_up_due") and row.get("is_high_severity") else
+                1 if row.get("follow_up_due") else
+                2 if row.get("is_high_severity") else
+                3
+            ),
+        })
+    actions.sort(key=lambda item: (
+        item["rank"],
+        -int(item.get("days_open") or 0),
+        item.get("follow_up_date") or "9999",
+        item.get("id") or 0,
+    ))
+    return actions[:8]
+
+
 def incident_report(sess: Session, *, filters: dict | None = None,
                     now: datetime | None = None) -> dict:
     """Build an admin-only incident report from personnel_issues."""
@@ -199,6 +251,7 @@ def incident_report(sess: Session, *, filters: dict | None = None,
         "generated_at": now.isoformat(timespec="seconds"),
         "filters": safe_filters,
         "summary": summary,
+        "action_queue": _incident_action_queue(incidents),
         "incidents": incidents,
     }
 
