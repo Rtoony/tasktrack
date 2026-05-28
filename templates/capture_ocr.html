@@ -6,7 +6,7 @@
 <title>OCR Capture - {{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --radius:6px; }
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:6px; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
   header { background:rgba(24,33,43,0.94); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
@@ -28,6 +28,16 @@
   .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.45rem 0.78rem; font-weight:700; font-size:0.8rem; text-decoration:none; cursor:pointer; }
   .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
   .note { color:var(--text-muted); font-size:0.84rem; line-height:1.45; }
+  .status { color:var(--text-muted); font-size:0.82rem; }
+  .status.ok { color:var(--ok); }
+  .status.warn { color:var(--warn); }
+  .status.error { color:var(--danger); }
+  .parse-result { border-left:3px solid var(--accent); }
+  .parse-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.6rem; margin-top:0.75rem; }
+  .parse-chip { border:1px solid var(--border); background:rgba(17,22,29,0.55); border-radius:var(--radius); padding:0.55rem; }
+  .parse-label { color:var(--text-muted); font-size:0.64rem; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.2rem; }
+  .parse-value { font-weight:700; overflow-wrap:anywhere; }
+  @media (max-width: 850px) { .parse-grid { grid-template-columns:1fr; } }
   @media (max-width: 850px) { .grid { grid-template-columns:1fr; } .nav a { margin-left:0.5rem; } }
 </style>
 </head>
@@ -46,12 +56,12 @@
 </header>
 <main>
   <h1>reMarkable / OCR Capture</h1>
-  <p class="sub">Paste OCR text from a tablet export, scan, or paper note. This does not save anything by itself; it hands the text to Dashboard Capture with source set to reMarkable/OCR.</p>
+  <p class="sub">Paste OCR text from a tablet export, scan, paper note, or TaskTrack printable form. This does not save anything by itself; it parses known form labels, then hands the text to Dashboard Capture with the right target/source preset.</p>
 
   <section class="card">
     <div class="grid">
       <div class="field">
-        <label for="target">Target preset</label>
+        <label for="target">Fallback target preset</label>
         <select id="target">
           <option value="work_tasks">CAD Dev</option>
           <option value="project_work_tasks">Project Task</option>
@@ -72,27 +82,95 @@
       <textarea id="ocr_text" placeholder="Paste exported OCR text here..."></textarea>
     </div>
     <div class="actions">
+      <button class="btn secondary" type="button" onclick="parseOcrForm(true)">Parse OCR Form</button>
       <button class="btn" type="button" onclick="sendToCapture()">Send To Dashboard Capture</button>
       <button class="btn secondary" type="button" onclick="clearForm()">Clear</button>
       <a class="btn secondary" href="/?capture_source=remarkable-ocr">Open Empty Capture</a>
+      <span class="status" id="parse_status"></span>
+    </div>
+  </section>
+
+  <section class="card parse-result" id="parse_result" style="display:none">
+    <h2 style="font-size:1rem;margin-bottom:0.35rem">Parsed Intake Form</h2>
+    <div class="note" id="parse_summary"></div>
+    <div class="parse-grid">
+      <div class="parse-chip"><div class="parse-label">Form</div><div class="parse-value" id="parse_form">-</div></div>
+      <div class="parse-chip"><div class="parse-label">Target</div><div class="parse-value" id="parse_target">-</div></div>
+      <div class="parse-chip"><div class="parse-label">Project</div><div class="parse-value" id="parse_project">-</div></div>
+      <div class="parse-chip"><div class="parse-label">Requestor</div><div class="parse-value" id="parse_requestor">-</div></div>
+      <div class="parse-chip"><div class="parse-label">Priority</div><div class="parse-value" id="parse_priority">-</div></div>
+      <div class="parse-chip"><div class="parse-label">Due</div><div class="parse-value" id="parse_due">-</div></div>
     </div>
   </section>
 
   <section class="card">
-    <div class="note">Recommended workflow: write freely on the tablet, export/OCR text, paste it here, then let TaskTrack triage it into a task, project follow-up, training item, or calendar action. Keep this as an intake lane; the tablet should not become the database of record.</div>
+    <div class="note">Recommended workflow: write freely on the tablet, export/OCR text, paste it here, then let TaskTrack triage it into a task, project follow-up, training item, or calendar action. Known printable packets are detected as source <code>paper-form</code>; freeform tablet notes stay <code>remarkable-ocr</code>. Keep this as an intake lane; the tablet should not become the database of record.</div>
   </section>
 </main>
 <script>
 const CAPTURE_PREFILL_KEY = 'tasktrack-capture-prefill';
+let parsedOcr = null;
+
 function cleanProjectNumber(value) {
   const raw = String(value || '').trim();
   if (/^\d{4}\.\d{2}$/.test(raw)) return raw;
   const digits = raw.replace(/\D/g, '').slice(0, 6);
   return digits.length === 6 ? digits.slice(0, 4) + '.' + digits.slice(4) : raw;
 }
-function sendToCapture() {
+function setParseStatus(text, cls) {
+  const el = document.getElementById('parse_status');
+  el.textContent = text || '';
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+function setText(id, value) {
+  document.getElementById(id).textContent = value || '-';
+}
+function renderParsed(parsed) {
+  const card = document.getElementById('parse_result');
+  if (!parsed) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  const warnings = (parsed.warnings || []).join(' ');
+  document.getElementById('parse_summary').textContent = parsed.detected
+    ? `Detected ${parsed.form_title} with confidence ${Math.round((parsed.confidence || 0) * 100)}%. ${warnings}`.trim()
+    : `No TaskTrack FORM_ID detected. Generic OCR capture will be used. ${warnings}`.trim();
+  setText('parse_form', parsed.form_id || parsed.form_title);
+  setText('parse_target', parsed.capture_target || parsed.target_table);
+  setText('parse_project', parsed.project_number);
+  setText('parse_requestor', parsed.requested_by);
+  setText('parse_priority', parsed.priority);
+  setText('parse_due', parsed.due_date);
+}
+function applyParsedToForm(parsed) {
+  if (!parsed) return;
+  if (parsed.capture_target) document.getElementById('target').value = parsed.capture_target;
+  if (parsed.project_number) document.getElementById('project_number').value = parsed.project_number;
+  if (!document.getElementById('source_ref').value.trim() && parsed.form_id) {
+    document.getElementById('source_ref').value = parsed.form_id;
+  }
+}
+async function parseOcrForm(showStatus = false) {
   const text = document.getElementById('ocr_text').value.trim();
-  if (!text) { alert('Paste OCR text first.'); return; }
+  if (!text) { if (showStatus) alert('Paste OCR text first.'); return null; }
+  if (showStatus) setParseStatus('Parsing OCR form...');
+  const res = await fetch('/api/v1/intake/ocr/parse', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text, source_ref: document.getElementById('source_ref').value.trim() })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    parsedOcr = null;
+    renderParsed(null);
+    setParseStatus(body.error || 'OCR parse failed', 'error');
+    return null;
+  }
+  parsedOcr = body;
+  applyParsedToForm(body);
+  renderParsed(body);
+  setParseStatus(body.detected ? 'TaskTrack form detected.' : 'Generic OCR capture parsed.', body.detected ? 'ok' : 'warn');
+  return body;
+}
+function fallbackPrefill(text) {
   const target = document.getElementById('target').value || 'work_tasks';
   const projectNumber = cleanProjectNumber(document.getElementById('project_number').value);
   const sourceRef = document.getElementById('source_ref').value.trim();
@@ -101,24 +179,39 @@ function sendToCapture() {
   if (sourceRef) lines.push('Source ref: ' + sourceRef);
   lines.push('OCR text:');
   lines.push(text);
-  sessionStorage.setItem(CAPTURE_PREFILL_KEY, JSON.stringify({
+  return {
     source: 'remarkable-ocr',
     target,
     project_number: projectNumber,
     text: lines.join('\n'),
-  }));
-  const params = new URLSearchParams({ capture_source: 'remarkable-ocr', capture_target: target });
+  };
+}
+async function sendToCapture() {
+  const text = document.getElementById('ocr_text').value.trim();
+  if (!text) { alert('Paste OCR text first.'); return; }
+  let parsed = parsedOcr;
+  if (!parsed) parsed = await parseOcrForm(false);
+  const payload = (parsed && parsed.prefill) ? parsed.prefill : fallbackPrefill(text);
+  sessionStorage.setItem(CAPTURE_PREFILL_KEY, JSON.stringify(payload));
+  const params = new URLSearchParams({
+    capture_source: payload.source || 'remarkable-ocr',
+    capture_target: payload.target || document.getElementById('target').value || 'work_tasks',
+  });
   window.location = '/?' + params.toString();
 }
 function clearForm() {
   document.getElementById('ocr_text').value = '';
   document.getElementById('source_ref').value = '';
   document.getElementById('project_number').value = '';
+  parsedOcr = null;
+  renderParsed(null);
+  setParseStatus('');
 }
 document.getElementById('project_number').addEventListener('input', event => {
   const digits = event.target.value.replace(/\D/g, '').slice(0, 6);
   event.target.value = digits.length > 4 ? digits.slice(0, 4) + '.' + digits.slice(4) : digits;
 });
+document.getElementById('ocr_text').addEventListener('input', () => { parsedOcr = null; renderParsed(null); setParseStatus(''); });
 </script>
 </body>
 </html>

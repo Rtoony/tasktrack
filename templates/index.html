@@ -572,6 +572,7 @@
                     <option value="paste" selected>Paste</option>
                     <option value="voice">Voice note</option>
                     <option value="remarkable-ocr">reMarkable / OCR note</option>
+                    <option value="paper-form">Paper / printable form</option>
                     <option value="paperless">Paperless scan</option>
                     <option value="meeting">Meeting</option>
                     <option value="phone">Phone call</option>
@@ -4392,7 +4393,12 @@ function applyCapturePresetValues(values) {
   if (requestedBy && values.requested_by) requestedBy.value = values.requested_by;
   const projectNumber = document.getElementById('preset-project-number');
   if (projectNumber && values.project_number) projectNumber.value = values.project_number;
+  const dueDate = document.getElementById('preset-due-date');
+  if (dueDate && values.due_date) dueDate.value = values.due_date;
+  const dueAt = document.getElementById('preset-due-at');
+  if (dueAt && values.due_at) dueAt.value = values.due_at;
   intakeApplyTargetLayout();
+  if (values.requested_by || values.project_number || values.due_date || values.due_at) setIntakeOptions(true);
 }
 
 function applyCapturePreset(name) {
