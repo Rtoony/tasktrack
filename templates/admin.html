@@ -133,6 +133,18 @@
         <div class="workflow-link-title">At-Risk Queue</div>
         <div class="workflow-link-copy">Portfolio report filtered to projects that need management attention first.</div>
       </a>
+      <a class="workflow-link-card" href="/reports/incidents?open_only=1">
+        <div class="workflow-link-title">Incident Reports</div>
+        <div class="workflow-link-copy">Admin-only capability and incident reports with full narratives, print, JSON, and CSV.</div>
+      </a>
+      <a class="workflow-link-card" href="/reports/incidents?severity=High&open_only=1">
+        <div class="workflow-link-title">High Severity Incidents</div>
+        <div class="workflow-link-copy">Open high-severity capability incidents for quick management review.</div>
+      </a>
+      <a class="workflow-link-card" href="/api/v1/reports/incidents.csv?open_only=1">
+        <div class="workflow-link-title">Incident CSV</div>
+        <div class="workflow-link-copy">Download the current open incident report as CSV.</div>
+      </a>
       <a class="workflow-link-card" href="/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25">
         <div class="workflow-link-title">At-Risk CSV</div>
         <div class="workflow-link-copy">Download the current management action queue as CSV.</div>

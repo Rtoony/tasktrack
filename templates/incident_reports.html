@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Incident Reports - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --warn:#fbbf24; --danger:#f87171; --ok:#34d399; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1220px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1220px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.55rem; font-weight:700; margin-bottom:0.2rem; }
+  .sub { color:var(--text-muted); font-size:0.86rem; margin-bottom:1rem; max-width:850px; }
+  .filter-card,.hero,.summary-card,.incident-card,.section { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+  .filter-card { padding:1rem; margin-bottom:1rem; }
+  .filters { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input,select { width:100%; padding:0.38rem 0.48rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; }
+  .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
+  .checkline input { width:auto; }
+  .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+  .btn { background:var(--accent); border:none; color:#0b1220; padding:0.4rem 0.75rem; border-radius:var(--radius); cursor:pointer; font-weight:700; text-decoration:none; font-size:0.78rem; display:inline-flex; align-items:center; justify-content:center; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .hero { padding:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+  .hero-title { font-size:1.2rem; font-weight:700; }
+  .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
+  .summary-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .summary-card { padding:0.75rem; }
+  .summary-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .summary-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  .summary-value.danger { color:var(--danger); }
+  .incident-card { padding:1rem; margin-bottom:1rem; break-inside:avoid; }
+  .incident-head { display:flex; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:0.8rem; }
+  .incident-id { color:var(--accent); font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em; }
+  .incident-title { font-size:1.05rem; font-weight:700; margin-top:0.1rem; }
+  .meta { color:var(--text-muted); font-size:0.77rem; margin-top:0.18rem; }
+  .chips { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:0.4rem; }
+  .chip { border:1px solid var(--border); background:rgba(17,22,29,0.65); border-radius:999px; padding:0.16rem 0.5rem; color:var(--text-muted); font-size:0.7rem; text-decoration:none; }
+  .chip.danger { color:var(--danger); border-color:rgba(248,113,113,0.45); }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; }
+  .section { background:rgba(17,22,29,0.35); padding:0.75rem; }
+  .section h2 { font-size:0.88rem; margin-bottom:0.45rem; }
+  .note { color:var(--text-muted); white-space:pre-wrap; }
+  .empty { color:var(--text-dim); font-style:italic; padding:0.4rem 0; }
+  .danger { color:var(--danger); }
+  .print-only { display:none; }
+  .print-masthead { border-bottom:1px solid var(--border); margin-bottom:1rem; padding-bottom:0.7rem; }
+  .print-eyebrow { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.68rem; }
+  .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
+  .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
+  .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
+  @media (max-width: 1000px) { .filters,.summary-grid { grid-template-columns:repeat(2,1fr); } .cols { grid-template-columns:1fr; } .hero,.incident-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
+    header,.filter-card,.nav,.btn { display:none !important; }
+    main { max-width:none; padding:0 0 0.15in; }
+    .print-only { display:block !important; }
+    .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
+    .print-eyebrow,.print-meta { color:#4b5563; }
+    .print-title { color:#111827; }
+    .print-footer { color:#4b5563; border-color:#d1d5db; }
+    .hero,.incident-card,.summary-card,.section { border-color:#d1d5db; background:#fff; box-shadow:none; }
+    .hero,.incident-card { padding:0.12in; margin-bottom:0.12in; }
+    .summary-grid { grid-template-columns:repeat(5,1fr); gap:0.08in; margin-bottom:0.12in; }
+    .summary-card { padding:0.08in; }
+    .summary-value { font-size:14pt; color:#111827; }
+    .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+    .incident-head { border-color:#e5e7eb; }
+    .incident-card { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Incident Reports</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/reports/projects">Portfolio</a>
+      <a href="/weekly">Weekly</a>
+      <a href="/admin">Admin</a>
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section class="print-masthead print-only" aria-label="Printable report header">
+    <div>
+      <div class="print-eyebrow">TaskTrack Incident Report</div>
+      <div class="print-title">{{ packet.summary.total }} incident{{ '' if packet.summary.total == 1 else 's' }} / {{ packet.summary.high_severity_count }} high severity</div>
+    </div>
+    <div class="print-meta">Generated {{ packet.generated_at[:16] }}<br>{% if packet.filters.open_only %}Open only<br>{% endif %}{% if packet.filters.project_number %}Project {{ packet.filters.project_number }}{% else %}All projects{% endif %}</div>
+  </section>
+
+  <h1>Incident Reports</h1>
+  <p class="sub">Admin-only capability and incident reporting. This page includes sensitive narratives and should be treated as an internal management artifact.</p>
+
+  <form class="filter-card" method="get" action="/reports/incidents">
+    <div class="filters">
+      <div><label for="q">Search</label><input id="q" name="q" value="{{ packet.filters.q }}" placeholder="narrative, person, project"></div>
+      <div><label for="severity">Severity</label><select id="severity" name="severity"><option value="" {% if not packet.filters.severity %}selected{% endif %}>Any</option>{% for value in ['Critical','High','Medium','Low'] %}<option value="{{ value }}" {% if packet.filters.severity == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="status">Status</label><input id="status" name="status" value="{{ packet.filters.status }}" placeholder="Observed, Resolved..."></div>
+      <div><label for="project_number">Project #</label><input id="project_number" name="project_number" value="{{ packet.filters.project_number }}" placeholder="optional"></div>
+      <div><label for="person">Person</label><input id="person" name="person" value="{{ packet.filters.person }}" placeholder="optional"></div>
+      <div><label for="days">Days</label><input id="days" name="days" value="{{ packet.filters.days }}" inputmode="numeric"></div>
+      <label class="checkline"><input type="checkbox" name="open_only" value="1" {% if packet.filters.open_only %}checked{% endif %}> Open only</label>
+      <label class="checkline"><input type="checkbox" name="follow_up_due" value="1" {% if packet.filters.follow_up_due %}checked{% endif %}> Follow-up due</label>
+      <div><label for="limit">Limit</label><input id="limit" name="limit" value="{{ packet.filters.limit }}" inputmode="numeric"></div>
+      <div class="actions"><a class="btn secondary" href="/reports/incidents">Reset</a><button class="btn" type="submit">Build Report</button></div>
+    </div>
+  </form>
+
+  <section class="hero">
+    <div>
+      <div class="hero-title">{{ packet.summary.total }} incident{{ '' if packet.summary.total == 1 else 's' }} in report</div>
+      <div class="hero-meta">Generated {{ packet.generated_at[:16] }}{% if packet.summary.truncated %} / showing {{ packet.summary.total }} of {{ packet.summary.matched_count }} matched{% endif %}</div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/api/v1/reports/incidents?{{ request.query_string.decode('utf-8') }}">JSON</a>
+      <a class="btn secondary" href="/api/v1/reports/incidents.csv?{{ request.query_string.decode('utf-8') }}">CSV</a>
+      <button class="btn" type="button" onclick="window.print()">Print</button>
+    </div>
+  </section>
+
+  <section class="summary-grid">
+    <div class="summary-card"><div class="summary-label">Total</div><div class="summary-value">{{ packet.summary.total }}</div></div>
+    <div class="summary-card"><div class="summary-label">Open</div><div class="summary-value">{{ packet.summary.open_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">High Severity</div><div class="summary-value{% if packet.summary.high_severity_count %} danger{% endif %}">{{ packet.summary.high_severity_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Follow-Up Due</div><div class="summary-value{% if packet.summary.follow_up_due_count %} danger{% endif %}">{{ packet.summary.follow_up_due_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Time Loss</div><div class="summary-value">{{ packet.summary.estimated_time_loss_minutes }}</div></div>
+  </section>
+
+  {% if not packet.incidents %}
+    <section class="incident-card"><div class="empty">No incidents matched these filters.</div></section>
+  {% endif %}
+
+  {% for row in packet.incidents %}
+  <article class="incident-card">
+    <div class="incident-head">
+      <div>
+        <div class="incident-id">Incident #{{ row.id }}</div>
+        <div class="incident-title">{{ row.issue_description }}</div>
+        <div class="meta">{{ row.person_name or 'No person assigned' }}{% if row.project_number %} / Project {{ row.project_number }}{% endif %}{% if row.cad_skill_area %} / {{ row.cad_skill_area }}{% endif %}</div>
+      </div>
+      <div class="chips">
+        <span class="chip{% if row.is_high_severity %} danger{% endif %}">{{ row.severity or 'Unspecified' }}</span>
+        <span class="chip">{{ row.status or 'Unspecified' }}</span>
+        {% if row.follow_up_due %}<span class="chip danger">follow-up due</span>{% endif %}
+        {% if row.project_report_url %}<a class="chip" href="{{ row.project_report_url }}">project report</a>{% endif %}
+      </div>
+    </div>
+    <div class="cols">
+      <section class="section">
+        <h2>Context</h2>
+        <div class="note">{{ row.incident_context or 'No context recorded.' }}</div>
+        {% if row.immediate_solution %}<h2 style="margin-top:0.75rem">Immediate Solution</h2><div class="note">{{ row.immediate_solution }}</div>{% endif %}
+      </section>
+      <section class="section">
+        <h2>Follow-Up</h2>
+        <div class="meta">Reported {{ row.reported_at[:16] }} / {{ row.days_open }} day{{ '' if row.days_open == 1 else 's' }} open{% if row.follow_up_date %} / follow-up {{ row.follow_up_date }}{% endif %}</div>
+        {% if row.recommended_training %}<h2 style="margin-top:0.75rem">Recommended Training</h2><div class="note">{{ row.recommended_training }}</div>{% endif %}
+        {% if row.resolution_notes %}<h2 style="margin-top:0.75rem">Resolution Notes</h2><div class="note">{{ row.resolution_notes }}</div>{% endif %}
+      </section>
+    </div>
+  </article>
+  {% endfor %}
+
+  <section class="print-footer print-only">TaskTrack incident report generated {{ packet.generated_at[:16] }}. Admin-only sensitive narrative report.</section>
+</main>
+</body>
+</html>

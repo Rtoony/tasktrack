@@ -9,9 +9,14 @@ from datetime import datetime
 from flask import Blueprint, Response, jsonify, render_template, request, session
 from sqlalchemy import or_, select
 
-from ..auth import login_required
+from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
+from ..services.incident_reports import (
+    INCIDENT_CSV_FIELDS,
+    incident_csv_rows,
+    incident_report,
+)
 from ..services.project_reports import (
     DEFAULT_PORTFOLIO_LIMIT,
     MAX_PORTFOLIO_LIMIT,
@@ -152,6 +157,20 @@ def _portfolio_filters() -> dict:
     filters = _request_portfolio_filters()
     filters.pop("include_private", None)
     return filters
+
+
+def _incident_filters() -> dict:
+    return {
+        "q": (request.args.get("q") or "").strip(),
+        "severity": (request.args.get("severity") or "").strip(),
+        "status": (request.args.get("status") or "").strip(),
+        "project_number": (request.args.get("project_number") or "").strip(),
+        "person": (request.args.get("person") or "").strip(),
+        "open_only": _bool_arg("open_only"),
+        "follow_up_due": _bool_arg("follow_up_due"),
+        "days": _int_arg("days", 365, 1, 3650),
+        "limit": _int_arg("limit", 100, 1, 250),
+    }
 
 
 def _preset_filters(row: ReportPreset) -> dict:
@@ -366,6 +385,38 @@ def report_presets_delete(preset_id: int):
     sess.delete(row)
     sess.commit()
     return jsonify({"ok": True})
+
+
+@bp.route("/api/v1/reports/incidents", methods=["GET"])
+@admin_required
+def incident_report_json():
+    return jsonify(incident_report(get_session(), filters=_incident_filters()))
+
+
+@bp.route("/api/v1/reports/incidents.csv", methods=["GET"])
+@admin_required
+def incident_report_csv():
+    packet = incident_report(get_session(), filters=_incident_filters())
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=INCIDENT_CSV_FIELDS)
+    writer.writeheader()
+    writer.writerows(incident_csv_rows(packet))
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=incident_report_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
+@bp.route("/reports/incidents", methods=["GET"])
+@admin_required
+def incident_report_page():
+    return render_template(
+        "incident_reports.html",
+        packet=incident_report(get_session(), filters=_incident_filters()),
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
 
 
 @bp.route("/api/v1/reports/project", methods=["GET"])

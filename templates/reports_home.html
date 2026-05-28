@@ -107,6 +107,19 @@
     </div>
 
     <div>
+      {% if user_role == 'admin' %}
+      <section class="card">
+        <h2>Incident Reports</h2>
+        <p>Admin-only capability and incident reporting with full narratives, filters, printable output, JSON, and CSV.</p>
+        <div class="actions">
+          <a class="btn" href="/reports/incidents?open_only=1">Open Incidents</a>
+          <a class="btn secondary" href="/reports/incidents?severity=High&open_only=1">High Severity</a>
+          <a class="btn secondary" href="/reports/incidents?follow_up_due=1">Follow-Up Due</a>
+          <a class="btn ghost" href="/api/v1/reports/incidents.csv?open_only=1">CSV</a>
+        </div>
+      </section>
+      {% endif %}
+
       <section class="card">
         <h2>Weekly Review</h2>
         <p>Use this for check-ins, recent work, overdue summaries, and quick operational status.</p>
