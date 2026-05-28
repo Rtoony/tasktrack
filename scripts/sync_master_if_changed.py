@@ -41,6 +41,10 @@ Run modes:
   # Force: ignore stored hashes and re-import even if files haven't
   # changed. Useful for redoing an import after a schema migration.
   python3 scripts/sync_master_if_changed.py --force
+
+  # Preflight JSON: validate source visibility + change detection only.
+  # Does not touch DB, state, or Telegram.
+  python3 scripts/sync_master_if_changed.py --preflight-json
 """
 from __future__ import annotations
 
@@ -232,6 +236,53 @@ def _notify_telegram(report: dict, *, dry_run: bool) -> None:
         LOG.warning("telegram digest raised: %s", exc)
 
 
+def preflight_sync(*, source_dir: Path, state_path: Path, force: bool = False) -> dict:
+    """Resolve sources and compare hashes without importing or writing state."""
+    payload = {
+        "ok": False,
+        "source_dir": str(source_dir),
+        "state_path": str(state_path),
+        "force": bool(force),
+        "state_exists": state_path.is_file(),
+        "last_run_at": "",
+        "xlsx_path": "",
+        "xlsx_sha256": "",
+        "kmz_path": "",
+        "kmz_sha256": "",
+        "unchanged": False,
+        "would_import": False,
+        "message": "",
+    }
+    try:
+        xlsx_path, kmz_path = _resolve_sources(source_dir)
+        xlsx_hash = _sha256_file(xlsx_path)
+        kmz_hash = _sha256_file(kmz_path)
+    except SystemExit as exc:
+        payload["message"] = str(exc)
+        return payload
+
+    state = _load_state(state_path)
+    unchanged = (
+        state.get("xlsx_sha256") == xlsx_hash
+        and state.get("kmz_sha256") == kmz_hash
+    )
+    payload.update({
+        "ok": True,
+        "last_run_at": state.get("last_run_at", ""),
+        "xlsx_path": str(xlsx_path),
+        "xlsx_sha256": xlsx_hash,
+        "kmz_path": str(kmz_path),
+        "kmz_sha256": kmz_hash,
+        "unchanged": unchanged,
+        "would_import": bool(force or not unchanged),
+        "message": "force import requested" if force else (
+            "sources changed; importer would run" if not unchanged else
+            "sources match stored hashes; importer would skip"
+        ),
+    })
+    return payload
+
+
 def run_sync(*, source_dir: Path, db_url: str | None,
              state_path: Path, dry_run: bool, force: bool) -> int:
     """Do one sync cycle. Returns the int exit code."""
@@ -311,6 +362,10 @@ def main() -> int:
         help="Ignore stored hashes and re-import even if files match.",
     )
     parser.add_argument(
+        "--preflight-json", action="store_true",
+        help="Validate source visibility/change detection and print JSON without importing or writing state.",
+    )
+    parser.add_argument(
         "--log-level", default=os.environ.get("TASKTRACK_LOG_LEVEL", "INFO"),
     )
     args = parser.parse_args()
@@ -324,6 +379,13 @@ def main() -> int:
         os.environ.get("TASKTRACK_MASTER_SOURCE_DIR", _DEFAULT_SOURCE_DIR)
     )
     state_path = args.state_file or _state_path()
+
+    if args.preflight_json:
+        payload = preflight_sync(
+            source_dir=source_dir, state_path=state_path, force=args.force,
+        )
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0 if payload.get("ok") else 2
 
     return run_sync(
         source_dir=source_dir,

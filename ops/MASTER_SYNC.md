@@ -163,6 +163,18 @@ Confirm next run = tomorrow 03:30 local.
 
 ## Manual operations
 
+### Preflight source visibility
+```
+TASKTRACK_MASTER_SOURCE_DIR=/mnt/synology-eng-data/master-list \
+  /home/rtoony/miniconda3/bin/python3 \
+  /home/rtoony/projects/collab-tracker/scripts/sync_master_if_changed.py \
+  --preflight-json
+```
+
+This only resolves the XLSX/KMZ, hashes them, compares the state file,
+and reports whether a real sync would import or skip. It does not touch
+the database, state file, source files, or Telegram.
+
 ### One-shot sync now
 ```
 systemctl --user start tasktrack-master-sync.service

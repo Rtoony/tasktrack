@@ -371,6 +371,49 @@ def test_sync_dry_run_does_not_touch_db_or_state(
         assert sess.query(Project).count() == 0
 
 
+def test_sync_preflight_reports_would_import_without_touching_state(
+    tmp_path, source_dir_with_files,
+):
+    state = tmp_path / "state.json"
+    payload = syncer.preflight_sync(
+        source_dir=source_dir_with_files, state_path=state, force=False,
+    )
+    assert payload["ok"] is True
+    assert payload["would_import"] is True
+    assert payload["unchanged"] is False
+    assert payload["xlsx_sha256"]
+    assert payload["kmz_sha256"]
+    assert not state.exists()
+
+
+def test_sync_preflight_reports_unchanged_after_real_run(
+    tmp_path, temp_app, source_dir_with_files,
+):
+    state = tmp_path / "state.json"
+    syncer.run_sync(
+        source_dir=source_dir_with_files,
+        db_url=_db_url(temp_app),
+        state_path=state, dry_run=False, force=False,
+    )
+    payload = syncer.preflight_sync(
+        source_dir=source_dir_with_files, state_path=state, force=False,
+    )
+    assert payload["ok"] is True
+    assert payload["state_exists"] is True
+    assert payload["would_import"] is False
+    assert payload["unchanged"] is True
+    assert payload["last_run_at"]
+
+
+def test_sync_preflight_reports_missing_source(tmp_path):
+    payload = syncer.preflight_sync(
+        source_dir=tmp_path / "missing", state_path=tmp_path / "state.json",
+    )
+    assert payload["ok"] is False
+    assert payload["would_import"] is False
+    assert "source dir" in payload["message"]
+
+
 # ── Notifier-level: digest formatting ─────────────────────────────────────
 
 
