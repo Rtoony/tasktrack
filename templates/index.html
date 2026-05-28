@@ -776,6 +776,16 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <select class="filter-select" id="filter-triage-source" onchange="loadTable('triage')">
+        <option value="">All Sources</option>
+        <option value="remarkable-ocr">reMarkable/OCR</option>
+        <option value="paperless">Paperless</option>
+        <option value="telegram">Telegram</option>
+        <option value="voice">Voice</option>
+        <option value="meeting">Meeting</option>
+        <option value="email">Email</option>
+        <option value="paste">Paste</option>
+      </select>
       <a class="btn btn-sm btn-export" href="/api/v1/inbox_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('triage')">+ Add Triage Item</button>
     </div>
@@ -2331,6 +2341,7 @@ async function loadTable(table) {
   // Apply filters
   const statusFilter = document.getElementById('filter-'+table+'-status')?.value || '';
   const priorityFilter = document.getElementById('filter-'+table+'-priority')?.value || '';
+  const sourceFilter = document.getElementById('filter-'+table+'-source')?.value || '';
   const typeFilter = document.getElementById('filter-'+table+'-type')?.value || '';
   const overdueFilter = document.getElementById('filter-'+table+'-overdue')?.checked || false;
 
@@ -2342,6 +2353,9 @@ async function loadTable(table) {
   if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
+  if (sourceFilter && table === 'triage') {
+    filtered = filtered.filter(r => String(r.source || '').toLowerCase().includes(sourceFilter.toLowerCase()));
+  }
   if (typeFilter && table === 'calendar') filtered = filtered.filter(r => r.event_type === typeFilter);
   if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
