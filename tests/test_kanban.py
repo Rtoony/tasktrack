@@ -31,6 +31,11 @@ def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):
     assert "All Sources" in html
     assert "captureSource" in html
     assert "applyCapturePresetRoute" in html
+    assert "capture-preset-btn" in html
+    assert "Meeting Notes" in html
+    assert "CAD Issue" in html
+    assert "Training Need" in html
+    assert "CAPTURE_PREFILL_KEY" in html
 
 
 def test_project_endpoint_still_returns_200(auth_client):

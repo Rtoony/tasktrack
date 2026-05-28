@@ -349,6 +349,9 @@
   .capture-card .intake-card { border:none; padding:0; box-shadow:none; background:transparent; }
   .capture-card .intake-card h3 { display:none; }
   .capture-card .intake-card .intake-sub { margin-bottom:0.7rem; }
+  .capture-presets { display:flex; gap:0.45rem; flex-wrap:wrap; margin-bottom:0.75rem; }
+  .capture-preset-btn { border:1px solid var(--border); background:color-mix(in srgb, var(--surface) 82%, var(--bg)); color:var(--text-muted); border-radius:999px; padding:0.26rem 0.62rem; font:inherit; font-size:0.74rem; font-weight:600; cursor:pointer; }
+  .capture-preset-btn:hover { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 55%, var(--border)); }
   .capture-textarea { min-height:96px !important; }
   .intake-options-toggle-row { margin-top:0.7rem; }
   .intake-options-toggle { background:none; border:none; font-family:inherit; font-size:0.74rem; font-weight:600; color:var(--text-muted); cursor:pointer; padding:0.25rem 0; display:inline-flex; align-items:center; gap:0.35rem; }
@@ -534,6 +537,12 @@
           <div class="intake-card">
             <h3>Raw Input</h3>
             <div class="intake-sub">Paste a messy note, forwarded email, voice transcript, or tablet OCR text &mdash; the AI will draft a structured task. For a quick follow-up item without AI triage, use <strong>+ Add Triage Item</strong> instead.</div>
+            <div class="capture-presets" aria-label="Capture presets">
+              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('remarkable')">reMarkable OCR</button>
+              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('meeting')">Meeting Notes</button>
+              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('cad_issue')">CAD Issue</button>
+              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('training')">Training Need</button>
+            </div>
             <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
             <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
 
@@ -4357,6 +4366,55 @@ const INTAKE_TARGET_LABELS = {
   training_tasks: 'Training',
 };
 
+const CAPTURE_PREFILL_KEY = 'tasktrack-capture-prefill';
+const CAPTURE_PRESETS = {
+  remarkable: { source: 'remarkable-ocr', target: 'work_tasks', priority: '', skill: 'OCR / field notes' },
+  meeting: { source: 'meeting', target: 'project_work_tasks', priority: 'Medium' },
+  cad_issue: { source: 'paste', target: 'work_tasks', priority: 'High', skill: 'CAD issue' },
+  training: { source: 'meeting', target: 'training_tasks', priority: 'Medium', skill: 'Training / coaching' },
+};
+
+function setSelectValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el || value == null || value === '') return;
+  const allowed = Array.from(el.options || []).map(option => option.value);
+  if (!allowed.length || allowed.includes(value)) el.value = value;
+}
+
+function applyCapturePresetValues(values) {
+  if (!values) return;
+  setSelectValue('preset-source', values.source);
+  setSelectValue('preset-target', values.target);
+  setSelectValue('preset-priority', values.priority);
+  const skill = document.getElementById('preset-skill');
+  if (skill && values.skill) skill.value = values.skill;
+  const requestedBy = document.getElementById('preset-requested-by');
+  if (requestedBy && values.requested_by) requestedBy.value = values.requested_by;
+  const projectNumber = document.getElementById('preset-project-number');
+  if (projectNumber && values.project_number) projectNumber.value = values.project_number;
+  intakeApplyTargetLayout();
+}
+
+function applyCapturePreset(name) {
+  applyCapturePresetValues(CAPTURE_PRESETS[name]);
+  if (name === 'meeting' || name === 'training') setIntakeOptions(true);
+  const input = document.getElementById('intake-input');
+  if (input) input.focus();
+  toast('Capture preset applied');
+}
+
+function consumeCapturePrefill() {
+  let payload = null;
+  try {
+    payload = JSON.parse(sessionStorage.getItem(CAPTURE_PREFILL_KEY) || 'null');
+    sessionStorage.removeItem(CAPTURE_PREFILL_KEY);
+  } catch { payload = null; }
+  if (!payload) return;
+  applyCapturePresetValues(payload);
+  const input = document.getElementById('intake-input');
+  if (input && payload.text) input.value = payload.text;
+}
+
 function intakeSetStatus(text, cls) {
   const el = document.getElementById('intake-status');
   if (!el) return;
@@ -4708,14 +4766,7 @@ function startupRouteState() {
 
 function applyCapturePresetRoute(state) {
   if (!state.captureSource && !state.captureTarget) return;
-  const source = document.getElementById('preset-source');
-  const target = document.getElementById('preset-target');
-  if (source && state.captureSource) source.value = state.captureSource;
-  if (target && state.captureTarget) {
-    const allowed = Array.from(target.options).map(option => option.value);
-    if (allowed.includes(state.captureTarget)) target.value = state.captureTarget;
-  }
-  intakeApplyTargetLayout();
+  applyCapturePresetValues({ source: state.captureSource, target: state.captureTarget });
   const input = document.getElementById('intake-input');
   if (input) {
     input.focus({ preventScroll: true });
@@ -4727,6 +4778,7 @@ async function applyStartupRouteState() {
   const state = startupRouteState();
   if (STANDALONE_TAB) return;
   if (state.tab && state.tab !== 'dashboard') activateTab(state.tab);
+  consumeCapturePrefill();
   applyCapturePresetRoute(state);
   if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
   if (state.workspace) await openProjectWorkspaceByNumber(state.workspace);

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browser Testing Checklist - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --ok:#34d399; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(52,211,153,0.10), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:rgba(24,33,43,0.94); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1100px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1100px; margin:0 auto; padding:1.6rem 1.5rem 3rem; }
+  h1 { font-size:1.65rem; margin-bottom:0.25rem; }
+  .sub { color:var(--text-muted); max-width:850px; margin-bottom:1.1rem; }
+  .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; align-items:start; }
+  .card { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; }
+  .card h2 { font-size:1rem; margin-bottom:0.55rem; }
+  .item { display:grid; grid-template-columns:auto 1fr auto; gap:0.65rem; align-items:start; padding:0.48rem 0; border-bottom:1px solid var(--border); }
+  .item:last-child { border-bottom:none; }
+  .item input { margin-top:0.18rem; transform:scale(1.05); }
+  .item label { cursor:pointer; }
+  .meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.1rem; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.38rem 0.65rem; font-weight:700; font-size:0.76rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+  .progress { color:var(--ok); font-family:'IBM Plex Mono',monospace; font-size:0.82rem; margin-bottom:1rem; }
+  @media (max-width: 900px) { .grid { grid-template-columns:1fr; } .item { grid-template-columns:auto 1fr; } .item a { grid-column:2; width:max-content; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Browser Testing</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/capture/ocr">OCR Capture</a>
+      {% if user_role == 'admin' %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>Browser Testing Checklist</h1>
+  <p class="sub">Use this to walk the current system without needing mobile, Telegram, or a real tablet export. Checks are stored locally in this browser only.</p>
+  <div class="actions">
+    <button class="btn secondary" type="button" onclick="resetChecks()">Reset Checks</button>
+    <a class="btn secondary" href="/reports/today">Today Brief</a>
+    <a class="btn secondary" href="/?capture_source=remarkable-ocr">reMarkable Capture</a>
+  </div>
+  <div class="progress" id="progress">0 complete</div>
+  <div class="grid" id="checklist"></div>
+</main>
+<script>
+const STORAGE_KEY = 'tasktrack-browser-test-checks-v1';
+const GROUPS = [
+  { title: 'Capture Loop', items: [
+    ['ocr-capture', 'Paste OCR text into the OCR landing page and send it to Dashboard Capture.', '/capture/ocr'],
+    ['ai-preview', 'Run AI triage preview from Dashboard Capture.', '/?capture_source=remarkable-ocr'],
+    ['triage-filter', 'Open Triage and filter source to reMarkable/OCR.', '/?tab=triage'],
+    ['promote', 'Promote or save one item into the right tracker.']
+  ]},
+  { title: 'Calendar And Meetings', items: [
+    ['calendar-event', 'Create a linked calendar event.', '/?tab=calendar'],
+    ['meeting-packet', 'Open a meeting packet for that event.', '/reports'],
+    ['today-brief', 'Confirm the event appears in Today Brief.', '/reports/today']
+  ]},
+  { title: 'Projects And Map', items: [
+    ['map-pin', 'Open a project from the Map pin workspace.', '/?tab=map'],
+    ['project-report', 'Generate a project one-pager.', '/reports'],
+    ['portfolio', 'Generate an at-risk or active portfolio packet.', '/reports/projects?display_status=active&limit=12']
+  ]},
+  { title: 'Admin Reports', items: [
+    ['incident-create', 'Create or review one capability/incident item.', '/?tab=personnel'],
+    ['incident-report', 'Open the incident report and one-pager.', '/reports/incidents?open_only=1'],
+    ['admin-links', 'Verify Admin links and Telegram pairing status.', '/admin']
+  ]}
+];
+function loadState() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch { return {}; }
+}
+function saveState(state) { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+function render() {
+  const state = loadState();
+  const root = document.getElementById('checklist');
+  root.innerHTML = '';
+  let total = 0;
+  let done = 0;
+  GROUPS.forEach(group => {
+    const card = document.createElement('section');
+    card.className = 'card';
+    card.innerHTML = '<h2></h2>';
+    card.querySelector('h2').textContent = group.title;
+    group.items.forEach(([id, label, href]) => {
+      total += 1;
+      if (state[id]) done += 1;
+      const row = document.createElement('div');
+      row.className = 'item';
+      row.innerHTML = '<input type="checkbox"><label></label><a class="btn secondary">Open</a>';
+      const input = row.querySelector('input');
+      input.checked = Boolean(state[id]);
+      input.addEventListener('change', () => { state[id] = input.checked; saveState(state); render(); });
+      row.querySelector('label').textContent = label;
+      const link = row.querySelector('a');
+      if (href) link.href = href;
+      else link.style.display = 'none';
+      card.appendChild(row);
+    });
+    root.appendChild(card);
+  });
+  document.getElementById('progress').textContent = done + ' of ' + total + ' complete';
+}
+function resetChecks() { localStorage.removeItem(STORAGE_KEY); render(); }
+render();
+</script>
+</body>
+</html>

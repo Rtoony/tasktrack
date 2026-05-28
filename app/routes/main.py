@@ -19,6 +19,26 @@ def index():
     )
 
 
+@bp.route("/capture/ocr")
+@login_required
+def capture_ocr():
+    return render_template(
+        "capture_ocr.html",
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
+@bp.route("/testing")
+@login_required
+def testing_checklist():
+    return render_template(
+        "testing_checklist.html",
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
 @bp.route("/healthz")
 def healthz():
     return "ok"
