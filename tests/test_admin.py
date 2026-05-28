@@ -29,6 +29,21 @@ def test_admin_panel_forbids_regular_user(auth_client):
 def test_admin_panel_serves_admin(admin_client):
     r = admin_client.get("/admin")
     assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Pages & Reports" in html
+    assert "Report Center" in html
+    assert "Today Brief" in html
+    assert "Portfolio Reports" in html
+    assert "At-Risk Queue" in html
+    assert "At-Risk CSV" in html
+    assert "Project One-Pager" in html
+    assert "Meeting Packet Batch" in html
+    assert "Weekly Review" in html
+    assert "Submission Forms" in html
+    assert "/reports/today" in html
+    assert "/reports/meetings?days=14&limit=12" in html
+
+
 
 
 def test_admin_api_endpoint_returns_401_for_anonymous(client):
