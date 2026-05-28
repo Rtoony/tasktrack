@@ -676,6 +676,8 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert "Report Center" in html
     assert "Testing Launchpad" in html
     assert "Triage Inbox" in html
+    assert "reMarkable/OCR Capture" in html
+    assert "/?capture_source=remarkable-ocr" in html
     assert "/?tab=triage" in html
     assert "/?tab=calendar" in html
     assert "Project Status One-Pager" in html

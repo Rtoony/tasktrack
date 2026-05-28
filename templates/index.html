@@ -4701,13 +4701,33 @@ function startupRouteState() {
     tab: params.get('tab') || hashTab || '',
     workspace: params.get('workspace') || (hashParts[0] === 'workspace' ? hashParts.slice(1).join('/') : ''),
     mapProject: params.get('map_project') || (hashParts[0] === 'map' ? hashParts.slice(1).join('/') : ''),
+    captureSource: params.get('capture_source') || '',
+    captureTarget: params.get('capture_target') || '',
   };
+}
+
+function applyCapturePresetRoute(state) {
+  if (!state.captureSource && !state.captureTarget) return;
+  const source = document.getElementById('preset-source');
+  const target = document.getElementById('preset-target');
+  if (source && state.captureSource) source.value = state.captureSource;
+  if (target && state.captureTarget) {
+    const allowed = Array.from(target.options).map(option => option.value);
+    if (allowed.includes(state.captureTarget)) target.value = state.captureTarget;
+  }
+  intakeApplyTargetLayout();
+  const input = document.getElementById('intake-input');
+  if (input) {
+    input.focus({ preventScroll: true });
+    document.querySelector('.capture-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 async function applyStartupRouteState() {
   const state = startupRouteState();
   if (STANDALONE_TAB) return;
   if (state.tab && state.tab !== 'dashboard') activateTab(state.tab);
+  applyCapturePresetRoute(state);
   if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
   if (state.workspace) await openProjectWorkspaceByNumber(state.workspace);
 }

@@ -29,6 +29,8 @@ def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):
     assert "remarkable-ocr" in html
     assert 'id="filter-triage-source"' in html
     assert "All Sources" in html
+    assert "captureSource" in html
+    assert "applyCapturePresetRoute" in html
 
 
 def test_project_endpoint_still_returns_200(auth_client):
