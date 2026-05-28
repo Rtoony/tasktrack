@@ -171,6 +171,22 @@
           <a class="btn" href="/reports/meetings?days=14&limit=12">Batch Meeting Packets</a>
           <a class="btn secondary" href="/api/v1/reports/meetings?days=14&limit=12">Batch JSON</a>
         </div>
+        <div class="quick-row">
+          <div><div class="quick-title">Saved Meeting Presets</div><div class="quick-meta">Reusable meeting packet windows and filters.</div></div>
+          <a class="btn ghost" href="/reports/meetings">Manage</a>
+        </div>
+        <div class="preset-list" style="margin-top:0.7rem;margin-bottom:0.75rem">
+          {% if meeting_presets %}
+            {% for preset in meeting_presets %}
+            <div class="preset-item">
+              <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Meeting packet{% if preset.is_shared %} / shared{% endif %}</div></div>
+              <a class="btn secondary" href="/reports/meetings?preset={{ preset.id }}">Open</a>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty">No saved meeting presets yet.</div>
+          {% endif %}
+        </div>
         <div id="meeting-packets" class="event-list"><div class="empty">Loading upcoming events...</div></div>
       </section>
     </div>

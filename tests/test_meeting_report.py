@@ -276,6 +276,71 @@ def test_meeting_packet_batch_json_and_html(auth_client, temp_app):
     assert "Owner private meeting" not in html
     assert "window.print" in html
     assert "@page { size: letter" in html
+    assert "Saved Preset" in html
+    assert "saveMeetingPreset" in html
+    assert "updateMeetingPreset" in html
+    assert "deleteMeetingPreset" in html
+
+
+def test_meeting_packet_batch_presets(auth_client, temp_app):
+    _ids(temp_app)
+
+    create = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Two week meeting batch",
+        "surface": "meetings",
+        "is_shared": True,
+        "filters": {
+            "days": 14,
+            "limit": 10,
+            "project_number": "7711.20",
+            "event_type": "meeting",
+            "include_private": True,
+        },
+    })
+    assert create.status_code == 201
+    preset = create.get_json()
+    assert preset["surface"] == "meetings"
+    assert preset["filters"]["project_number"] == "7711.20"
+    assert preset["filters"]["include_private"] is True
+
+    listed = auth_client.get("/api/v1/reports/presets?surface=meetings")
+    assert listed.status_code == 200
+    assert [row["name"] for row in listed.get_json()["presets"]] == ["Two week meeting batch"]
+
+    packet = auth_client.get(f"/api/v1/reports/meetings?preset={preset['id']}")
+    assert packet.status_code == 200
+    body = packet.get_json()
+    assert body["selected_preset"]["id"] == preset["id"]
+    assert body["filters"]["project_number"] == "7711.20"
+    assert body["filters"]["event_type"] == "meeting"
+    assert body["include_private"] is True
+    assert [row["event"]["title"] for row in body["packets"]] == ["Management sync"]
+
+    html = auth_client.get(f"/reports/meetings?preset={preset['id']}")
+    assert html.status_code == 200
+    page = html.get_data(as_text=True)
+    assert "Loaded preset: Two week meeting batch" in page
+    assert "Management sync" in page
+    assert "Unlinked staff sync" not in page
+
+    override = auth_client.get(f"/api/v1/reports/meetings?preset={preset['id']}&project_number=")
+    assert override.status_code == 200
+
+
+def test_meeting_presets_visible_on_report_center(auth_client):
+    preset = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Shared meeting packet",
+        "surface": "meetings",
+        "is_shared": True,
+        "filters": {"days": 7, "limit": 5},
+    }).get_json()
+
+    r = auth_client.get("/reports")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Saved Meeting Presets" in html
+    assert "Shared meeting packet" in html
+    assert f'/reports/meetings?preset={preset["id"]}' in html
 
 
 def test_calendar_ui_exposes_meeting_packet_actions(auth_client):

@@ -21,6 +21,8 @@
   .filter-card,.hero,.packet,.section,.summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
   .filter-card { padding:1rem; margin-bottom:1rem; }
   .filters { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  .preset-row { display:grid; grid-template-columns:2fr auto auto auto auto; gap:0.6rem; align-items:end; margin-bottom:0.8rem; padding-bottom:0.8rem; border-bottom:1px solid var(--border); }
+  .inline-note { color:var(--text-muted); font-size:0.76rem; margin-top:0.35rem; }
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; font-size:0.64rem; margin-bottom:0.25rem; }
   input,select { width:100%; padding:0.38rem 0.48rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; }
   .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
@@ -57,7 +59,7 @@
   .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
   .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
   .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
-  @media (max-width: 900px) { .filters,.summary-grid,.cols { grid-template-columns:1fr; } .hero,.packet-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
+  @media (max-width: 900px) { .filters,.summary-grid,.cols,.preset-row { grid-template-columns:1fr; } .hero,.packet-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
   @media print {
     @page { size: letter; margin: 0.45in; }
     body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
@@ -108,7 +110,24 @@
   <h1>Meeting Packet Batch</h1>
   <p class="sub">Print a batch of upcoming event packets. Private events and private linked project events are excluded unless explicitly requested.</p>
 
-  <form class="filter-card" method="get" action="/reports/meetings">
+  <form class="filter-card" method="get" action="/reports/meetings" id="meeting-filter-form">
+    {% if error %}<div class="danger" style="margin-bottom:0.75rem">{{ error }}</div>{% endif %}
+    <div class="preset-row">
+      <div>
+        <label for="meeting-preset">Saved Preset</label>
+        <select id="meeting-preset" name="preset" onchange="applyMeetingPreset(this.value)">
+          <option value="">Custom filters</option>
+          {% for preset in presets %}
+          <option value="{{ preset.id }}" {% if packet.selected_preset and packet.selected_preset.id == preset.id %}selected{% endif %}>{{ preset.name }}{% if preset.is_shared %} (shared){% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if packet.selected_preset %}<div class="inline-note">Loaded preset: {{ packet.selected_preset.name }}</div>{% endif %}
+      </div>
+      <label class="checkline"><input type="checkbox" id="meeting-preset-share" {% if packet.selected_preset and packet.selected_preset.is_shared %}checked{% endif %}> Share preset</label>
+      <button class="btn secondary" type="button" onclick="saveMeetingPreset()">Save New</button>
+      <button class="btn secondary" type="button" onclick="updateMeetingPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Update Loaded</button>
+      <button class="btn secondary" type="button" onclick="deleteMeetingPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Delete</button>
+    </div>
     <div class="filters">
       <div><label for="days">Days</label><input id="days" name="days" value="{{ packet.days }}" inputmode="numeric"></div>
       <div><label for="limit">Limit</label><input id="limit" name="limit" value="{{ packet.limit }}" inputmode="numeric"></div>
@@ -188,5 +207,77 @@
 
   <section class="print-footer print-only">TaskTrack meeting packet batch generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
 </main>
+<script>
+function applyMeetingPreset(id) {
+  if (!id) { window.location = '/reports/meetings'; return; }
+  window.location = `/reports/meetings?preset=${encodeURIComponent(id)}`;
+}
+function meetingFiltersFromForm() {
+  const form = document.getElementById('meeting-filter-form');
+  const fd = new FormData(form);
+  const filters = {
+    days: (fd.get('days') || '').trim(),
+    limit: (fd.get('limit') || '').trim(),
+    project_number: (fd.get('project_number') || '').trim(),
+    event_type: (fd.get('event_type') || '').trim(),
+    include_private: fd.has('include_private')
+  };
+  Object.keys(filters).forEach(key => {
+    if (filters[key] === '') delete filters[key];
+  });
+  return filters;
+}
+function selectedMeetingPresetName() {
+  const select = document.getElementById('meeting-preset');
+  const option = select.options[select.selectedIndex];
+  return option ? option.text.replace(/\s*\(shared\)\s*$/, '').trim() : '';
+}
+function meetingPresetPayload(name) {
+  return {
+    name: name.trim(),
+    surface: 'meetings',
+    is_shared: document.getElementById('meeting-preset-share').checked,
+    filters: meetingFiltersFromForm()
+  };
+}
+async function saveMeetingPreset() {
+  const name = prompt('Preset name for these meeting packet filters:', selectedMeetingPresetName());
+  if (!name || !name.trim()) return;
+  const res = await fetch('/api/v1/reports/presets', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(meetingPresetPayload(name))
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not save preset'); return; }
+  window.location = `/reports/meetings?preset=${encodeURIComponent(body.id)}`;
+}
+async function updateMeetingPreset() {
+  const id = document.getElementById('meeting-preset').value;
+  if (!id) return;
+  const name = prompt('Update loaded preset name:', selectedMeetingPresetName());
+  if (!name || !name.trim()) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(meetingPresetPayload(name))
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not update preset'); return; }
+  window.location = `/reports/meetings?preset=${encodeURIComponent(body.id)}`;
+}
+async function deleteMeetingPreset() {
+  const id = document.getElementById('meeting-preset').value;
+  if (!id) return;
+  if (!confirm('Delete this meeting packet preset?')) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {method: 'DELETE'});
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.error || 'Could not delete preset');
+    return;
+  }
+  window.location = '/reports/meetings';
+}
+</script>
 </body>
 </html>
