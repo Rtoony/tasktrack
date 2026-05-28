@@ -23,8 +23,9 @@
   main { max-width:1180px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
   h1 { font-size:1.5rem; font-weight:600; margin-bottom:0.25rem; }
   .sub { color:var(--text-muted); font-size:0.85rem; margin-bottom:1.25rem; }
-  .lookup { display:flex; gap:0.5rem; align-items:center; margin:0 0 1.25rem; }
-  .lookup input { width:130px; padding:0.35rem 0.5rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:'IBM Plex Mono', monospace; }
+  .lookup { display:flex; gap:0.5rem; align-items:end; margin:0 0 1.25rem; }
+  .lookup-field { min-width:280px; }
+  .lookup input { width:100%; padding:0.35rem 0.5rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:'IBM Plex Mono', monospace; }
   .lookup button,.btn { background:var(--accent); border:none; color:#0b1220; padding:0.36rem 0.75rem; border-radius:var(--radius); cursor:pointer; font-weight:600; text-decoration:none; font-size:0.78rem; }
   .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
   .hero { background:linear-gradient(135deg, rgba(56,189,248,0.14), rgba(24,33,43,0.96)); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem; margin-bottom:1rem; }
@@ -79,9 +80,12 @@
   </div>
 </header>
 <main>
-  <form class="lookup" method="get" action="/reports/project">
-    <label for="project-number" style="color:var(--text-muted);">Project #</label>
-    <input id="project-number" name="project_number" value="{{ project_number }}" placeholder="1234.56" maxlength="7">
+  <form class="lookup" method="get" action="/reports/project" onsubmit="normalizeProjectReportLookup()">
+    <div class="lookup-field">
+      <label for="project-number" style="color:var(--text-muted);">Project</label>
+      <input id="project-number" name="project_number" value="{{ project_number }}" list="project-report-picker-options" placeholder="type number, name, or client">
+      <datalist id="project-report-picker-options"></datalist>
+    </div>
     <button type="submit">Open Report</button>
   </form>
 
@@ -233,5 +237,39 @@
     </section>
   {% endif %}
 </main>
+
+<script>
+let projectReportOptionsLoaded = false;
+async function loadProjectReportOptions() {
+  if (projectReportOptionsLoaded) return;
+  projectReportOptionsLoaded = true;
+  const list = document.getElementById('project-report-picker-options');
+  try {
+    const res = await fetch('/api/v1/projects?include_inactive=1');
+    if (!res.ok) return;
+    const rows = await res.json();
+    list.innerHTML = '';
+    rows.slice(0, 8000).forEach(project => {
+      const number = project.project_number || '';
+      if (!number) return;
+      const option = document.createElement('option');
+      option.value = [number, project.name, project.client].filter(Boolean).join(' · ');
+      list.appendChild(option);
+    });
+  } catch (err) {
+    projectReportOptionsLoaded = false;
+  }
+}
+function normalizeProjectReportLookup() {
+  const input = document.getElementById('project-number');
+  input.value = (input.value || '').split('·')[0].trim().split(/\s+/)[0].trim();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const input = document.getElementById('project-number');
+  if (!input) return;
+  input.addEventListener('focus', loadProjectReportOptions);
+  input.addEventListener('input', loadProjectReportOptions);
+});
+</script>
 </body>
 </html>

@@ -123,6 +123,8 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "TaskTrack Overlay" in html
     assert "Management-facing overlay note" in html
     assert "Internal-only project context" not in html
+    assert "project-report-picker-options" in html
+    assert "normalizeProjectReportLookup" in html
     assert "Report project" in html
     assert "Late exhibit" in html
     assert "Public project review" in html
