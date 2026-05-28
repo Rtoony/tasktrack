@@ -674,6 +674,10 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Report Center" in html
+    assert "Testing Launchpad" in html
+    assert "Triage Inbox" in html
+    assert "/?tab=triage" in html
+    assert "/?tab=calendar" in html
     assert "Project Status One-Pager" in html
     assert "Today Brief" in html
     assert "At-Risk Queue" in html

@@ -62,6 +62,18 @@
   <h1>Report Center</h1>
   <p class="sub">Build meeting-ready packets from TaskTrack data. Private calendar items stay user-scoped; capability details stay admin-gated.</p>
 
+  <section class="card">
+    <h2>Testing Launchpad</h2>
+    <p>Fast paths for today's shakedown: capture a real note, check the daily packet, open the calendar, and print/export the reports that matter.</p>
+    <div class="actions">
+      <a class="btn" href="/reports/today">Today Brief</a>
+      <a class="btn secondary" href="/?tab=triage">Triage Inbox</a>
+      <a class="btn secondary" href="/?tab=calendar">Calendar</a>
+      <a class="btn secondary" href="/reports/projects?attention_level=at_risk&limit=25">At-Risk Projects</a>
+      {% if user_role == 'admin' %}<a class="btn secondary" href="/reports/incidents?open_only=1">Open Incidents</a>{% endif %}
+    </div>
+  </section>
+
   <div class="grid">
     <div>
       <section class="card">

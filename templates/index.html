@@ -533,7 +533,7 @@
         <div class="intake-layout">
           <div class="intake-card">
             <h3>Raw Input</h3>
-            <div class="intake-sub">Paste a messy note, forwarded email, or voice transcript &mdash; the AI will draft a structured task. For a quick follow-up item without AI triage, use <strong>+ Add Triage Item</strong> instead.</div>
+            <div class="intake-sub">Paste a messy note, forwarded email, voice transcript, or tablet OCR text &mdash; the AI will draft a structured task. For a quick follow-up item without AI triage, use <strong>+ Add Triage Item</strong> instead.</div>
             <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
             <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
 
@@ -562,6 +562,8 @@
                   <select id="preset-source">
                     <option value="paste" selected>Paste</option>
                     <option value="voice">Voice note</option>
+                    <option value="remarkable-ocr">reMarkable / OCR note</option>
+                    <option value="paperless">Paperless scan</option>
                     <option value="meeting">Meeting</option>
                     <option value="phone">Phone call</option>
                     <option value="contractor">Contractor</option>
@@ -761,7 +763,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Triage</h2>
-        <div class="section-subtitle">Quick captures from Telegram, voice memos, paperless, or any Nexus app. Triage from here into the right tracker, or leave as an internal follow-up.</div>
+        <div class="section-subtitle">Quick captures from Telegram, voice memos, paperless, reMarkable/OCR notes, or any Nexus app. Triage from here into the right tracker, or leave as an internal follow-up.</div>
       </div>
       <select class="filter-select" id="filter-triage-status" onchange="loadTable('triage')">
         <option value="">All Statuses</option>
@@ -3488,7 +3490,7 @@ const FORMS = {
   triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
-    {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
+    {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless, remarkable-ocr…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
     {key:'links',label:'Links',type:'links'},
   ],
