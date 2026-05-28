@@ -26,6 +26,8 @@
   .filter-card,.hero,.project-card,.summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
   .filter-card { padding:1rem; margin-bottom:1rem; }
   .filters { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  .preset-row { display:grid; grid-template-columns:2fr auto auto auto; gap:0.6rem; align-items:end; margin-bottom:0.8rem; padding-bottom:0.8rem; border-bottom:1px solid var(--border); }
+  .inline-note { color:var(--text-muted); font-size:0.76rem; margin-top:0.35rem; }
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; font-size:0.64rem; margin-bottom:0.25rem; }
   input,select { width:100%; padding:0.38rem 0.48rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; }
   .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
@@ -88,7 +90,23 @@
   <h1>Portfolio Project Packet</h1>
   <p class="sub">Generate a meeting-ready packet across active projects. Private calendar events are excluded unless explicitly requested.</p>
 
-  <form class="filter-card" method="get" action="/reports/projects">
+  <form class="filter-card" method="get" action="/reports/projects" id="portfolio-filter-form">
+    {% if error %}<div class="danger" style="margin-bottom:0.75rem">{{ error }}</div>{% endif %}
+    <div class="preset-row">
+      <div>
+        <label for="preset">Saved Preset</label>
+        <select id="preset" name="preset" onchange="applyPortfolioPreset(this.value)">
+          <option value="">Custom filters</option>
+          {% for preset in presets %}
+          <option value="{{ preset.id }}" {% if packet.selected_preset and packet.selected_preset.id == preset.id %}selected{% endif %}>{{ preset.name }}{% if preset.is_shared %} (shared){% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if packet.selected_preset %}<div class="inline-note">Loaded preset: {{ packet.selected_preset.name }}</div>{% endif %}
+      </div>
+      <label class="checkline"><input type="checkbox" id="preset-share"> Share preset</label>
+      <button class="btn secondary" type="button" onclick="savePortfolioPreset()">Save Current</button>
+      <button class="btn secondary" type="button" onclick="deletePortfolioPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Delete</button>
+    </div>
     <div class="filters">
       <div><label for="q">Search</label><input id="q" name="q" value="{{ packet.filters.q }}" placeholder="name, number, client"></div>
       <div><label for="project_numbers">Project #s</label><input id="project_numbers" name="project_numbers" value="{{ packet.filters.project_numbers|join(', ') }}" placeholder="1234.56, 2345.67"></div>
@@ -182,5 +200,61 @@
     </article>
   {% endfor %}
 </main>
+
+<script>
+function applyPortfolioPreset(id) {
+  if (!id) { window.location = '/reports/projects'; return; }
+  window.location = `/reports/projects?preset=${encodeURIComponent(id)}`;
+}
+function portfolioFiltersFromForm() {
+  const form = document.getElementById('portfolio-filter-form');
+  const fd = new FormData(form);
+  const projectNumbers = (fd.get('project_numbers') || '').split(',').map(v => v.trim()).filter(Boolean);
+  const filters = {
+    q: (fd.get('q') || '').trim(),
+    project_numbers: projectNumbers,
+    client: (fd.get('client') || '').trim(),
+    principal: (fd.get('principal') || '').trim(),
+    component: (fd.get('component') || '').trim(),
+    display_status: (fd.get('display_status') || '').trim(),
+    include_inactive: fd.has('include_inactive'),
+    include_private: fd.has('include_private'),
+    limit: (fd.get('limit') || '').trim()
+  };
+  Object.keys(filters).forEach(key => {
+    if (filters[key] === '' || (Array.isArray(filters[key]) && filters[key].length === 0)) delete filters[key];
+  });
+  return filters;
+}
+async function savePortfolioPreset() {
+  const name = prompt('Preset name for these portfolio filters:');
+  if (!name || !name.trim()) return;
+  const res = await fetch('/api/v1/reports/presets', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name: name.trim(),
+      surface: 'portfolio',
+      is_shared: document.getElementById('preset-share').checked,
+      filters: portfolioFiltersFromForm()
+    })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not save preset'); return; }
+  window.location = `/reports/projects?preset=${encodeURIComponent(body.id)}`;
+}
+async function deletePortfolioPreset() {
+  const id = document.getElementById('preset').value;
+  if (!id) return;
+  if (!confirm('Delete this report preset?')) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {method: 'DELETE'});
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.error || 'Could not delete preset');
+    return;
+  }
+  window.location = '/reports/projects';
+}
+</script>
 </body>
 </html>

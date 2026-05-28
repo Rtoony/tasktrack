@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectSite, ProjectWorkTask, WorkTask
+from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectSite, ProjectWorkTask, ReportPreset, WorkTask
 
 
 def _seed_report_project(sess):
@@ -389,3 +389,111 @@ def test_dashboard_workspace_exposes_project_report_action(auth_client):
     html = r.get_data(as_text=True)
     assert "workspaceOpenReport" in html
     assert "Project Report" in html
+
+
+def test_report_preset_crud_and_apply_portfolio_filters(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    create = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Acme active packet",
+        "surface": "portfolio",
+        "filters": {
+            "client": "Acme",
+            "component": "Site Improvement Plans",
+            "project_numbers": ["8800.10"],
+            "include_private": True,
+            "limit": 5,
+        },
+    })
+    assert create.status_code == 201
+    preset = create.get_json()
+    assert preset["name"] == "Acme active packet"
+    assert preset["filters"]["client"] == "Acme"
+    assert preset["filters"]["include_private"] is True
+
+    listed = auth_client.get("/api/v1/reports/presets?surface=portfolio")
+    assert listed.status_code == 200
+    assert [row["name"] for row in listed.get_json()["presets"]] == ["Acme active packet"]
+
+    packet = auth_client.get(f"/api/v1/reports/projects?preset={preset['id']}")
+    assert packet.status_code == 200
+    body = packet.get_json()
+    assert body["selected_preset"]["id"] == preset["id"]
+    assert body["filters"]["client"] == "Acme"
+    assert body["include_private"] is True
+    assert body["summary"]["project_count"] == 1
+    titles = {event["title"] for event in body["reports"][0]["upcoming_events"]}
+    assert "Private portfolio prep" in titles
+
+    override = auth_client.get(f"/api/v1/reports/projects?preset={preset['id']}&include_private=0")
+    assert override.status_code == 200
+    titles = {event["title"] for event in override.get_json()["reports"][0]["upcoming_events"]}
+    assert "Private portfolio prep" not in titles
+
+
+def test_report_preset_owner_visibility_and_delete(auth_client, temp_app):
+    private = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Owner only",
+        "surface": "portfolio",
+        "filters": {"client": "Acme"},
+    }).get_json()
+    shared = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Shared packet",
+        "surface": "portfolio",
+        "is_shared": True,
+        "filters": {"client": "Beta"},
+    }).get_json()
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    listed = auth_client.get("/api/v1/reports/presets?surface=portfolio")
+    assert listed.status_code == 200
+    names = {row["name"] for row in listed.get_json()["presets"]}
+    assert "Shared packet" in names
+    assert "Owner only" not in names
+    assert auth_client.get(f"/api/v1/reports/projects?preset={private['id']}").status_code == 404
+    assert auth_client.delete(f"/api/v1/reports/presets/{shared['id']}").status_code == 403
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 1
+        s["user_name"] = "Tester"
+        s["user_role"] = "user"
+    assert auth_client.delete(f"/api/v1/reports/presets/{shared['id']}").status_code == 200
+    assert auth_client.get(f"/api/v1/reports/projects?preset={shared['id']}").status_code == 404
+
+
+def test_report_preset_validation_and_auth(client, auth_client):
+    bad_key = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Bad",
+        "surface": "portfolio",
+        "filters": {"sql": "nope"},
+    })
+    assert bad_key.status_code == 400
+    assert "unsupported filter key" in bad_key.get_json()["error"]
+
+    bad_surface = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Bad",
+        "surface": "meeting",
+        "filters": {},
+    })
+    assert bad_surface.status_code == 400
+    assert auth_client.get("/api/v1/reports/projects?preset=nope").status_code == 400
+
+    with client.session_transaction() as s:
+        s.clear()
+    assert client.get("/api/v1/reports/presets").status_code == 401
+    assert client.post("/api/v1/reports/presets", json={"name": "x"}).status_code == 401
+
+
+def test_portfolio_report_html_exposes_preset_controls(auth_client):
+    r = auth_client.get("/reports/projects")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Saved Preset" in html
+    assert "savePortfolioPreset" in html
+    assert "deletePortfolioPreset" in html

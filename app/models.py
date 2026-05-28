@@ -475,6 +475,26 @@ class ProjectOverlay(Base):
     )
 
 
+class ReportPreset(Base):
+    """Saved report filter set owned by TaskTrack users."""
+    __tablename__ = "report_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    surface: Mapped[str] = mapped_column(Text, nullable=False)
+    filters_json: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_user_id: Mapped[int | None] = mapped_column(Integer)
+    is_shared: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_report_presets_surface", "surface"),
+        Index("idx_report_presets_owner", "owner_user_id"),
+        Index("idx_report_presets_shared", "is_shared"),
+    )
+
+
 class ProjectSite(Base):
     """One physical pin location for a project.
 
@@ -586,7 +606,7 @@ __all__ = [
     "PersonnelIssue", "PersonalItem", "InboxItem", "CalendarEvent",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
-    "Employee", "Project", "ProjectOverlay",
+    "Employee", "Project", "ProjectOverlay", "ReportPreset",
     "SkillCategory", "EmployeeSkillScore",
     "to_dict",
 ]
