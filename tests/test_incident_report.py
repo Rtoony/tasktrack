@@ -226,3 +226,80 @@ def test_today_brief_admin_incident_summary(auth_client, temp_app):
     html = auth_client.get("/reports/today")
     assert html.status_code == 200
     assert "Open Incident Follow-Ups" not in html.get_data(as_text=True)
+
+
+
+def test_incident_report_presets_admin_apply_and_html_controls(admin_client, temp_app):
+    with temp_app.app_context():
+        _seed_incidents(get_session())
+
+    create = admin_client.post("/api/v1/reports/presets", json={
+        "name": "High open incidents",
+        "surface": "incidents",
+        "is_shared": True,
+        "filters": {
+            "severity": "High",
+            "open_only": True,
+            "follow_up_due": True,
+            "days": 30,
+            "limit": 10,
+        },
+    })
+    assert create.status_code == 201
+    preset = create.get_json()
+    assert preset["surface"] == "incidents"
+    assert preset["filters"]["severity"] == "High"
+    assert preset["filters"]["open_only"] is True
+
+    listed = admin_client.get("/api/v1/reports/presets?surface=incidents")
+    assert listed.status_code == 200
+    assert [row["name"] for row in listed.get_json()["presets"]] == ["High open incidents"]
+
+    report = admin_client.get(f"/api/v1/reports/incidents?preset={preset['id']}")
+    assert report.status_code == 200
+    body = report.get_json()
+    assert body["selected_preset"]["id"] == preset["id"]
+    assert body["filters"]["severity"] == "High"
+    assert body["filters"]["open_only"] is True
+    assert [row["issue_description"] for row in body["incidents"]] == ["Sensitive grading issue"]
+
+    csv_resp = admin_client.get(f"/api/v1/reports/incidents.csv?preset={preset['id']}")
+    assert csv_resp.status_code == 200
+    csv_text = csv_resp.get_data(as_text=True)
+    assert "Sensitive grading issue" in csv_text
+    assert "Resolved plotting issue" not in csv_text
+
+    html = admin_client.get(f"/reports/incidents?preset={preset['id']}")
+    assert html.status_code == 200
+    page = html.get_data(as_text=True)
+    assert "Saved Preset" in page
+    assert "Loaded preset: High open incidents" in page
+    assert "saveIncidentPreset" in page
+    assert "updateIncidentPreset" in page
+    assert "deleteIncidentPreset" in page
+    assert "Sensitive grading issue" in page
+    assert "Resolved plotting issue" not in page
+
+
+def test_incident_report_presets_are_admin_only(auth_client):
+    create = auth_client.post("/api/v1/reports/presets", json={
+        "name": "User should not create incident preset",
+        "surface": "incidents",
+        "filters": {"open_only": True},
+    })
+    assert create.status_code == 403
+    assert auth_client.get("/api/v1/reports/presets?surface=incidents").status_code == 403
+
+    portfolio = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Portfolio owner preset",
+        "surface": "portfolio",
+        "filters": {"client": "Acme"},
+    })
+    assert portfolio.status_code == 201
+    preset_id = portfolio.get_json()["id"]
+    update = auth_client.put(f"/api/v1/reports/presets/{preset_id}", json={
+        "name": "Escalated",
+        "surface": "incidents",
+        "filters": {"open_only": True},
+    })
+    assert update.status_code == 403

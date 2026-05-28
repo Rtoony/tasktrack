@@ -132,6 +132,22 @@
           <a class="btn secondary" href="/reports/incidents?follow_up_due=1">Follow-Up Due</a>
           <a class="btn ghost" href="/api/v1/reports/incidents.csv?open_only=1">CSV</a>
         </div>
+        <div class="quick-row">
+          <div><div class="quick-title">Saved Incident Presets</div><div class="quick-meta">Admin-only reusable capability packets.</div></div>
+          <a class="btn ghost" href="/reports/incidents">Manage</a>
+        </div>
+        <div class="preset-list" style="margin-top:0.7rem">
+          {% if incident_presets %}
+            {% for preset in incident_presets %}
+            <div class="preset-item">
+              <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Incident report{% if preset.is_shared %} / shared{% endif %}</div></div>
+              <a class="btn secondary" href="/reports/incidents?preset={{ preset.id }}">Open</a>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty">No saved incident presets yet.</div>
+          {% endif %}
+        </div>
       </section>
       {% endif %}
 

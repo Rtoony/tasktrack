@@ -30,12 +30,16 @@ from ..services.project_reports import (
 bp = Blueprint("reports", __name__)
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
-_PRESET_SURFACES = {"portfolio"}
+_PRESET_SURFACES = {"portfolio", "incidents"}
 _TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status", "attention_level"}
 _BOOL_FILTER_KEYS = {"include_inactive", "include_private"}
 _LIST_FILTER_KEYS = {"project_numbers"}
 _LIMIT_FILTER_KEYS = {"limit"}
 _PORTFOLIO_FILTER_KEYS = _TEXT_FILTER_KEYS | _BOOL_FILTER_KEYS | _LIST_FILTER_KEYS | _LIMIT_FILTER_KEYS
+_INCIDENT_TEXT_FILTER_KEYS = {"q", "severity", "status", "project_number", "person"}
+_INCIDENT_BOOL_FILTER_KEYS = {"open_only", "follow_up_due"}
+_INCIDENT_LIMIT_FILTER_KEYS = {"days", "limit"}
+_INCIDENT_FILTER_KEYS = _INCIDENT_TEXT_FILTER_KEYS | _INCIDENT_BOOL_FILTER_KEYS | _INCIDENT_LIMIT_FILTER_KEYS
 
 
 def _bool_arg(name: str) -> bool:
@@ -46,15 +50,19 @@ def _is_admin() -> bool:
     return session.get("user_role") == "admin"
 
 
-def _int_arg(name: str, default: int, minimum: int, maximum: int) -> int:
-    raw = (request.args.get(name) or "").strip()
-    if not raw:
+def _int_arg_value(raw, default: int, minimum: int, maximum: int) -> int:
+    if raw in (None, ""):
         return default
     try:
         value = int(raw)
     except (TypeError, ValueError):
         return default
     return max(minimum, min(value, maximum))
+
+
+def _int_arg(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = (request.args.get(name) or "").strip()
+    return _int_arg_value(raw, default, minimum, maximum)
 
 
 def _event_id_arg():
@@ -109,16 +117,36 @@ def _clean_limit(raw):
     return max(1, min(value, MAX_PORTFOLIO_LIMIT))
 
 
-def _clean_preset_filters(raw) -> tuple[dict, str | None]:
+def _preset_keys(surface: str) -> set[str]:
+    if surface == "incidents":
+        return _INCIDENT_FILTER_KEYS
+    return _PORTFOLIO_FILTER_KEYS
+
+
+def _clean_preset_filters(raw, *, surface: str = "portfolio") -> tuple[dict, str | None]:
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
         return {}, "filters must be an object"
-    unknown = sorted(set(raw) - _PORTFOLIO_FILTER_KEYS)
+    unknown = sorted(set(raw) - _preset_keys(surface))
     if unknown:
         return {}, f"unsupported filter key: {unknown[0]}"
 
     filters: dict = {}
+    if surface == "incidents":
+        for key in _INCIDENT_TEXT_FILTER_KEYS:
+            value = str(raw.get(key) or "").strip()
+            if value:
+                filters[key] = value[:160]
+        for key in _INCIDENT_BOOL_FILTER_KEYS:
+            if key in raw:
+                filters[key] = bool(raw.get(key))
+        if "days" in raw:
+            filters["days"] = _int_arg_value(raw.get("days"), 365, 1, 3650)
+        if "limit" in raw:
+            filters["limit"] = _int_arg_value(raw.get("limit"), 100, 1, 250)
+        return filters, None
+
     for key in _TEXT_FILTER_KEYS:
         value = str(raw.get(key) or "").strip()
         if value:
@@ -148,7 +176,7 @@ def _request_portfolio_filters(*, only_present: bool = False) -> dict:
             filters[key] = _bool_arg(key)
     if not only_present or "limit" in request.args:
         filters["limit"] = request.args.get("limit")
-    cleaned, _ = _clean_preset_filters(filters)
+    cleaned, _ = _clean_preset_filters(filters, surface="portfolio")
     if "limit" not in filters and not only_present:
         cleaned["limit"] = None
     return cleaned
@@ -160,18 +188,24 @@ def _portfolio_filters() -> dict:
     return filters
 
 
+def _request_incident_filters(*, only_present: bool = False) -> dict:
+    filters: dict = {}
+    for key in _INCIDENT_TEXT_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = (request.args.get(key) or "").strip()
+    for key in _INCIDENT_BOOL_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = _bool_arg(key)
+    if not only_present or "days" in request.args:
+        filters["days"] = request.args.get("days")
+    if not only_present or "limit" in request.args:
+        filters["limit"] = request.args.get("limit")
+    cleaned, _ = _clean_preset_filters(filters, surface="incidents")
+    return cleaned
+
+
 def _incident_filters() -> dict:
-    return {
-        "q": (request.args.get("q") or "").strip(),
-        "severity": (request.args.get("severity") or "").strip(),
-        "status": (request.args.get("status") or "").strip(),
-        "project_number": (request.args.get("project_number") or "").strip(),
-        "person": (request.args.get("person") or "").strip(),
-        "open_only": _bool_arg("open_only"),
-        "follow_up_due": _bool_arg("follow_up_due"),
-        "days": _int_arg("days", 365, 1, 3650),
-        "limit": _int_arg("limit", 100, 1, 250),
-    }
+    return _request_incident_filters()
 
 
 def _preset_filters(row: ReportPreset) -> dict:
@@ -179,7 +213,7 @@ def _preset_filters(row: ReportPreset) -> dict:
         raw = json.loads(row.filters_json or "{}")
     except (TypeError, ValueError):
         raw = {}
-    filters, _ = _clean_preset_filters(raw)
+    filters, _ = _clean_preset_filters(raw, surface=row.surface)
     return filters
 
 
@@ -205,10 +239,16 @@ def _visible_presets_stmt(surface: str, *, user_id: int | None, is_admin: bool):
     return stmt.order_by(ReportPreset.name.asc(), ReportPreset.id.asc())
 
 
+def _preset_surface_allowed(surface: str, *, is_admin: bool) -> bool:
+    return surface != "incidents" or is_admin
+
+
 def _load_visible_preset(sess, preset_id: int, *, surface: str, user_id: int | None,
                          is_admin: bool) -> ReportPreset | None:
     row = sess.get(ReportPreset, preset_id)
     if row is None or row.surface != surface:
+        return None
+    if not _preset_surface_allowed(row.surface, is_admin=is_admin):
         return None
     if is_admin or row.is_shared or row.owner_user_id == user_id:
         return row
@@ -241,6 +281,28 @@ def _portfolio_context(sess):
     return filters, include_private, selected, None, 200
 
 
+def _incident_context(sess):
+    selected = None
+    base_filters: dict = {}
+    preset_id = (request.args.get("preset") or "").strip()
+    if preset_id:
+        try:
+            preset_int = int(preset_id)
+        except (TypeError, ValueError):
+            return None, None, "preset must be an integer", 400
+        selected = _load_visible_preset(
+            sess, preset_int, surface="incidents",
+            user_id=session.get("user_id"), is_admin=_is_admin(),
+        )
+        if selected is None:
+            return None, None, "preset not found", 404
+        base_filters = _preset_filters(selected)
+
+    explicit = _request_incident_filters(only_present=True)
+    filters = {**base_filters, **explicit}
+    return filters, selected, None, 200
+
+
 def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict, str | None]:
     name = str(data.get("name") or "").strip()
     if not name:
@@ -248,7 +310,7 @@ def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict,
     surface = str(data.get("surface") or "portfolio").strip()
     if surface not in _PRESET_SURFACES:
         return {}, "unsupported preset surface"
-    filters, error = _clean_preset_filters(data.get("filters") or {})
+    filters, error = _clean_preset_filters(data.get("filters") or {}, surface=surface)
     if error:
         return {}, error
     return {
@@ -264,12 +326,19 @@ def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict,
 @login_required
 def reports_home():
     sess = get_session()
+    is_admin = _is_admin()
     presets = sess.scalars(_visible_presets_stmt(
-        "portfolio", user_id=session.get("user_id"), is_admin=_is_admin(),
+        "portfolio", user_id=session.get("user_id"), is_admin=is_admin,
     )).all()
+    incident_presets = []
+    if is_admin:
+        incident_presets = sess.scalars(_visible_presets_stmt(
+            "incidents", user_id=session.get("user_id"), is_admin=True,
+        )).all()
     return render_template(
         "reports_home.html",
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )
@@ -334,8 +403,11 @@ def report_presets_list():
     surface = (request.args.get("surface") or "portfolio").strip()
     if surface not in _PRESET_SURFACES:
         return jsonify({"error": "unsupported preset surface"}), 400
+    is_admin = _is_admin()
+    if not _preset_surface_allowed(surface, is_admin=is_admin):
+        return jsonify({"error": "forbidden"}), 403
     rows = get_session().scalars(_visible_presets_stmt(
-        surface, user_id=session.get("user_id"), is_admin=_is_admin(),
+        surface, user_id=session.get("user_id"), is_admin=is_admin,
     )).all()
     return jsonify({"presets": [_preset_to_dict(row) for row in rows]})
 
@@ -344,6 +416,9 @@ def report_presets_list():
 @login_required
 def report_presets_create():
     data = request.get_json(silent=True) or {}
+    requested_surface = str(data.get("surface") or "portfolio").strip()
+    if not _preset_surface_allowed(requested_surface, is_admin=_is_admin()):
+        return jsonify({"error": "forbidden"}), 403
     payload, error = _serialize_preset_payload(data, user_id=session.get("user_id"))
     if error:
         return jsonify({"error": error}), 400
@@ -365,9 +440,11 @@ def report_presets_update(preset_id: int):
     row = sess.get(ReportPreset, preset_id)
     if row is None:
         return jsonify({"error": "not found"}), 404
-    if not _can_modify_preset(row):
-        return jsonify({"error": "forbidden"}), 403
     data = request.get_json(silent=True) or {}
+    requested_surface = str(data.get("surface") or row.surface or "portfolio").strip()
+    is_admin = _is_admin()
+    if not _can_modify_preset(row) or not _preset_surface_allowed(row.surface, is_admin=is_admin) or not _preset_surface_allowed(requested_surface, is_admin=is_admin):
+        return jsonify({"error": "forbidden"}), 403
     payload, error = _serialize_preset_payload(data, user_id=row.owner_user_id)
     if error:
         return jsonify({"error": error}), 400
@@ -387,7 +464,7 @@ def report_presets_delete(preset_id: int):
     row = sess.get(ReportPreset, preset_id)
     if row is None:
         return jsonify({"error": "not found"}), 404
-    if not _can_modify_preset(row):
+    if not _can_modify_preset(row) or not _preset_surface_allowed(row.surface, is_admin=_is_admin()):
         return jsonify({"error": "forbidden"}), 403
     sess.delete(row)
     sess.commit()
@@ -397,13 +474,23 @@ def report_presets_delete(preset_id: int):
 @bp.route("/api/v1/reports/incidents", methods=["GET"])
 @admin_required
 def incident_report_json():
-    return jsonify(incident_report(get_session(), filters=_incident_filters()))
+    sess = get_session()
+    filters, selected, error, status = _incident_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    packet = incident_report(sess, filters=filters)
+    packet["selected_preset"] = _preset_to_dict(selected, include_filters=False) if selected else None
+    return jsonify(packet)
 
 
 @bp.route("/api/v1/reports/incidents.csv", methods=["GET"])
 @admin_required
 def incident_report_csv():
-    packet = incident_report(get_session(), filters=_incident_filters())
+    sess = get_session()
+    filters, selected, error, status = _incident_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    packet = incident_report(sess, filters=filters)
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=INCIDENT_CSV_FIELDS)
     writer.writeheader()
@@ -418,12 +505,23 @@ def incident_report_csv():
 @bp.route("/reports/incidents", methods=["GET"])
 @admin_required
 def incident_report_page():
+    sess = get_session()
+    filters, selected, error, status = _incident_context(sess)
+    if error:
+        filters = _incident_filters()
+    packet = incident_report(sess, filters=filters)
+    packet["selected_preset"] = _preset_to_dict(selected, include_filters=False) if selected else None
+    presets = sess.scalars(_visible_presets_stmt(
+        "incidents", user_id=session.get("user_id"), is_admin=True,
+    )).all()
     return render_template(
         "incident_reports.html",
-        packet=incident_report(get_session(), filters=_incident_filters()),
+        packet=packet,
+        presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
-    )
+    ), status
 
 
 @bp.route("/api/v1/reports/incidents/<int:incident_id>", methods=["GET"])
