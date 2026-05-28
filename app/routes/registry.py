@@ -18,6 +18,7 @@ from pathlib import Path
 
 from flask import Blueprint, g, jsonify, request, session
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 
 from ..auth import admin_required, login_required
 from ..db import get_session
@@ -450,6 +451,39 @@ def _master_sync_state_path() -> Path:
     return Path(base) / "tasktrack" / "master-sync.json"
 
 
+def _overlay_attention(sess) -> dict:
+    rows = sess.scalars(select(ProjectOverlay).order_by(ProjectOverlay.id.asc())).all()
+    samples = []
+    for row in rows:
+        project = sess.get(Project, row.project_id) if row.project_id is not None else None
+        reason = ""
+        current_project_number = ""
+        vanished_at = ""
+        if project is None:
+            reason = "missing_project"
+        else:
+            current_project_number = project.project_number or ""
+            vanished_at = project.vanished_from_master_at or ""
+            if project.project_number != row.project_number:
+                reason = "project_number_mismatch"
+            elif project.vanished_from_master_at:
+                reason = "project_vanished"
+        if not reason:
+            continue
+        samples.append({
+            "overlay_id": row.id,
+            "project_id": row.project_id,
+            "project_number": row.project_number or "",
+            "current_project_number": current_project_number,
+            "vanished_from_master_at": vanished_at,
+            "reason": reason,
+        })
+    return {
+        "count": len(samples),
+        "samples": samples[:10],
+    }
+
+
 @bp.route("/api/v1/projects/sync-status", methods=["GET"])
 @login_required
 def projects_sync_status():
@@ -461,11 +495,13 @@ def projects_sync_status():
       - "unreadable"        state file exists but couldn't be parsed
       - "ok"                state file parsed cleanly
     """
+    overlay_attention = _overlay_attention(get_session())
     state_path = _master_sync_state_path()
     if not state_path.is_file():
         return jsonify({
             "state": "never_run",
             "message": "The automated sync has not run yet on this host.",
+            "overlay_attention": overlay_attention,
         })
     try:
         payload = json.loads(state_path.read_text())
@@ -473,24 +509,38 @@ def projects_sync_status():
         return jsonify({
             "state":   "unreadable",
             "message": f"State file present but could not be parsed: {exc}",
+            "overlay_attention": overlay_attention,
         }), 500
     payload["state"] = "ok"
+    payload["overlay_attention"] = overlay_attention
     return jsonify(payload)
 
 
 
 
+class OverlayConflict(ValueError):
+    pass
+
+
 def _project_overlay_row(sess, proj: Project, *, create: bool = False) -> ProjectOverlay | None:
     row = sess.scalar(select(ProjectOverlay).where(ProjectOverlay.project_id == proj.id))
-    if row is None:
-        row = sess.scalar(select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number))
-    if row is None and create:
+    if row is not None:
+        row.project_number = proj.project_number
+        return row
+
+    row = sess.scalar(select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number))
+    if row is not None:
+        if row.project_id not in (None, proj.id):
+            raise OverlayConflict(
+                "project overlay is linked to another project; resolve overlay drift before editing"
+            )
+        row.project_id = proj.id
+        return row
+
+    if create:
         row = ProjectOverlay(project_id=proj.id, project_number=proj.project_number)
         sess.add(row)
         sess.flush()
-    if row is not None:
-        row.project_id = proj.id
-        row.project_number = proj.project_number
     return row
 
 
@@ -518,12 +568,22 @@ def update_project_overlay(proj_id):
     if proj is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
     data = request.get_json(silent=True) or {}
-    row = _project_overlay_row(sess, proj, create=True)
-    for col in _PROJECT_OVERLAY_FIELDS:
-        if col in data:
-            setattr(row, col, (data.get(col) or "").strip())
-    row.updated_at = datetime.utcnow()
-    sess.commit()
+    try:
+        row = _project_overlay_row(sess, proj, create=True)
+        for col in _PROJECT_OVERLAY_FIELDS:
+            if col in data:
+                setattr(row, col, (data.get(col) or "").strip())
+        row.updated_at = datetime.utcnow()
+        sess.commit()
+    except OverlayConflict as exc:
+        sess.rollback()
+        return jsonify({"error": str(exc), "request_id": _rid()}), 409
+    except IntegrityError:
+        sess.rollback()
+        return jsonify({
+            "error": "project overlay conflicts with an existing overlay; resolve overlay drift before editing",
+            "request_id": _rid(),
+        }), 409
     return jsonify(to_dict(row))
 
 

@@ -280,6 +280,8 @@ async function loadSyncStatusBadge() {
     if (r.updated_count)   parts.push(r.updated_count + ' updated');
     if (r.vanished_count)  parts.push(r.vanished_count + ' vanished');
     if (r.returned_count)  parts.push(r.returned_count + ' returned');
+    const overlayCount = data.overlay_attention?.count || 0;
+    if (overlayCount) parts.push(overlayCount + ' overlay review');
     const tail = parts.length ? ' — ' + parts.join(', ') : ' — no changes';
     badge.textContent = 'Master sync: ' + when + tail;
   } catch (e) { /* informational only */ }

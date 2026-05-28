@@ -152,12 +152,17 @@ def project_overlay_payload(sess: Session, proj: Project, *, is_admin: bool = Fa
     row = sess.scalar(
         select(ProjectOverlay).where(ProjectOverlay.project_id == proj.id)
     )
-    if row is None:
-        row = sess.scalar(
-            select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number)
-        )
     if row is not None:
         return _overlay_to_dict(row, is_admin=is_admin)
+
+    row = sess.scalar(
+        select(ProjectOverlay).where(ProjectOverlay.project_number == proj.project_number)
+    )
+    if row is not None and row.project_id in (None, proj.id):
+        return _overlay_to_dict(row, is_admin=is_admin)
+
+    # A matching project_number bound to a different project_id is drift.
+    # Surface it through sync-status instead of silently attaching it here.
     return _empty_project_overlay(proj)
 
 

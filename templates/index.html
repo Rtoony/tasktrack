@@ -2145,7 +2145,9 @@ function syncStatusSummary(data) {
   if (r.updated_count) parts.push(r.updated_count + ' updated');
   if (r.vanished_count) parts.push(r.vanished_count + ' vanished');
   if (r.returned_count) parts.push(r.returned_count + ' returned');
-  return parts.length ? parts.join(' · ') : 'No project-level changes on the last sync.';
+  const summary = parts.length ? parts.join(' · ') : 'No project-level changes on the last sync.';
+  const overlayCount = data.overlay_attention?.count || 0;
+  return overlayCount ? summary + ' · ' + overlayCount + ' overlay(s) need review' : summary;
 }
 
 async function loadProjectSyncStatus() {

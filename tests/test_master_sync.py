@@ -28,7 +28,7 @@ from openpyxl import Workbook
 from sqlalchemy import select
 
 from app.db import get_session
-from app.models import Project
+from app.models import Project, ProjectOverlay
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "scripts"))
@@ -419,6 +419,7 @@ def test_sync_status_never_run(auth_client, tmp_path, monkeypatch):
     assert r.status_code == 200
     body = r.get_json()
     assert body["state"] == "never_run"
+    assert body["overlay_attention"]["count"] == 0
 
 
 def test_sync_status_reads_state_file(auth_client, tmp_path, monkeypatch):
@@ -447,6 +448,47 @@ def test_sync_status_reads_state_file(auth_client, tmp_path, monkeypatch):
     assert body["state"] == "ok"
     assert body["xlsx_sha256"] == "abc123"
     assert body["last_report"]["created_count"] == 3
+    assert body["overlay_attention"]["count"] == 0
+
+
+def test_sync_status_reports_overlay_attention(auth_client, temp_app, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    state_dir = tmp_path / "tasktrack"
+    state_dir.mkdir()
+    (state_dir / "master-sync.json").write_text(json.dumps({
+        "schema_version": 1,
+        "last_run_at": "2026-05-22T03:30:00+00:00",
+        "last_report": {},
+    }))
+    with temp_app.app_context():
+        sess = get_session()
+        vanished = Project(
+            project_number="5511.00",
+            name="Vanished project",
+            vanished_from_master_at="2026-05-22T03:30:00",
+        )
+        sess.add(vanished)
+        sess.flush()
+        sess.add_all([
+            ProjectOverlay(
+                project_id=vanished.id,
+                project_number="5511.00",
+                operator_status="Needs relink decision",
+            ),
+            ProjectOverlay(
+                project_id=999999,
+                project_number="5599.00",
+                operator_status="Missing parent",
+            ),
+        ])
+        sess.commit()
+
+    r = auth_client.get("/api/v1/projects/sync-status")
+    assert r.status_code == 200
+    attention = r.get_json()["overlay_attention"]
+    assert attention["count"] == 2
+    reasons = {row["reason"] for row in attention["samples"]}
+    assert reasons == {"project_vanished", "missing_project"}
 
 
 def test_sync_status_requires_auth(client):
@@ -461,3 +503,4 @@ def test_admin_dashboard_exposes_project_sync_status_card(admin_client):
     assert "Project List Sync" in html
     assert 'id="dash-sync-status"' in html
     assert "loadProjectSyncStatus" in html
+    assert "overlay(s) need review" in html

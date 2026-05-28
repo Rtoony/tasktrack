@@ -203,6 +203,67 @@ def test_project_overlay_api_is_tasktrack_owned(auth_client, temp_app):
         assert row.report_note == "Discuss at management sync"
 
 
+def test_overlay_get_does_not_attach_stranded_overlay(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="4477.88", name="Current project")
+        sess.add(proj)
+        sess.flush()
+        sess.add(ProjectOverlay(
+            project_id=999999,
+            project_number="4477.88",
+            operator_status="Old project context",
+            internal_notes="Old internal context",
+        ))
+        sess.commit()
+        proj_id = proj.id
+
+    r = auth_client.get(f"/api/v1/projects/{proj_id}/overlay")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["project_id"] == proj_id
+    assert body["operator_status"] == ""
+    assert "Old internal context" not in str(body)
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.query(ProjectOverlay).filter_by(project_number="4477.88").one()
+        assert row.project_id == 999999
+
+
+def test_overlay_patch_conflicts_on_stranded_overlay(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        proj = Project(project_number="4488.99", name="Current project")
+        sess.add(proj)
+        sess.flush()
+        sess.add(ProjectOverlay(
+            project_id=999999,
+            project_number="4488.99",
+            operator_status="Old project context",
+        ))
+        sess.commit()
+        proj_id = proj.id
+
+    with auth_client.session_transaction() as session_data:
+        session_data["user_id"] = 2
+        session_data["user_name"] = "Admin User"
+        session_data["user_role"] = "admin"
+
+    r = auth_client.patch(
+        f"/api/v1/projects/{proj_id}/overlay",
+        json={"operator_status": "New project context"},
+    )
+    assert r.status_code == 409
+    assert "overlay" in r.get_json()["error"]
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.query(ProjectOverlay).filter_by(project_number="4488.99").one()
+        assert row.project_id == 999999
+        assert row.operator_status == "Old project context"
+
+
 def test_admin_projects_page_links_to_workspace_map_and_reports(admin_client, temp_app):
     with temp_app.app_context():
         sess = get_session()
