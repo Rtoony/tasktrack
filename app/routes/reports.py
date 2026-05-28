@@ -252,6 +252,32 @@ def report_presets_create():
     return jsonify(_preset_to_dict(row)), 201
 
 
+def _can_modify_preset(row: ReportPreset) -> bool:
+    return bool(_is_admin() or row.owner_user_id == session.get("user_id"))
+
+
+@bp.route("/api/v1/reports/presets/<int:preset_id>", methods=["PUT", "PATCH"])
+@login_required
+def report_presets_update(preset_id: int):
+    sess = get_session()
+    row = sess.get(ReportPreset, preset_id)
+    if row is None:
+        return jsonify({"error": "not found"}), 404
+    if not _can_modify_preset(row):
+        return jsonify({"error": "forbidden"}), 403
+    data = request.get_json(silent=True) or {}
+    payload, error = _serialize_preset_payload(data, user_id=row.owner_user_id)
+    if error:
+        return jsonify({"error": error}), 400
+    row.name = payload["name"]
+    row.surface = payload["surface"]
+    row.filters_json = payload["filters_json"]
+    row.is_shared = payload["is_shared"]
+    row.updated_at = datetime.now()
+    sess.commit()
+    return jsonify(_preset_to_dict(row))
+
+
 @bp.route("/api/v1/reports/presets/<int:preset_id>", methods=["DELETE"])
 @login_required
 def report_presets_delete(preset_id: int):
@@ -259,7 +285,7 @@ def report_presets_delete(preset_id: int):
     row = sess.get(ReportPreset, preset_id)
     if row is None:
         return jsonify({"error": "not found"}), 404
-    if not (_is_admin() or row.owner_user_id == session.get("user_id")):
+    if not _can_modify_preset(row):
         return jsonify({"error": "forbidden"}), 403
     sess.delete(row)
     sess.commit()

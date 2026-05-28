@@ -433,6 +433,68 @@ def test_report_preset_crud_and_apply_portfolio_filters(auth_client, temp_app):
     assert "Private portfolio prep" not in titles
 
 
+def test_report_preset_update_overwrites_loaded_filters(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    preset = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Original packet",
+        "surface": "portfolio",
+        "filters": {"client": "Acme", "limit": 5},
+    }).get_json()
+
+    update = auth_client.put(f"/api/v1/reports/presets/{preset['id']}", json={
+        "name": "Dormant packet",
+        "surface": "portfolio",
+        "is_shared": True,
+        "filters": {
+            "client": "Acme",
+            "project_numbers": ["8800.20"],
+            "include_inactive": True,
+            "limit": 5,
+        },
+    })
+    assert update.status_code == 200
+    body = update.get_json()
+    assert body["name"] == "Dormant packet"
+    assert body["is_shared"] is True
+    assert body["filters"]["project_numbers"] == ["8800.20"]
+
+    packet = auth_client.get(f"/api/v1/reports/projects?preset={preset['id']}")
+    assert packet.status_code == 200
+    report_body = packet.get_json()
+    assert report_body["selected_preset"]["name"] == "Dormant packet"
+    assert report_body["filters"]["include_inactive"] is True
+    assert report_body["summary"]["project_count"] == 1
+    assert report_body["reports"][0]["project"]["project_number"] == "8800.20"
+
+
+def test_report_preset_update_forbidden_for_shared_non_owner(auth_client):
+    shared = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Shared owner packet",
+        "surface": "portfolio",
+        "is_shared": True,
+        "filters": {"client": "Acme"},
+    }).get_json()
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Other User"
+        s["user_role"] = "user"
+
+    update = auth_client.put(f"/api/v1/reports/presets/{shared['id']}", json={
+        "name": "Hijacked",
+        "surface": "portfolio",
+        "filters": {"client": "Beta"},
+    })
+    assert update.status_code == 403
+
+    visible = auth_client.get(f"/api/v1/reports/projects?preset={shared['id']}")
+    assert visible.status_code == 200
+    assert visible.get_json()["selected_preset"]["name"] == "Shared owner packet"
+
+
 def test_report_preset_owner_visibility_and_delete(auth_client, temp_app):
     private = auth_client.post("/api/v1/reports/presets", json={
         "name": "Owner only",
@@ -496,4 +558,5 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     html = r.get_data(as_text=True)
     assert "Saved Preset" in html
     assert "savePortfolioPreset" in html
+    assert "updatePortfolioPreset" in html
     assert "deletePortfolioPreset" in html

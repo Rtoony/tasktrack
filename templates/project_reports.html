@@ -103,8 +103,9 @@
         </select>
         {% if packet.selected_preset %}<div class="inline-note">Loaded preset: {{ packet.selected_preset.name }}</div>{% endif %}
       </div>
-      <label class="checkline"><input type="checkbox" id="preset-share"> Share preset</label>
-      <button class="btn secondary" type="button" onclick="savePortfolioPreset()">Save Current</button>
+      <label class="checkline"><input type="checkbox" id="preset-share" {% if packet.selected_preset and packet.selected_preset.is_shared %}checked{% endif %}> Share preset</label>
+      <button class="btn secondary" type="button" onclick="savePortfolioPreset()">Save New</button>
+      <button class="btn secondary" type="button" onclick="updatePortfolioPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Update Loaded</button>
       <button class="btn secondary" type="button" onclick="deletePortfolioPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Delete</button>
     </div>
     <div class="filters">
@@ -226,21 +227,43 @@ function portfolioFiltersFromForm() {
   });
   return filters;
 }
+function selectedPresetName() {
+  const select = document.getElementById('preset');
+  const option = select.options[select.selectedIndex];
+  return option ? option.text.replace(/\s*\(shared\)\s*$/, '').trim() : '';
+}
+function presetPayload(name) {
+  return {
+    name: name.trim(),
+    surface: 'portfolio',
+    is_shared: document.getElementById('preset-share').checked,
+    filters: portfolioFiltersFromForm()
+  };
+}
 async function savePortfolioPreset() {
-  const name = prompt('Preset name for these portfolio filters:');
+  const name = prompt('Preset name for these portfolio filters:', selectedPresetName());
   if (!name || !name.trim()) return;
   const res = await fetch('/api/v1/reports/presets', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      name: name.trim(),
-      surface: 'portfolio',
-      is_shared: document.getElementById('preset-share').checked,
-      filters: portfolioFiltersFromForm()
-    })
+    body: JSON.stringify(presetPayload(name))
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) { alert(body.error || 'Could not save preset'); return; }
+  window.location = `/reports/projects?preset=${encodeURIComponent(body.id)}`;
+}
+async function updatePortfolioPreset() {
+  const id = document.getElementById('preset').value;
+  if (!id) return;
+  const name = prompt('Update loaded preset name:', selectedPresetName());
+  if (!name || !name.trim()) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(presetPayload(name))
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not update preset'); return; }
   window.location = `/reports/projects?preset=${encodeURIComponent(body.id)}`;
 }
 async function deletePortfolioPreset() {
