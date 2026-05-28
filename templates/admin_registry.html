@@ -267,8 +267,12 @@ async function loadSyncStatusBadge() {
     const res = await fetch('/api/v1/projects/sync-status');
     if (!res.ok) return;
     const data = await res.json();
+    const source = data.source_readiness || {};
+    const sourceTail = source.ready
+      ? 'source ready: ' + (source.xlsx_selected || 'master list')
+      : 'source check: ' + (source.state || 'unknown');
     if (data.state === 'never_run') {
-      badge.textContent = 'Master sync: never run on this host';
+      badge.textContent = 'Master sync: never run on this host — ' + sourceTail;
       return;
     }
     const when = data.last_run_at
@@ -280,6 +284,7 @@ async function loadSyncStatusBadge() {
     if (r.updated_count)   parts.push(r.updated_count + ' updated');
     if (r.vanished_count)  parts.push(r.vanished_count + ' vanished');
     if (r.returned_count)  parts.push(r.returned_count + ' returned');
+    parts.push(sourceTail);
     const overlayCount = data.overlay_attention?.count || 0;
     if (overlayCount) parts.push(overlayCount + ' overlay review');
     const tail = parts.length ? ' — ' + parts.join(', ') : ' — no changes';

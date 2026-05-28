@@ -46,6 +46,9 @@ _PROJECT_OVERLAY_FIELDS = (
     "internal_notes",
     "report_note",
 )
+_MASTER_SYNC_DEFAULT_SOURCE_DIR = "/media/rtoony/13FB-6205"
+_MASTER_SYNC_XLSX_GLOB = "Master List - Numeric*.xlsx"
+_MASTER_SYNC_KMZ_NAME = "Project Locator.kmz"
 
 
 def _coerce_latlng(raw):
@@ -451,6 +454,84 @@ def _master_sync_state_path() -> Path:
     return Path(base) / "tasktrack" / "master-sync.json"
 
 
+def _fmt_mtime(path: Path) -> str:
+    try:
+        return datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
+    except OSError:
+        return ""
+
+
+def _master_sync_source_readiness() -> dict:
+    source_dir = Path(os.environ.get(
+        "TASKTRACK_MASTER_SOURCE_DIR", _MASTER_SYNC_DEFAULT_SOURCE_DIR,
+    ))
+    payload = {
+        "source_dir": str(source_dir),
+        "source_dir_exists": source_dir.is_dir(),
+        "xlsx_glob": _MASTER_SYNC_XLSX_GLOB,
+        "xlsx_count": 0,
+        "xlsx_selected": "",
+        "xlsx_selected_mtime": "",
+        "xlsx_samples": [],
+        "kmz_name": _MASTER_SYNC_KMZ_NAME,
+        "kmz_exists": False,
+        "kmz_mtime": "",
+        "ready": False,
+        "state": "missing_source_dir",
+        "message": "Source directory is not available on this host.",
+    }
+    if not payload["source_dir_exists"]:
+        return payload
+
+    try:
+        xlsx_candidates = sorted(
+            source_dir.glob(_MASTER_SYNC_XLSX_GLOB),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError as exc:
+        payload.update({
+            "state": "unreadable_source_dir",
+            "message": f"Source directory could not be read: {exc}",
+        })
+        return payload
+
+    kmz_path = source_dir / _MASTER_SYNC_KMZ_NAME
+    payload.update({
+        "xlsx_count": len(xlsx_candidates),
+        "xlsx_samples": [p.name for p in xlsx_candidates[:5]],
+        "kmz_exists": kmz_path.is_file(),
+        "kmz_mtime": _fmt_mtime(kmz_path) if kmz_path.is_file() else "",
+    })
+    if xlsx_candidates:
+        selected = xlsx_candidates[0]
+        payload["xlsx_selected"] = selected.name
+        payload["xlsx_selected_mtime"] = _fmt_mtime(selected)
+
+    if not xlsx_candidates:
+        payload.update({
+            "state": "missing_xlsx",
+            "message": "No Master List XLSX matching the expected pattern is visible.",
+        })
+    elif len(xlsx_candidates) > 3:
+        payload.update({
+            "state": "too_many_xlsx",
+            "message": "Too many matching Master List XLSX files are present; clean up old copies before enabling sync.",
+        })
+    elif not payload["kmz_exists"]:
+        payload.update({
+            "state": "missing_kmz",
+            "message": "Project Locator KMZ is missing from the source directory.",
+        })
+    else:
+        payload.update({
+            "ready": True,
+            "state": "ready",
+            "message": "Source directory contains a usable Master List XLSX and Project Locator KMZ.",
+        })
+    return payload
+
+
 def _overlay_attention(sess) -> dict:
     rows = sess.scalars(select(ProjectOverlay).order_by(ProjectOverlay.id.asc())).all()
     samples = []
@@ -496,12 +577,14 @@ def projects_sync_status():
       - "ok"                state file parsed cleanly
     """
     overlay_attention = _overlay_attention(get_session())
+    source_readiness = _master_sync_source_readiness()
     state_path = _master_sync_state_path()
     if not state_path.is_file():
         return jsonify({
             "state": "never_run",
             "message": "The automated sync has not run yet on this host.",
             "overlay_attention": overlay_attention,
+            "source_readiness": source_readiness,
         })
     try:
         payload = json.loads(state_path.read_text())
@@ -510,9 +593,11 @@ def projects_sync_status():
             "state":   "unreadable",
             "message": f"State file present but could not be parsed: {exc}",
             "overlay_attention": overlay_attention,
+            "source_readiness": source_readiness,
         }), 500
     payload["state"] = "ok"
     payload["overlay_attention"] = overlay_attention
+    payload["source_readiness"] = source_readiness
     return jsonify(payload)
 
 

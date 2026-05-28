@@ -415,15 +415,25 @@ def test_digest_no_changes_says_pins_only():
 def test_sync_status_never_run(auth_client, tmp_path, monkeypatch):
     """No state file → endpoint reports never_run rather than 500."""
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setenv("TASKTRACK_MASTER_SOURCE_DIR", str(tmp_path / "missing-source"))
     r = auth_client.get("/api/v1/projects/sync-status")
     assert r.status_code == 200
     body = r.get_json()
     assert body["state"] == "never_run"
     assert body["overlay_attention"]["count"] == 0
+    assert body["source_readiness"]["ready"] is False
+    assert body["source_readiness"]["state"] == "missing_source_dir"
 
 
 def test_sync_status_reads_state_file(auth_client, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    xlsx = source_dir / "Master List - Numeric 052826.xlsx"
+    kmz = source_dir / "Project Locator.kmz"
+    xlsx.write_text("placeholder")
+    kmz.write_text("placeholder")
+    monkeypatch.setenv("TASKTRACK_MASTER_SOURCE_DIR", str(source_dir))
     state_dir = tmp_path / "tasktrack"
     state_dir.mkdir()
     payload = {
@@ -449,6 +459,26 @@ def test_sync_status_reads_state_file(auth_client, tmp_path, monkeypatch):
     assert body["xlsx_sha256"] == "abc123"
     assert body["last_report"]["created_count"] == 3
     assert body["overlay_attention"]["count"] == 0
+    assert body["source_readiness"]["ready"] is True
+    assert body["source_readiness"]["xlsx_selected"] == "Master List - Numeric 052826.xlsx"
+    assert body["source_readiness"]["kmz_exists"] is True
+
+
+def test_sync_status_reports_source_readiness_problems(auth_client, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    for idx in range(4):
+        (source_dir / f"Master List - Numeric 0528{idx}.xlsx").write_text("placeholder")
+    monkeypatch.setenv("TASKTRACK_MASTER_SOURCE_DIR", str(source_dir))
+
+    r = auth_client.get("/api/v1/projects/sync-status")
+    assert r.status_code == 200
+    readiness = r.get_json()["source_readiness"]
+    assert readiness["ready"] is False
+    assert readiness["state"] == "too_many_xlsx"
+    assert readiness["xlsx_count"] == 4
+    assert readiness["kmz_exists"] is False
 
 
 def test_sync_status_reports_overlay_attention(auth_client, temp_app, tmp_path, monkeypatch):
@@ -504,3 +534,4 @@ def test_admin_dashboard_exposes_project_sync_status_card(admin_client):
     assert 'id="dash-sync-status"' in html
     assert "loadProjectSyncStatus" in html
     assert "overlay(s) need review" in html
+    assert "source ready" in html

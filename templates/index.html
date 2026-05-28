@@ -2137,17 +2137,22 @@ async function loadDashboard() {
 }
 
 function syncStatusSummary(data) {
-  if (!data || data.state === 'never_run') return 'The automated master-list sync has not run on this host yet.';
-  if (data.state === 'unreadable') return data.message || 'Sync state exists but could not be read.';
+  const source = data?.source_readiness || {};
+  const sourceSummary = source.ready
+    ? 'source ready: ' + (source.xlsx_selected || 'master list')
+    : 'source check: ' + (source.state || 'unknown');
+  if (!data || data.state === 'never_run') return 'The automated master-list sync has not run on this host yet. ' + sourceSummary + '.';
+  if (data.state === 'unreadable') return (data.message || 'Sync state exists but could not be read.') + ' ' + sourceSummary + '.';
   const r = data.last_report || {};
   const parts = [];
   if (r.created_count) parts.push(r.created_count + ' added');
   if (r.updated_count) parts.push(r.updated_count + ' updated');
   if (r.vanished_count) parts.push(r.vanished_count + ' vanished');
   if (r.returned_count) parts.push(r.returned_count + ' returned');
-  const summary = parts.length ? parts.join(' · ') : 'No project-level changes on the last sync.';
+  parts.push(sourceSummary);
   const overlayCount = data.overlay_attention?.count || 0;
-  return overlayCount ? summary + ' · ' + overlayCount + ' overlay(s) need review' : summary;
+  if (overlayCount) parts.push(overlayCount + ' overlay(s) need review');
+  return parts.length ? parts.join(' · ') : 'No project-level changes on the last sync.';
 }
 
 async function loadProjectSyncStatus() {
