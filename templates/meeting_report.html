@@ -51,15 +51,36 @@
   .site-table { width:100%; border-collapse:collapse; font-size:0.78rem; }
   .site-table th,.site-table td { text-align:left; padding:0.35rem 0.4rem; border-bottom:1px solid var(--border); }
   .site-table th { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; }
+  .print-only { display:none; }
+  .print-masthead { border-bottom:1px solid var(--border); margin-bottom:1rem; padding-bottom:0.7rem; }
+  .print-eyebrow { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.68rem; }
+  .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
+  .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
+  .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
   .error { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.35); padding:0.9rem 1rem; border-radius:var(--radius); color:var(--danger); }
   @media (max-width: 920px) { .cols { grid-template-columns:1fr; } .grid { grid-template-columns:repeat(2,1fr); } .hero-top { flex-direction:column; } }
   @media print {
-    body { background:#fff; color:#111827; }
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:9.5pt; line-height:1.28; }
     header,.lookup,.nav,.btn { display:none !important; }
-    main { max-width:none; padding:0; }
-    .card,.hero,.stat { border-color:#d1d5db; background:#fff; break-inside:avoid; }
+    main { max-width:none; padding:0 0 0.15in; }
+    .print-only { display:block !important; }
+    .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
+    .print-eyebrow,.print-meta { color:#4b5563; }
+    .print-title { color:#111827; }
+    .print-footer { color:#4b5563; border-color:#d1d5db; }
+    .card,.hero,.stat { border-color:#d1d5db; background:#fff; break-inside:avoid; box-shadow:none; }
+    .card { padding:0.12in; margin-bottom:0.12in; }
+    .hero { padding:0.12in; margin-bottom:0.12in; }
+    .grid { gap:0.08in; margin-bottom:0.12in; }
+    .stat { padding:0.08in; }
+    .stat-value { font-size:15pt; color:#111827; }
     .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+    .action-queue { border-left:3px solid #111827; }
+    .row { padding:0.055in 0; }
     .row,.site-table th,.site-table td { border-color:#e5e7eb; }
+    .row-title { white-space:normal; }
+    .when { color:#374151; }
   }
 </style>
 </head>
@@ -90,6 +111,13 @@
     <div class="error">{{ error }}</div>
   {% elif packet %}
     {% set event = packet.event %}
+    <section class="print-masthead print-only" aria-label="Printable report header">
+      <div>
+        <div class="print-eyebrow">TaskTrack Meeting Packet</div>
+        <div class="print-title">{{ event.title or '(untitled event)' }}</div>
+      </div>
+      <div class="print-meta">{{ event.start_at[:16] }}{% if event.location %}<br>{{ event.location }}{% endif %}<br>Generated {{ packet.generated_at[:16] }}</div>
+    </section>
     <section class="hero">
       <div class="hero-top">
         <div>
@@ -264,6 +292,7 @@
         <div class="empty">This event is not linked to a project. The packet includes the meeting prep only.</div>
       </section>
     {% endif %}
+    <section class="print-footer print-only">TaskTrack meeting packet generated {{ packet.generated_at[:16] }}. Private linked events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
   {% endif %}
 </main>
 </body>

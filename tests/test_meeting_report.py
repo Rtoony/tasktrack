@@ -224,6 +224,10 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Meeting Packet" in html
+    assert "TaskTrack Meeting Packet" in html
+    assert "print-masthead" in html
+    assert "print-footer" in html
+    assert "@page { size: letter" in html
     assert "Project Management Brief" in html
     assert "Meeting Action Queue" in html
     assert "Prepare for Management sync" in html

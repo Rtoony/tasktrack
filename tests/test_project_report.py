@@ -122,6 +122,10 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Project Status" in html
+    assert "TaskTrack Project Status" in html
+    assert "print-masthead" in html
+    assert "print-footer" in html
+    assert "@page { size: letter" in html
     assert "Management Brief" in html
     assert "Management Action Queue" in html
     assert "Resolve overdue Project Tasks: Late exhibit" in html
@@ -369,6 +373,10 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Portfolio Project Packet" in html
+    assert "TaskTrack Portfolio Packet" in html
+    assert "print-masthead" in html
+    assert "print-footer" in html
+    assert "@page { size: letter" in html
     assert "At Risk Projects" in html
     assert 'id="attention_level"' in html
     assert "Management Action Queue" in html

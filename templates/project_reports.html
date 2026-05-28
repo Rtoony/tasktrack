@@ -60,16 +60,35 @@
   .empty { color:var(--text-dim); font-style:italic; padding:0.2rem 0; }
   .danger { color:var(--danger); }
   .ok { color:var(--ok); }
+  .print-only { display:none; }
+  .print-masthead { border-bottom:1px solid var(--border); margin-bottom:1rem; padding-bottom:0.7rem; }
+  .print-eyebrow { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.68rem; }
+  .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
+  .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
+  .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
   .more { color:var(--text-dim); font-size:0.72rem; margin-top:0.35rem; }
   @media (max-width: 1000px) { .filters,.summary-grid { grid-template-columns:repeat(2,1fr); } .cols { grid-template-columns:1fr; } .hero,.project-head { flex-direction:column; } .chips { justify-content:flex-start; } }
   @media print {
-    body { background:#fff; color:#111827; font-size:0.78rem; }
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
     header,.filter-card,.nav,.btn { display:none !important; }
-    main { max-width:none; padding:0; }
-    .hero,.project-card,.summary-card,.section { border-color:#d1d5db; background:#fff; }
+    main { max-width:none; padding:0 0 0.15in; }
+    .print-only { display:block !important; }
+    .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
+    .print-eyebrow,.print-meta { color:#4b5563; }
+    .print-title { color:#111827; }
+    .print-footer { color:#4b5563; border-color:#d1d5db; }
+    .hero,.project-card,.summary-card,.section { border-color:#d1d5db; background:#fff; box-shadow:none; }
+    .hero,.project-card { padding:0.12in; margin-bottom:0.12in; }
+    .summary-grid { grid-template-columns:repeat(7,1fr); gap:0.08in; margin-bottom:0.12in; }
+    .summary-card { padding:0.08in; }
+    .summary-value { font-size:14pt; color:#111827; }
     .chip { background:#fff; color:#374151; border-color:#d1d5db; }
     .row,.project-head { border-color:#e5e7eb; }
+    .row { padding:0.05in 0; }
+    .row-title { white-space:normal; }
     .project-card { page-break-inside:avoid; }
+    .action-queue { border-left:3px solid #111827; }
   }
 </style>
 </head>
@@ -88,6 +107,13 @@
   </div>
 </header>
 <main>
+  <section class="print-masthead print-only" aria-label="Printable report header">
+    <div>
+      <div class="print-eyebrow">TaskTrack Portfolio Packet</div>
+      <div class="print-title">{{ packet.summary.project_count }} project{{ '' if packet.summary.project_count == 1 else 's' }} / {{ packet.summary.attention_project_count }} at risk</div>
+    </div>
+    <div class="print-meta">Generated {{ packet.generated_at[:16] }}<br>{% if packet.filters.client %}Client: {{ packet.filters.client }}<br>{% endif %}{% if packet.filters.attention_level %}Attention: {{ packet.filters.attention_level|replace('_', ' ') }}{% else %}Attention: all visible{% endif %}</div>
+  </section>
   <h1>Portfolio Project Packet</h1>
   <p class="sub">Generate a meeting-ready packet across active projects. Private calendar events are excluded unless explicitly requested.</p>
 
@@ -226,6 +252,7 @@
       </div>
     </article>
   {% endfor %}
+  <section class="print-footer print-only">TaskTrack portfolio packet generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
 </main>
 
 <script>
