@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Packet Batch - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
+  .head-inner { max-width:1180px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1180px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.55rem; font-weight:700; margin-bottom:0.2rem; }
+  .sub { color:var(--text-muted); font-size:0.86rem; margin-bottom:1rem; max-width:820px; }
+  .filter-card,.hero,.packet,.section,.summary-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); }
+  .filter-card { padding:1rem; margin-bottom:1rem; }
+  .filters { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input,select { width:100%; padding:0.38rem 0.48rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; }
+  .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
+  .checkline input { width:auto; }
+  .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+  .btn { background:var(--accent); border:none; color:#0b1220; padding:0.4rem 0.75rem; border-radius:var(--radius); cursor:pointer; font-weight:700; text-decoration:none; font-size:0.78rem; display:inline-flex; align-items:center; justify-content:center; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .hero { padding:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
+  .hero-title { font-size:1.2rem; font-weight:700; }
+  .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
+  .summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .summary-card { padding:0.75rem; }
+  .summary-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .summary-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  .packet { padding:1rem; margin-bottom:1rem; break-inside:avoid; }
+  .packet-head { display:flex; justify-content:space-between; gap:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:0.8rem; }
+  .event-type { color:var(--accent); font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em; }
+  .packet-title { font-size:1.08rem; font-weight:700; margin-top:0.1rem; }
+  .meta,.mini-meta { color:var(--text-muted); font-size:0.77rem; margin-top:0.18rem; }
+  .chips { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:0.4rem; }
+  .chip { border:1px solid var(--border); background:rgba(17,22,29,0.65); border-radius:999px; padding:0.16rem 0.5rem; color:var(--text-muted); font-size:0.7rem; text-decoration:none; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:0.9rem; }
+  .section { background:rgba(17,22,29,0.35); padding:0.75rem; }
+  .section h2 { font-size:0.88rem; margin-bottom:0.45rem; }
+  .row { display:grid; grid-template-columns:1fr auto; gap:0.75rem; padding:0.35rem 0; border-bottom:1px solid var(--border); align-items:baseline; }
+  .row:last-child { border-bottom:none; }
+  .row-title { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .when { color:var(--text-dim); font-family:'IBM Plex Mono', monospace; font-size:0.7rem; white-space:nowrap; }
+  .empty { color:var(--text-dim); font-style:italic; padding:0.2rem 0; }
+  .danger { color:var(--danger); }
+  .print-only { display:none; }
+  .print-masthead { border-bottom:1px solid var(--border); margin-bottom:1rem; padding-bottom:0.7rem; }
+  .print-eyebrow { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.68rem; }
+  .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
+  .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
+  .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
+  @media (max-width: 900px) { .filters,.summary-grid,.cols { grid-template-columns:1fr; } .hero,.packet-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
+    header,.filter-card,.nav,.btn { display:none !important; }
+    main { max-width:none; padding:0 0 0.15in; }
+    .print-only { display:block !important; }
+    .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
+    .print-eyebrow,.print-meta { color:#4b5563; }
+    .print-title { color:#111827; }
+    .print-footer { color:#4b5563; border-color:#d1d5db; }
+    .hero,.packet,.summary-card,.section { border-color:#d1d5db; background:#fff; box-shadow:none; }
+    .hero,.packet { padding:0.12in; margin-bottom:0.12in; }
+    .summary-grid { grid-template-columns:repeat(4,1fr); gap:0.08in; margin-bottom:0.12in; }
+    .summary-card { padding:0.08in; }
+    .summary-value { font-size:14pt; color:#111827; }
+    .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+    .row,.packet-head { border-color:#e5e7eb; }
+    .row { padding:0.05in 0; }
+    .row-title { white-space:normal; }
+    .packet { page-break-inside:avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Meeting Batch</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/reports/projects">Portfolio</a>
+      <a href="/reports/project">Project</a>
+      <a href="/weekly">Weekly</a>
+      {% if user_role == 'admin' %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section class="print-masthead print-only" aria-label="Printable report header">
+    <div>
+      <div class="print-eyebrow">TaskTrack Meeting Packet Batch</div>
+      <div class="print-title">{{ packet.count }} packet{{ '' if packet.count == 1 else 's' }} / next {{ packet.days }} day{{ '' if packet.days == 1 else 's' }}</div>
+    </div>
+    <div class="print-meta">Generated {{ packet.generated_at[:16] }}<br>{% if packet.filters.event_type %}Type: {{ packet.filters.event_type|replace('_', ' ') }}<br>{% endif %}{% if packet.filters.project_number %}Project: {{ packet.filters.project_number }}{% else %}All visible projects{% endif %}</div>
+  </section>
+
+  <h1>Meeting Packet Batch</h1>
+  <p class="sub">Print a batch of upcoming event packets. Private events and private linked project events are excluded unless explicitly requested.</p>
+
+  <form class="filter-card" method="get" action="/reports/meetings">
+    <div class="filters">
+      <div><label for="days">Days</label><input id="days" name="days" value="{{ packet.days }}" inputmode="numeric"></div>
+      <div><label for="limit">Limit</label><input id="limit" name="limit" value="{{ packet.limit }}" inputmode="numeric"></div>
+      <div><label for="project_number">Project #</label><input id="project_number" name="project_number" value="{{ packet.filters.project_number }}" placeholder="optional"></div>
+      <div><label for="event_type">Type</label><select id="event_type" name="event_type"><option value="" {% if not packet.filters.event_type %}selected{% endif %}>Any</option><option value="meeting" {% if packet.filters.event_type == 'meeting' %}selected{% endif %}>Meeting</option><option value="review" {% if packet.filters.event_type == 'review' %}selected{% endif %}>Review</option><option value="prep" {% if packet.filters.event_type == 'prep' %}selected{% endif %}>Prep</option><option value="deadline" {% if packet.filters.event_type == 'deadline' %}selected{% endif %}>Deadline</option><option value="task_due" {% if packet.filters.event_type == 'task_due' %}selected{% endif %}>Task Due</option></select></div>
+      <label class="checkline"><input type="checkbox" name="include_private" value="1" {% if packet.include_private %}checked{% endif %}> Include my private events</label>
+      <div class="actions"><a class="btn secondary" href="/reports/meetings">Reset</a><button class="btn" type="submit">Build Batch</button></div>
+    </div>
+  </form>
+
+  <section class="hero">
+    <div>
+      <div class="hero-title">{{ packet.count }} packet{{ '' if packet.count == 1 else 's' }} ready</div>
+      <div class="hero-meta">Window {{ packet.window_start[:10] }} to {{ packet.window_end[:10] }}{% if packet.truncated %} / showing {{ packet.count }} of {{ packet.matched_count }} matched events{% endif %}</div>
+    </div>
+    <div class="actions">
+      <a class="btn secondary" href="/api/v1/reports/meetings?{{ request.query_string.decode('utf-8') }}">JSON</a>
+      <button class="btn" type="button" onclick="window.print()">Print Batch</button>
+    </div>
+  </section>
+
+  <section class="summary-grid">
+    <div class="summary-card"><div class="summary-label">Packets</div><div class="summary-value">{{ packet.count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Matched</div><div class="summary-value">{{ packet.matched_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Days</div><div class="summary-value">{{ packet.days }}</div></div>
+    <div class="summary-card"><div class="summary-label">Private</div><div class="summary-value">{{ 'Yes' if packet.include_private else 'No' }}</div></div>
+  </section>
+
+  {% if not packet.packets %}
+    <section class="packet"><div class="empty">No upcoming visible events matched this batch.</div></section>
+  {% endif %}
+
+  {% for item in packet.packets %}
+    {% set event = item.event %}
+    {% set report = item.project_report %}
+    <article class="packet">
+      <div class="packet-head">
+        <div>
+          <div class="event-type">{{ event.event_type|replace('_', ' ') }}</div>
+          <div class="packet-title">{{ event.title or '(untitled event)' }}</div>
+          <div class="meta">{{ event.start_at[:16] }}{% if event.location %} / {{ event.location }}{% endif %}{% if event.project_number %} / {{ event.project_number }}{% endif %}</div>
+        </div>
+        <div class="chips">
+          <span class="chip">{{ event.status }}</span>
+          <span class="chip">{{ event.visibility }}</span>
+          <a class="chip" href="/reports/meeting?event_id={{ event.id }}">single packet</a>
+          {% if event.project_number %}<a class="chip" href="/reports/project?project_number={{ event.project_number }}">project report</a>{% endif %}
+        </div>
+      </div>
+
+      {% if event.description %}<div class="meta" style="margin-bottom:0.75rem">{{ event.description }}</div>{% endif %}
+
+      {% if report %}
+        <div class="meta" style="margin-bottom:0.75rem"><strong>Brief:</strong> {{ report.management_brief.headline }} <span class="danger">{% if report.management_brief.attention_level == 'at_risk' %}/ at risk{% endif %}</span></div>
+        <div class="cols">
+          <section class="section">
+            <h2>Action Queue</h2>
+            {% for action in report.action_queue[:4] %}
+            <div class="row"><div><div class="row-title">{{ action.title }}</div><div class="mini-meta">{{ action.detail }}{% if action.source %} / {{ action.source }}{% endif %}</div></div><div class="when">{{ action.due[:16] }}</div></div>
+            {% endfor %}
+          </section>
+          <section class="section">
+            <h2>Project Context</h2>
+            <div class="row"><div><div class="row-title">{{ report.project.project_number }}{% if report.project.name %} - {{ report.project.name }}{% endif %}</div><div class="mini-meta">{{ report.project.client or 'No client' }}{% if report.project.principal %} / {{ report.project.principal }}{% endif %}</div></div><div class="when">{{ report.management_brief.attention_level|replace('_', ' ') }}</div></div>
+            {% if report.overdue_items %}
+              {% for row in report.overdue_items[:3] %}
+              <div class="row"><div><div class="row-title danger">{{ row.title }}</div><div class="mini-meta">{{ row.label }} / {{ row.status }}</div></div><div class="when danger">{{ row.due[:16] }}</div></div>
+              {% endfor %}
+            {% else %}<div class="empty">No overdue linked work.</div>{% endif %}
+          </section>
+        </div>
+      {% else %}
+        <section class="section"><div class="empty">This event is not linked to a project.</div></section>
+      {% endif %}
+    </article>
+  {% endfor %}
+
+  <section class="print-footer print-only">TaskTrack meeting packet batch generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
+</main>
+</body>
+</html>

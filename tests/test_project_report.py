@@ -614,6 +614,8 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert "At-Risk Queue" in html
     assert "attention_level=at_risk" in html
     assert "Upcoming Meeting Packets" in html
+    assert "Batch Meeting Packets" in html
+    assert "/reports/meetings?days=14&limit=12" in html
     assert "loadUpcomingMeetingPackets" in html
     assert "openProjectReport" in html
     assert f'/reports/projects?preset={preset["id"]}' in html

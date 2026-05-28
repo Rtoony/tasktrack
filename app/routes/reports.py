@@ -13,6 +13,7 @@ from ..models import ReportPreset
 from ..services.project_reports import (
     DEFAULT_PORTFOLIO_LIMIT,
     MAX_PORTFOLIO_LIMIT,
+    meeting_packet_batch_report,
     meeting_packet_report,
     portfolio_project_report,
     project_status_report,
@@ -35,6 +36,17 @@ def _bool_arg(name: str) -> bool:
 
 def _is_admin() -> bool:
     return session.get("user_role") == "admin"
+
+
+def _int_arg(name: str, default: int, minimum: int, maximum: int) -> int:
+    raw = (request.args.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(minimum, min(value, maximum))
 
 
 def _event_id_arg():
@@ -415,6 +427,43 @@ def meeting_report_json():
     if packet is None:
         return jsonify({"error": "not found"}), 404
     return jsonify(packet)
+
+
+@bp.route("/api/v1/reports/meetings", methods=["GET"])
+@login_required
+def meeting_batch_report_json():
+    packet = meeting_packet_batch_report(
+        get_session(),
+        days=_int_arg("days", 14, 1, 365),
+        limit=_int_arg("limit", 12, 1, 25),
+        project_number=(request.args.get("project_number") or "").strip(),
+        event_type=(request.args.get("event_type") or "").strip(),
+        user_id=session.get("user_id"),
+        include_private=_bool_arg("include_private"),
+        is_admin=_is_admin(),
+    )
+    return jsonify(packet)
+
+
+@bp.route("/reports/meetings", methods=["GET"])
+@login_required
+def meeting_batch_report_page():
+    packet = meeting_packet_batch_report(
+        get_session(),
+        days=_int_arg("days", 14, 1, 365),
+        limit=_int_arg("limit", 12, 1, 25),
+        project_number=(request.args.get("project_number") or "").strip(),
+        event_type=(request.args.get("event_type") or "").strip(),
+        user_id=session.get("user_id"),
+        include_private=_bool_arg("include_private"),
+        is_admin=_is_admin(),
+    )
+    return render_template(
+        "meeting_reports.html",
+        packet=packet,
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
 
 
 @bp.route("/reports/meeting", methods=["GET"])

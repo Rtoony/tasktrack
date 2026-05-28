@@ -242,6 +242,42 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert "Sensitive capability narrative" not in html
 
 
+def test_meeting_packet_batch_json_and_html(auth_client, temp_app):
+    ids = _ids(temp_app)
+
+    r = auth_client.get("/api/v1/reports/meetings?days=14&limit=10")
+    assert r.status_code == 200
+    body = r.get_json()
+    titles = [packet["event"]["title"] for packet in body["packets"]]
+    assert "Management sync" in titles
+    assert "Unlinked staff sync" in titles
+    assert "Owner private meeting" not in titles
+    assert body["include_private"] is False
+    assert body["count"] == 2
+    assert "Private project prep" not in str(body)
+
+    r = auth_client.get("/api/v1/reports/meetings?days=14&limit=10&include_private=1")
+    assert r.status_code == 200
+    titles = [packet["event"]["title"] for packet in r.get_json()["packets"]]
+    assert "Owner private meeting" in titles
+
+    r = auth_client.get("/api/v1/reports/meetings?days=14&limit=10&project_number=7711.20")
+    assert r.status_code == 200
+    project_titles = [packet["event"]["title"] for packet in r.get_json()["packets"]]
+    assert project_titles == ["Management sync"]
+
+    r = auth_client.get("/reports/meetings?days=14&limit=10")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Meeting Packet Batch" in html
+    assert "TaskTrack Meeting Packet Batch" in html
+    assert "Management sync" in html
+    assert "Unlinked staff sync" in html
+    assert "Owner private meeting" not in html
+    assert "window.print" in html
+    assert "@page { size: letter" in html
+
+
 def test_calendar_ui_exposes_meeting_packet_actions(auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200

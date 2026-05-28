@@ -1,7 +1,7 @@
 """Project status and portfolio report data builders."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -120,6 +120,19 @@ def _recent_activity_for_project(sess: Session, linked_records: dict[str, list[d
     return recent_activity_for_linked_records(
         sess, linked_records, is_admin=is_admin, limit=limit
     )
+
+
+def _calendar_event_in_window(row: CalendarEvent, *, now: datetime, end: datetime) -> bool:
+    start = _parse_dt(row.start_at)
+    if start is None:
+        return False
+    if row.all_day:
+        return now.date() <= start.date() <= end.date()
+    return now <= start <= end
+
+
+def _calendar_sort_key(row: CalendarEvent) -> str:
+    return row.start_at or ""
 
 
 def _project_open_total(report: dict) -> int:
@@ -350,6 +363,69 @@ def meeting_packet_report(sess: Session, *, event_id: int,
     }
 
 
+def meeting_packet_batch_report(sess: Session, *, days: int = 14, limit: int = 12,
+                                project_number: str = "", event_type: str = "",
+                                user_id: int | None = None,
+                                include_private: bool = False,
+                                is_admin: bool = False,
+                                now: datetime | None = None) -> dict:
+    """Build a printable batch of upcoming visible meeting packets."""
+    now = now or datetime.now()
+    days = max(1, min(int(days or 14), 365))
+    limit = max(1, min(int(limit or 12), 25))
+    end = now + timedelta(days=days)
+    project_number = (project_number or "").strip()
+    event_type = (event_type or "").strip()
+
+    rows = sess.scalars(select(CalendarEvent).order_by(CalendarEvent.start_at.asc())).all()
+    packets: list[dict] = []
+    matched = 0
+    for row in sorted(rows, key=_calendar_sort_key):
+        if _status(to_dict(row) or {}) in done_statuses_for_table("calendar_events"):
+            continue
+        if not record_visible_to_user("calendar_events", row, user_id):
+            continue
+        if row.visibility == "private" and not include_private:
+            continue
+        if project_number and (row.project_number or "").strip() != project_number:
+            continue
+        if event_type and (row.event_type or "").strip() != event_type:
+            continue
+        if not _calendar_event_in_window(row, now=now, end=end):
+            continue
+        matched += 1
+        if len(packets) >= limit:
+            continue
+        packet = meeting_packet_report(
+            sess,
+            event_id=row.id,
+            user_id=user_id,
+            include_private=include_private,
+            is_admin=is_admin,
+            now=now,
+        )
+        if packet is not None:
+            packets.append(packet)
+
+    return {
+        "generated_at": now.isoformat(timespec="seconds"),
+        "window_start": now.isoformat(timespec="seconds"),
+        "window_end": end.isoformat(timespec="seconds"),
+        "days": days,
+        "limit": limit,
+        "count": len(packets),
+        "matched_count": matched,
+        "truncated": matched > len(packets),
+        "filters": {
+            "project_number": project_number,
+            "event_type": event_type,
+        },
+        "include_private": bool(include_private),
+        "capabilities_visible": bool(is_admin),
+        "packets": packets,
+    }
+
+
 def _portfolio_project_stmt(filters: dict):
     stmt = select(Project)
     if not filters.get("include_inactive"):
@@ -504,6 +580,7 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
 __all__ = [
     "project_status_report",
     "meeting_packet_report",
+    "meeting_packet_batch_report",
     "portfolio_project_report",
     "REPORT_TABLES",
     "DEFAULT_PORTFOLIO_LIMIT",
