@@ -11,6 +11,7 @@ Routes mirror the rest of /api/v1/*:
 - DELETE /api/v1/employees/<id>   (soft delete: sets active=0)
 - (same shape for /api/v1/projects)
 """
+import importlib.util
 import json
 import os
 from datetime import datetime
@@ -454,6 +455,22 @@ def _master_sync_state_path() -> Path:
     return Path(base) / "tasktrack" / "master-sync.json"
 
 
+def _master_sync_source_dir() -> Path:
+    return Path(os.environ.get(
+        "TASKTRACK_MASTER_SOURCE_DIR", _MASTER_SYNC_DEFAULT_SOURCE_DIR,
+    ))
+
+
+def _load_master_sync_module():
+    script_path = Path(__file__).resolve().parents[2] / "scripts" / "sync_master_if_changed.py"
+    spec = importlib.util.spec_from_file_location("tasktrack_sync_master_if_changed", script_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"could not load sync preflight module at {script_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _fmt_mtime(path: Path) -> str:
     try:
         return datetime.fromtimestamp(path.stat().st_mtime).isoformat(timespec="seconds")
@@ -462,9 +479,7 @@ def _fmt_mtime(path: Path) -> str:
 
 
 def _master_sync_source_readiness() -> dict:
-    source_dir = Path(os.environ.get(
-        "TASKTRACK_MASTER_SOURCE_DIR", _MASTER_SYNC_DEFAULT_SOURCE_DIR,
-    ))
+    source_dir = _master_sync_source_dir()
     payload = {
         "source_dir": str(source_dir),
         "source_dir_exists": source_dir.is_dir(),
@@ -601,6 +616,33 @@ def projects_sync_status():
     return jsonify(payload)
 
 
+@bp.route("/api/v1/projects/sync-preflight", methods=["GET"])
+@admin_required
+def projects_sync_preflight():
+    """Admin-only read-only master-list preflight.
+
+    This validates source visibility and hash/change detection only. It
+    does not import, write the state file, touch Telegram, or write back
+    to the source XLSX/KMZ.
+    """
+    force = request.args.get("force") in ("1", "true", "yes")
+    try:
+        syncer = _load_master_sync_module()
+        payload = syncer.preflight_sync(
+            source_dir=_master_sync_source_dir(),
+            state_path=_master_sync_state_path(),
+            force=force,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({
+            "ok": False,
+            "message": f"sync preflight failed: {exc}",
+            "source_dir": str(_master_sync_source_dir()),
+            "state_path": str(_master_sync_state_path()),
+            "source_readiness": _master_sync_source_readiness(),
+        }), 500
+    payload["source_readiness"] = _master_sync_source_readiness()
+    return jsonify(payload)
 
 
 class OverlayConflict(ValueError):

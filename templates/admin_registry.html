@@ -146,6 +146,10 @@
   </div>
   <div class="panel">
     <h2>Project list <span id="sync-status-badge" style="font-size:0.72rem;font-weight:normal;color:var(--text-muted);margin-left:0.5rem"></span></h2>
+    <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;margin:0 0 0.8rem">
+      <button class="btn btn-sm btn-export" type="button" onclick="runSyncPreflight()">Run Sync Preflight</button>
+      <span id="sync-preflight-result" style="font-size:0.78rem;color:var(--text-muted)">Read-only check; does not import.</span>
+    </div>
     <table>
       <thead><tr>
         <th>Number</th><th>Name</th><th>Client</th><th>Component</th><th>Principal</th><th>Status</th><th>Location</th><th>Active</th><th></th>
@@ -260,6 +264,35 @@ async function reactivate(kind, id) {
 // the projects panel is on screen. Silent failure on every error
 // path; this is informational only and the rest of the page must
 // keep working without it.
+function syncPreflightFileName(path) {
+  const value = String(path || '');
+  return value ? value.split('/').pop() : '';
+}
+
+async function runSyncPreflight() {
+  const out = document.getElementById('sync-preflight-result');
+  if (!out) return;
+  out.textContent = 'Preflight: checking source files...';
+  out.dataset.state = 'checking';
+  try {
+    const res = await fetch('/api/v1/projects/sync-preflight');
+    if (!res.ok) {
+      out.dataset.state = 'error';
+      out.textContent = 'Preflight unavailable (' + res.status + ')';
+      return;
+    }
+    const data = await res.json();
+    const file = syncPreflightFileName(data.xlsx_path) || data.source_readiness?.xlsx_selected || 'master source';
+    const state = data.ok ? (data.would_import ? 'would import' : 'unchanged') : 'blocked';
+    const suffix = data.ok ? file : (data.source_readiness?.state || 'source not ready');
+    out.dataset.state = state.replace(/\s+/g, '-');
+    out.textContent = 'Preflight: ' + state + ' — ' + (data.message || suffix);
+  } catch (e) {
+    out.dataset.state = 'error';
+    out.textContent = 'Preflight failed';
+  }
+}
+
 async function loadSyncStatusBadge() {
   const badge = document.getElementById('sync-status-badge');
   if (!badge) return;

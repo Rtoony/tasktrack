@@ -569,6 +569,64 @@ def test_sync_status_requires_auth(client):
     assert r.status_code == 401
 
 
+def test_sync_preflight_endpoint_requires_admin(client):
+    with client.session_transaction() as s:
+        s.clear()
+    assert client.get("/api/v1/projects/sync-preflight").status_code == 401
+    with client.session_transaction() as s:
+        s["user_id"] = 1
+        s["user_name"] = "Regular User"
+        s["user_role"] = "user"
+    assert client.get("/api/v1/projects/sync-preflight").status_code == 403
+
+
+def test_sync_preflight_endpoint_reports_missing_source(admin_client, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("TASKTRACK_MASTER_SOURCE_DIR", str(tmp_path / "missing-source"))
+
+    r = admin_client.get("/api/v1/projects/sync-preflight")
+
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ok"] is False
+    assert body["would_import"] is False
+    assert body["source_readiness"]["state"] == "missing_source_dir"
+    assert "source dir not present" in body["message"]
+
+
+def test_sync_preflight_endpoint_reports_would_import_without_writing_state(
+    admin_client, tmp_path, monkeypatch
+):
+    state_home = tmp_path / "state"
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    (source_dir / "Master List - Numeric 052826.xlsx").write_bytes(b"xlsx placeholder")
+    (source_dir / "Project Locator.kmz").write_bytes(b"kmz placeholder")
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
+    monkeypatch.setenv("TASKTRACK_MASTER_SOURCE_DIR", str(source_dir))
+
+    r = admin_client.get("/api/v1/projects/sync-preflight")
+
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ok"] is True
+    assert body["would_import"] is True
+    assert body["unchanged"] is False
+    assert body["state_exists"] is False
+    assert body["source_readiness"]["ready"] is True
+    assert body["xlsx_path"].endswith("Master List - Numeric 052826.xlsx")
+    assert not (state_home / "tasktrack" / "master-sync.json").exists()
+
+
+def test_admin_projects_page_exposes_sync_preflight_control(admin_client):
+    r = admin_client.get("/admin/projects")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Run Sync Preflight" in html
+    assert "/api/v1/projects/sync-preflight" in html
+    assert "runSyncPreflight" in html
+
+
 def test_admin_dashboard_exposes_project_sync_status_card(admin_client):
     r = admin_client.get("/")
     assert r.status_code == 200
