@@ -557,6 +557,9 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Saved Preset" in html
+    assert "Find Project" in html
+    assert "project-picker-options" in html
+    assert "addPickedProject" in html
     assert "savePortfolioPreset" in html
     assert "updatePortfolioPreset" in html
     assert "deletePortfolioPreset" in html

@@ -111,6 +111,7 @@
     <div class="filters">
       <div><label for="q">Search</label><input id="q" name="q" value="{{ packet.filters.q }}" placeholder="name, number, client"></div>
       <div><label for="project_numbers">Project #s</label><input id="project_numbers" name="project_numbers" value="{{ packet.filters.project_numbers|join(', ') }}" placeholder="1234.56, 2345.67"></div>
+      <div><label for="project-picker">Find Project</label><input id="project-picker" list="project-picker-options" placeholder="type number, name, client"><datalist id="project-picker-options"></datalist></div>
       <div><label for="client">Client</label><input id="client" name="client" value="{{ packet.filters.client }}" placeholder="client contains"></div>
       <div><label for="principal">Principal</label><input id="principal" name="principal" value="{{ packet.filters.principal }}" placeholder="lead contains"></div>
       <div><label for="component">Component</label><input id="component" name="component" value="{{ packet.filters.component }}" placeholder="exact component"></div>
@@ -119,6 +120,7 @@
       <label class="checkline"><input type="checkbox" name="include_inactive" value="1" {% if packet.filters.include_inactive %}checked{% endif %}> Include soft-deleted</label>
       <label class="checkline"><input type="checkbox" name="include_private" value="1" {% if packet.include_private %}checked{% endif %}> Include my private events</label>
       <div class="actions">
+        <button class="btn secondary" type="button" onclick="addPickedProject()">Add Project</button>
         <a class="btn secondary" href="/reports/projects">Reset</a>
         <button class="btn" type="submit">Build Packet</button>
       </div>
@@ -227,6 +229,54 @@ function portfolioFiltersFromForm() {
   });
   return filters;
 }
+let portfolioProjectOptionsLoaded = false;
+async function loadPortfolioProjectOptions() {
+  if (portfolioProjectOptionsLoaded) return;
+  portfolioProjectOptionsLoaded = true;
+  const input = document.getElementById('project-picker');
+  const list = document.getElementById('project-picker-options');
+  try {
+    const res = await fetch('/api/v1/projects?include_inactive=1');
+    if (!res.ok) return;
+    const rows = await res.json();
+    list.innerHTML = '';
+    rows.slice(0, 8000).forEach(project => {
+      const number = project.project_number || '';
+      if (!number) return;
+      const option = document.createElement('option');
+      option.value = [number, project.name, project.client].filter(Boolean).join(' · ');
+      list.appendChild(option);
+    });
+  } catch (err) {
+    portfolioProjectOptionsLoaded = false;
+  }
+}
+function pickedProjectNumber(raw) {
+  return (raw || '').split('·')[0].trim().split(/\s+/)[0].trim();
+}
+function addPickedProject() {
+  const picker = document.getElementById('project-picker');
+  const target = document.getElementById('project_numbers');
+  const number = pickedProjectNumber(picker.value);
+  if (!number) return;
+  const existing = target.value.split(',').map(v => v.trim()).filter(Boolean);
+  if (!existing.includes(number)) existing.push(number);
+  target.value = existing.join(', ');
+  picker.value = '';
+  target.focus();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  const picker = document.getElementById('project-picker');
+  if (!picker) return;
+  picker.addEventListener('focus', loadPortfolioProjectOptions);
+  picker.addEventListener('input', loadPortfolioProjectOptions);
+  picker.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      addPickedProject();
+    }
+  });
+});
 function selectedPresetName() {
   const select = document.getElementById('preset');
   const option = select.options[select.selectedIndex];
