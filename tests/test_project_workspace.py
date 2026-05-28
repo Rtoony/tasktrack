@@ -313,6 +313,10 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'openProjectWorkspaceById' in html
     assert 'openProjectWorkspaceSmart' in html
     assert 'focusProjectOnMapSmart' in html
+    assert 'openProjectReportSmart' in html
+    assert 'openFocusedMapReport' in html
+    assert 'id="map-focus-card"' in html
+    assert 'Convex hull of project_sites' in html
     assert 'openMeetingPacketForEvent' in html
     assert 'startupRouteState' in html
     assert "params.get('workspace')" in html

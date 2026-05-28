@@ -800,7 +800,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Projects Map</h2>
-        <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Use a pin to open Workspace, focus the map, or copy the project number. Edit source metadata on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
+        <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Use a pin to open Workspace, launch a report, focus the map, or copy the project number. Edit source metadata on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
       </div>
       <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
         <option value="active" selected>Active</option>
@@ -830,6 +830,20 @@
       </label>
       <button class="btn btn-sm" type="button" onclick="reloadMap(true)">Refresh / Fit</button>
       <span class="filter-select" id="map-count" style="background:transparent;border:none;padding:0;color:var(--text-muted);font-size:0.78rem"></span>
+    </div>
+    <div id="map-focus-card" class="workspace-card" style="display:none;margin-bottom:0.75rem">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <div class="workspace-kicker">Map Focus</div>
+          <div class="workspace-title" id="map-focus-title" style="font-size:0.95rem">Focused project</div>
+          <div class="workspace-sub" id="map-focus-meta">Filtered to one project.</div>
+        </div>
+        <div class="workspace-actions" style="margin-top:0">
+          <button class="btn btn-sm btn-export" type="button" onclick="openFocusedMapWorkspace()">Workspace</button>
+          <button class="btn btn-sm" type="button" onclick="openFocusedMapReport()">Report</button>
+          <button class="btn btn-sm btn-ghost" type="button" onclick="clearMapProjectFocus()">Clear</button>
+        </div>
+      </div>
     </div>
     <div id="map-empty" class="empty-state" style="display:none">
       <div class="empty-title">No projects match these filters</div>
@@ -1712,6 +1726,9 @@ let mapHullLayer = null;
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
 let mapProjectFocus = { id: '', number: '' };
+let mapLastProjectCount = 0;
+let mapLastPinCount = 0;
+let mapLastAreaCount = 0;
 
 // Workflow status -> outline color. Pared to {active, dormant} to match
 // the Master Project List's binary Status column.
@@ -1739,6 +1756,66 @@ function mapPinColorFilterValue()  { return document.getElementById('map-pin-col
 function mapClientFilterValue()    { return document.getElementById('map-client-filter')?.value.trim() || ''; }
 function mapProjectNumberFilterValue() { return document.getElementById('map-project-number-filter')?.value.trim() || ''; }
 function mapShowAreasValue()       { return !!document.getElementById('map-show-areas')?.checked; }
+
+function projectReportUrl(projectNumber, projectId) {
+  const pn = String(projectNumber || '').trim();
+  if (pn) return '/reports/project?project_number=' + encodeURIComponent(pn);
+  if (projectId) return '/reports/project?project_id=' + encodeURIComponent(projectId);
+  return '/reports/project';
+}
+
+function openProjectReportSmart(projectId, projectNumber) {
+  if (!projectId && !String(projectNumber || '').trim()) { toast('Project identity is missing'); return; }
+  window.open(projectReportUrl(projectNumber, projectId), '_blank', 'noopener');
+}
+
+function openProjectReportForNumber(projectNumber) {
+  openProjectReportSmart(0, projectNumber);
+}
+
+function updateMapCountDisplay() {
+  const countEl = document.getElementById('map-count');
+  if (!countEl) return;
+  if (!mapLastPinCount) { countEl.textContent = ''; return; }
+  const projectText = mapLastProjectCount + ' project' + (mapLastProjectCount === 1 ? '' : 's');
+  const pinText = mapLastPinCount + ' pin' + (mapLastPinCount === 1 ? '' : 's');
+  const areaText = mapShowAreasValue()
+    ? ' · ' + mapLastAreaCount + ' area' + (mapLastAreaCount === 1 ? '' : 's')
+    : '';
+  countEl.textContent = projectText + ' · ' + pinText + areaText;
+}
+
+function updateMapFocusCard() {
+  const card = document.getElementById('map-focus-card');
+  if (!card) return;
+  if (!mapProjectFocus.id && !mapProjectFocus.number) {
+    card.style.display = 'none';
+    return;
+  }
+  const title = document.getElementById('map-focus-title');
+  const meta = document.getElementById('map-focus-meta');
+  const label = mapProjectFocus.number || ('id ' + mapProjectFocus.id);
+  if (title) title.textContent = 'Focused project · ' + label;
+  if (meta) {
+    const bits = [
+      mapLastProjectCount + ' matched project' + (mapLastProjectCount === 1 ? '' : 's'),
+      mapLastPinCount + ' pin' + (mapLastPinCount === 1 ? '' : 's'),
+    ];
+    if (mapShowAreasValue()) bits.push(mapLastAreaCount + ' read-only area' + (mapLastAreaCount === 1 ? '' : 's'));
+    meta.textContent = bits.join(' · ');
+  }
+  card.style.display = 'block';
+}
+
+function openFocusedMapWorkspace() {
+  if (!mapProjectFocus.id && !mapProjectFocus.number) { toast('No focused project'); return; }
+  openProjectWorkspaceSmart(Number(mapProjectFocus.id || 0), mapProjectFocus.number);
+}
+
+function openFocusedMapReport() {
+  if (!mapProjectFocus.id && !mapProjectFocus.number) { toast('No focused project'); return; }
+  openProjectReportSmart(Number(mapProjectFocus.id || 0), mapProjectFocus.number);
+}
 
 function normalizeMapProjectNumberInput() {
   const input = document.getElementById('map-project-number-filter');
@@ -1811,17 +1888,18 @@ async function reloadMap(fit) {
 
   document.getElementById('map-empty').style.display = features.length ? 'none' : 'block';
   document.getElementById('map-host').style.display = features.length ? 'block' : 'none';
-  const countEl = document.getElementById('map-count');
-  if (countEl) {
-    // Distinct project count vs. site count — both useful when a project
-    // can render many pins (the worst is "223.00" with 84 sites).
-    const projectIds = new Set(features.map(f => f.properties.project_id));
-    countEl.textContent = features.length
-      ? `${projectIds.size} project${projectIds.size === 1 ? '' : 's'} · ${features.length} pin${features.length === 1 ? '' : 's'}`
-      : '';
-  }
+  // Distinct project count vs. site count — both useful when a project
+  // can render many pins (the worst is "223.00" with 84 sites).
+  mapLastPinCount = features.length;
+  mapLastProjectCount = new Set(features.map(f => f.properties.project_id)).size;
+  mapLastAreaCount = 0;
+  updateMapCountDisplay();
+  updateMapFocusCard();
 
-  if (!features.length) { return; }
+  if (!features.length) {
+    if (mapHullLayer) { mapHullLayer.remove(); mapHullLayer = null; }
+    return;
+  }
 
   // Radius scales down for dense views — at 5000+ pins, a fat marker is
   // a UX disaster. Pick once based on total count, not per-pin.
@@ -1844,6 +1922,7 @@ async function reloadMap(fit) {
       const p = feat.properties;
       const pin = p.pin_color ? `<span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:50%;background:${PIN_COLOR[p.pin_color] || '#94a3b8'};margin-right:0.3rem;vertical-align:middle"></span>${escHtml(p.pin_color)}` : '';
       const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
+      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
@@ -1859,8 +1938,9 @@ async function reloadMap(fit) {
           (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
         '</div>' +
         '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
         '</div>' +
         '</div>';
       layer.bindPopup(html);
@@ -1876,12 +1956,14 @@ async function reloadMap(fit) {
   // Pure rendering — visualizes existing project_sites as a translucent
   // polygon for projects with 3+ sites. No new schema. The OrdoCAD lane
   // separation (2026-05-22) keeps per-project boundary metadata over there.
-  await reloadMapHulls();
+  mapLastAreaCount = await reloadMapHulls();
+  updateMapCountDisplay();
+  updateMapFocusCard();
 }
 
 async function reloadMapHulls() {
   if (mapHullLayer) { mapHullLayer.remove(); mapHullLayer = null; }
-  if (!mapShowAreasValue()) return;
+  if (!mapShowAreasValue()) return 0;
   const params = new URLSearchParams();
   const status = mapStatusFilterValue();
   const component = mapComponentFilterValue();
@@ -1897,11 +1979,11 @@ async function reloadMapHulls() {
   let geo;
   try {
     const res = await fetch(url);
-    if (res.status === 401) { window.location='/login'; return; }
+    if (res.status === 401) { window.location='/login'; return 0; }
     geo = await res.json();
-  } catch (e) { return; }
+  } catch (e) { return 0; }
   const hulls = (geo.features || []);
-  if (!hulls.length) return;
+  if (!hulls.length) return 0;
   mapHullLayer = L.geoJSON({ type:'FeatureCollection', features: hulls }, {
     style: (feat) => {
       const p = feat.properties;
@@ -1919,6 +2001,7 @@ async function reloadMapHulls() {
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
       const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
+      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + ' <span style="color:var(--text-muted);font-weight:400">· area</span></div>' +
@@ -1931,8 +2014,9 @@ async function reloadMapHulls() {
         '</div>' +
         '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
         '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + Number(p.project_id || 0) + ',\'' + popupProjectNumber + '\')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
+          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
         '</div>' +
         '</div>';
       layer.bindPopup(html);
@@ -1942,6 +2026,7 @@ async function reloadMapHulls() {
   // on top. Force the hull layer to the back as a belt-and-suspenders
   // for any future re-ordering.
   if (mapHullLayer.bringToBack) mapHullLayer.bringToBack();
+  return hulls.length;
 }
 
 function updateMapDeepLink(projectNumber) {
@@ -1954,13 +2039,15 @@ function updateMapDeepLink(projectNumber) {
   history.replaceState(null, '', url);
 }
 
-function focusProjectOnMap(projectId) {
+function focusProjectOnMap(projectId, projectNumber) {
   if (!projectId) { toast('Project is missing a registry id'); return; }
-  mapProjectFocus = { id: String(projectId), number: '' };
+  const pn = String(projectNumber || '').trim();
+  mapProjectFocus = { id: String(projectId), number: pn };
   const projectNumberInput = document.getElementById('map-project-number-filter');
-  if (projectNumberInput) projectNumberInput.value = '';
+  if (projectNumberInput) projectNumberInput.value = pn;
   const clear = document.getElementById('map-clear-focus');
   if (clear) clear.style.display = 'inline-flex';
+  updateMapFocusCard();
   const btn = tabButtonFor('map');
   if (currentTab !== 'map' && btn) activateTab('map');
   else reloadMap(true);
@@ -1969,7 +2056,7 @@ function focusProjectOnMap(projectId) {
 function focusProjectOnMapSmart(projectId, projectNumber) {
   const pn = String(projectNumber || '').trim();
   if (pn) updateMapDeepLink(pn);
-  if (projectId) { focusProjectOnMap(projectId); return; }
+  if (projectId) { focusProjectOnMap(projectId, pn); return; }
   if (!pn) { toast('Project identity is missing'); return; }
   mapProjectFocus = { id: '', number: pn };
   const projectNumberInput = document.getElementById('map-project-number-filter');
@@ -1983,8 +2070,11 @@ function focusProjectOnMapSmart(projectId, projectNumber) {
 
 function clearMapProjectFocus() {
   mapProjectFocus = { id: '', number: '' };
+  const projectNumberInput = document.getElementById('map-project-number-filter');
+  if (projectNumberInput) projectNumberInput.value = '';
   const clear = document.getElementById('map-clear-focus');
   if (clear) clear.style.display = 'none';
+  updateMapFocusCard();
   reloadMap(true);
 }
 
