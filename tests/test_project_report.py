@@ -347,6 +347,18 @@ def test_portfolio_project_report_filters_summary_and_privacy(auth_client, temp_
     titles = {event["title"] for event in r.get_json()["reports"][0]["upcoming_events"]}
     assert "Private portfolio prep" in titles
 
+    r = auth_client.get("/api/v1/reports/projects?client=Acme&attention_level=at_risk&limit=5")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["filters"]["attention_level"] == "at_risk"
+    assert [report["project"]["project_number"] for report in body["reports"]] == ["8800.10"]
+
+    r = auth_client.get("/api/v1/reports/projects?client=Acme&attention_level=quiet&limit=5")
+    assert r.status_code == 200
+    quiet_numbers = [report["project"]["project_number"] for report in r.get_json()["reports"]]
+    assert "8800.20" in quiet_numbers
+    assert "8800.10" not in quiet_numbers
+
 
 def test_portfolio_project_report_html_renders(auth_client, temp_app):
     with temp_app.app_context():
@@ -358,6 +370,7 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     html = r.get_data(as_text=True)
     assert "Portfolio Project Packet" in html
     assert "At Risk Projects" in html
+    assert 'id="attention_level"' in html
     assert "Management Action Queue" in html
     assert "What to discuss first" in html
     assert "Resolve overdue Project Tasks: Portfolio late item" in html
@@ -576,6 +589,7 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     assert "savePortfolioPreset" in html
     assert "updatePortfolioPreset" in html
     assert "deletePortfolioPreset" in html
+    assert 'id="attention_level"' in html
 
 def test_reports_home_renders_command_center(client, auth_client):
     preset = auth_client.post("/api/v1/reports/presets", json={
@@ -589,6 +603,8 @@ def test_reports_home_renders_command_center(client, auth_client):
     html = r.get_data(as_text=True)
     assert "Report Center" in html
     assert "Project Status One-Pager" in html
+    assert "At-Risk Queue" in html
+    assert "attention_level=at_risk" in html
     assert "Upcoming Meeting Packets" in html
     assert "loadUpcomingMeetingPackets" in html
     assert "openProjectReport" in html

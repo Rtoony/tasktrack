@@ -117,6 +117,7 @@
       <div><label for="principal">Principal</label><input id="principal" name="principal" value="{{ packet.filters.principal }}" placeholder="lead contains"></div>
       <div><label for="component">Component</label><input id="component" name="component" value="{{ packet.filters.component }}" placeholder="exact component"></div>
       <div><label for="display_status">Status</label><select id="display_status" name="display_status"><option value="" {% if not packet.filters.display_status %}selected{% endif %}>Any</option><option value="active" {% if packet.filters.display_status == 'active' %}selected{% endif %}>Active</option><option value="dormant" {% if packet.filters.display_status == 'dormant' %}selected{% endif %}>Dormant</option></select></div>
+      <div><label for="attention_level">Attention</label><select id="attention_level" name="attention_level"><option value="" {% if not packet.filters.attention_level %}selected{% endif %}>Any</option><option value="at_risk" {% if packet.filters.attention_level == 'at_risk' %}selected{% endif %}>At Risk</option><option value="scheduled" {% if packet.filters.attention_level == 'scheduled' %}selected{% endif %}>Scheduled</option><option value="active" {% if packet.filters.attention_level == 'active' %}selected{% endif %}>Active</option><option value="quiet" {% if packet.filters.attention_level == 'quiet' %}selected{% endif %}>Quiet</option></select></div>
       <div><label for="limit">Limit</label><input id="limit" name="limit" value="{{ packet.limit }}" inputmode="numeric"></div>
       <label class="checkline"><input type="checkbox" name="include_inactive" value="1" {% if packet.filters.include_inactive %}checked{% endif %}> Include soft-deleted</label>
       <label class="checkline"><input type="checkbox" name="include_private" value="1" {% if packet.include_private %}checked{% endif %}> Include my private events</label>
@@ -243,6 +244,7 @@ function portfolioFiltersFromForm() {
     principal: (fd.get('principal') || '').trim(),
     component: (fd.get('component') || '').trim(),
     display_status: (fd.get('display_status') || '').trim(),
+    attention_level: (fd.get('attention_level') || '').trim(),
     include_inactive: fd.has('include_inactive'),
     include_private: fd.has('include_private'),
     limit: (fd.get('limit') || '').trim()

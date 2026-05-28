@@ -22,7 +22,7 @@ bp = Blueprint("reports", __name__)
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _PRESET_SURFACES = {"portfolio"}
-_TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status"}
+_TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status", "attention_level"}
 _BOOL_FILTER_KEYS = {"include_inactive", "include_private"}
 _LIST_FILTER_KEYS = {"project_numbers"}
 _LIMIT_FILTER_KEYS = {"limit"}

@@ -451,9 +451,11 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
     limit = _clamp_limit(filters.get("limit"))
     now = now or datetime.now()
 
-    rows = sess.scalars(_portfolio_project_stmt(filters).limit(limit + 1)).all()
-    truncated = len(rows) > limit
-    projects = rows[:limit]
+    attention_level = (filters.get("attention_level") or "").strip()
+    fetch_limit = MAX_PORTFOLIO_LIMIT if attention_level else limit
+    rows = sess.scalars(_portfolio_project_stmt(filters).limit(fetch_limit + 1)).all()
+    truncated = len(rows) > fetch_limit
+    projects = rows[:fetch_limit]
     reports = [
         project_status_report(
             sess,
@@ -466,6 +468,14 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
         for proj in projects
     ]
     reports = [report for report in reports if report is not None]
+    if attention_level:
+        reports = [
+            report for report in reports
+            if (report.get("management_brief") or {}).get("attention_level") == attention_level
+        ]
+        if len(reports) > limit:
+            truncated = True
+            reports = reports[:limit]
 
     safe_filters = {
         "q": (filters.get("q") or "").strip(),
@@ -474,6 +484,7 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
         "principal": (filters.get("principal") or "").strip(),
         "component": (filters.get("component") or "").strip(),
         "display_status": (filters.get("display_status") or "").strip(),
+        "attention_level": attention_level,
         "include_inactive": bool(filters.get("include_inactive")),
         "limit": limit,
     }
