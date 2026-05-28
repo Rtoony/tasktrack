@@ -149,6 +149,28 @@
     <div class="summary-card"><div class="summary-label">Overdue</div><div class="summary-value{% if packet.summary.overdue_count %} danger{% endif %}">{{ packet.summary.overdue_count }}</div></div>
   </section>
 
+  {% if packet.summary.action_projects %}
+  <section class="project-card action-queue">
+    <div class="project-head">
+      <div>
+        <div class="pn">Management Action Queue</div>
+        <div class="project-title">What to discuss first</div>
+        <div class="project-meta">Ordered by risk, upcoming touchpoints, and visible TaskTrack work.</div>
+      </div>
+    </div>
+    {% for row in packet.summary.action_projects %}
+    <div class="row">
+      <div>
+        <div class="row-title"><a href="/reports/project?project_number={{ row.project_number }}" style="color:inherit;text-decoration:none">{{ row.project_number }}{% if row.name %} - {{ row.name }}{% endif %}</a></div>
+        <div class="mini-meta">{{ row.primary_action }}{% if row.primary_action_detail %} / {{ row.primary_action_detail }}{% endif %}</div>
+        {% if row.headline %}<div class="mini-meta">{{ row.headline }}</div>{% endif %}
+      </div>
+      <div class="when{% if row.attention_level == 'at_risk' %} danger{% endif %}">{{ row.attention_level|replace('_', ' ') }}</div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
   {% if not packet.reports %}
     <section class="project-card"><div class="empty">No projects matched these filters.</div></section>
   {% endif %}

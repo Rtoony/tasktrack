@@ -168,6 +168,73 @@ def _project_management_brief(report: dict) -> dict:
     }
 
 
+def _project_action_queue(report: dict) -> list[dict]:
+    """Meeting-facing next actions derived from visible report data."""
+    actions: list[dict] = []
+    overlay = report.get("operator_overlay") or {}
+    report_note = (overlay.get("report_note") or "").strip()
+
+    for item in (report.get("overdue_items") or [])[:3]:
+        actions.append({
+            "priority": "high",
+            "title": f"Resolve overdue {item.get('label') or 'item'}: {item.get('title') or 'Untitled'}",
+            "detail": f"Status: {item.get('status') or 'unknown'}",
+            "source": item.get("label") or item.get("table") or "Linked record",
+            "due": item.get("due") or "",
+        })
+
+    upcoming = list(report.get("upcoming_events") or [])
+    if upcoming:
+        event = upcoming[0]
+        bits = [event.get("event_type") or "event", event.get("status") or ""]
+        if event.get("location"):
+            bits.append(event.get("location"))
+        actions.append({
+            "priority": "scheduled",
+            "title": f"Prepare for {event.get('title') or 'upcoming project event'}",
+            "detail": " / ".join([bit for bit in bits if bit]),
+            "source": "Calendar",
+            "due": event.get("start_at") or "",
+        })
+
+    linked = report.get("linked_records") or {}
+    for table, source in (("project_work_tasks", "Project Tasks"), ("work_tasks", "CAD Dev"), ("training_tasks", "Training")):
+        for row in linked.get(table, []):
+            if not _is_open(table, row):
+                continue
+            if any(action.get("title", "").endswith(f": {_record_title(table, row)}") for action in actions):
+                continue
+            actions.append({
+                "priority": "next",
+                "title": f"Advance {source.lower()}: {_record_title(table, row)}",
+                "detail": f"Status: {_status(row) or 'open'}",
+                "source": source,
+                "due": _record_when(table, row),
+            })
+            break
+        if len(actions) >= 4:
+            break
+
+    if report_note:
+        actions.append({
+            "priority": "note",
+            "title": "Management note",
+            "detail": report_note,
+            "source": "TaskTrack Overlay",
+            "due": "",
+        })
+
+    if not actions:
+        actions.append({
+            "priority": "quiet",
+            "title": "No immediate TaskTrack action",
+            "detail": "No open linked work, overdue items, or upcoming project events are visible.",
+            "source": "TaskTrack",
+            "due": "",
+        })
+    return actions[:5]
+
+
 def _clamp_limit(raw, default: int = DEFAULT_PORTFOLIO_LIMIT) -> int:
     try:
         value = int(raw)
@@ -239,6 +306,7 @@ def project_status_report(sess: Session, *, project_id: int | None = None,
         "capabilities_visible": bool(is_admin),
     }
     report["management_brief"] = _project_management_brief(report)
+    report["action_queue"] = _project_action_queue(report)
     return report
 
 
@@ -327,6 +395,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
     site_count = 0
     overdue_count = 0
     upcoming_count = 0
+    action_projects = []
     for report in reports:
         site_count += int(report.get("counts", {}).get("sites") or 0)
         overdue_count += len(report.get("overdue_items") or [])
@@ -334,10 +403,32 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         for key in REPORT_TABLES:
             counts[key] += int(report.get("counts", {}).get(key) or 0)
             open_counts[key] += int(report.get("open_counts", {}).get(key) or 0)
+        project = report.get("project") or {}
+        brief = report.get("management_brief") or {}
+        action = (report.get("action_queue") or [{}])[0]
+        action_projects.append({
+            "project_number": project.get("project_number") or "",
+            "name": project.get("name") or "",
+            "client": project.get("client") or "",
+            "attention_level": brief.get("attention_level") or "quiet",
+            "headline": brief.get("headline") or "",
+            "primary_action": action.get("title") or "",
+            "primary_action_detail": action.get("detail") or "",
+            "overdue_count": len(report.get("overdue_items") or []),
+            "open_count": _project_open_total(report),
+            "next_due": action.get("due") or "",
+        })
     attention_project_count = len([
         report for report in reports
         if (report.get("management_brief") or {}).get("attention_level") == "at_risk"
     ])
+    rank = {"at_risk": 0, "scheduled": 1, "active": 2, "quiet": 3}
+    action_projects.sort(key=lambda row: (
+        rank.get(row.get("attention_level"), 9),
+        -int(row.get("overdue_count") or 0),
+        row.get("next_due") or "9999",
+        row.get("project_number") or "",
+    ))
     return {
         "project_count": len(reports),
         "site_count": site_count,
@@ -346,6 +437,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         "overdue_count": overdue_count,
         "upcoming_event_count": upcoming_count,
         "attention_project_count": attention_project_count,
+        "action_projects": action_projects[:8],
     }
 
 

@@ -168,6 +168,19 @@
         {% else %}<div class="empty">No management brief is available.</div>{% endif %}
       </section>
 
+      <section class="card action-queue">
+        <h2>Meeting Action Queue</h2>
+        {% for action in report.action_queue %}
+        <div class="row">
+          <div>
+            <div class="row-title">{{ action.title }}</div>
+            <div class="row-meta">{{ action.source }}{% if action.detail %} / {{ action.detail }}{% endif %}</div>
+          </div>
+          <div class="when{% if action.priority == 'high' %} danger{% endif %}">{{ action.due[:16] if action.due else action.priority }}</div>
+        </div>
+        {% endfor %}
+      </section>
+
       <section class="grid">
         <div class="stat"><div class="stat-label">Project Tasks</div><div class="stat-value">{{ report.counts.project_work_tasks }}</div></div>
         <div class="stat"><div class="stat-label">Calendar</div><div class="stat-value">{{ report.counts.calendar_events }}</div></div>

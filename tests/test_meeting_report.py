@@ -122,6 +122,7 @@ def test_meeting_packet_json_linked_event(auth_client, temp_app):
     assert body["project"]["project_number"] == "7711.20"
     assert body["project_report"]["counts"]["project_work_tasks"] == 1
     assert body["project_report"]["management_brief"]["attention_level"] in {"active", "scheduled"}
+    assert body["project_report"]["action_queue"][0]["title"] == "Prepare for Management sync"
     assert body["project_report"]["operator_overlay"]["report_note"] == "Meeting report note"
     assert body["project_report"]["operator_overlay"]["internal_notes"] == ""
     assert "Meeting internal secret" not in str(body)
@@ -224,6 +225,8 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     html = r.get_data(as_text=True)
     assert "Meeting Packet" in html
     assert "Project Management Brief" in html
+    assert "Meeting Action Queue" in html
+    assert "Prepare for Management sync" in html
     assert "Meeting report note" in html
     assert "Meeting internal secret" not in html
     assert "Management sync" in html

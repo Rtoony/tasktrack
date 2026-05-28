@@ -100,6 +100,9 @@ def test_project_report_json_summary_and_privacy(auth_client, temp_app):
     assert body["management_brief"]["attention_level"] == "at_risk"
     assert body["management_brief"]["overdue_count"] == 1
     assert body["management_brief"]["top_overdue"][0]["title"] == "Late exhibit"
+    assert body["action_queue"][0]["priority"] == "high"
+    assert body["action_queue"][0]["title"] == "Resolve overdue Project Tasks: Late exhibit"
+    assert any(action["title"] == "Management note" for action in body["action_queue"])
     assert body["operator_overlay"]["operator_status"] == "Needs PM review"
     assert body["operator_overlay"]["priority"] == "High"
     assert body["operator_overlay"]["report_note"] == "Management-facing overlay note"
@@ -120,6 +123,8 @@ def test_project_report_html_renders(auth_client, temp_app):
     html = r.get_data(as_text=True)
     assert "Project Status" in html
     assert "Management Brief" in html
+    assert "Management Action Queue" in html
+    assert "Resolve overdue Project Tasks: Late exhibit" in html
     assert "TaskTrack Overlay" in html
     assert "Management-facing overlay note" in html
     assert "Internal-only project context" not in html
@@ -326,6 +331,8 @@ def test_portfolio_project_report_filters_summary_and_privacy(auth_client, temp_
     assert body["summary"]["site_count"] == 1
     assert body["summary"]["overdue_count"] == 1
     assert body["summary"]["attention_project_count"] == 1
+    assert body["summary"]["action_projects"][0]["project_number"] == "8800.10"
+    assert body["summary"]["action_projects"][0]["primary_action"] == "Resolve overdue Project Tasks: Portfolio late item"
     assert body["include_private"] is False
     report = body["reports"][0]
     assert report["project"]["project_number"] == "8800.10"
@@ -351,6 +358,9 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     html = r.get_data(as_text=True)
     assert "Portfolio Project Packet" in html
     assert "At Risk Projects" in html
+    assert "Management Action Queue" in html
+    assert "What to discuss first" in html
+    assert "Resolve overdue Project Tasks: Portfolio late item" in html
     assert "Brief:" in html
     assert "Overlay:" in html
     assert "Portfolio one" in html
