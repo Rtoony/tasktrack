@@ -363,12 +363,13 @@ def test_portfolio_project_report_auth_and_dashboard_link(client, auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert 'href="/reports/projects"' in html
+    assert 'href="/reports"' in html
 
     with client.session_transaction() as s:
         s.clear()
     assert client.get("/api/v1/reports/projects").status_code == 401
     assert client.get("/reports/projects").status_code == 302
+    assert client.get("/reports").status_code == 302
 
 def test_project_report_errors_and_auth(client, auth_client):
     assert auth_client.get("/api/v1/reports/project").status_code == 400
@@ -563,3 +564,25 @@ def test_portfolio_report_html_exposes_preset_controls(auth_client):
     assert "savePortfolioPreset" in html
     assert "updatePortfolioPreset" in html
     assert "deletePortfolioPreset" in html
+
+def test_reports_home_renders_command_center(client, auth_client):
+    preset = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Management review",
+        "surface": "portfolio",
+        "filters": {"client": "Acme", "limit": 5},
+    }).get_json()
+
+    r = auth_client.get("/reports")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Report Center" in html
+    assert "Project Status One-Pager" in html
+    assert "Upcoming Meeting Packets" in html
+    assert "loadUpcomingMeetingPackets" in html
+    assert "openProjectReport" in html
+    assert f'/reports/projects?preset={preset["id"]}' in html
+    assert "Management review" in html
+
+    with client.session_transaction() as s:
+        s.clear()
+    assert client.get("/reports").status_code == 302

@@ -226,6 +226,21 @@ def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict,
     }, None
 
 
+@bp.route("/reports", methods=["GET"])
+@login_required
+def reports_home():
+    sess = get_session()
+    presets = sess.scalars(_visible_presets_stmt(
+        "portfolio", user_id=session.get("user_id"), is_admin=_is_admin(),
+    )).all()
+    return render_template(
+        "reports_home.html",
+        presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
 @bp.route("/api/v1/reports/presets", methods=["GET"])
 @login_required
 def report_presets_list():
