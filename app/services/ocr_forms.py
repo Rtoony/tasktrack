@@ -207,6 +207,132 @@ def _capture_text(*, form: dict | None, fields: dict[str, str], raw_text: str,
     return "\n".join(line for line in lines if line is not None).strip()
 
 
+
+def _first_line(*values: str, fallback: str = "OCR intake request") -> str:
+    for value in values:
+        text = _clean(value)
+        if text:
+            return text.splitlines()[0].strip()[:180]
+    return fallback
+
+
+def _body_from_parsed(parsed: dict) -> str:
+    lines: list[str] = []
+    if parsed.get("request_summary"):
+        lines.extend(["Request summary:", parsed["request_summary"], ""])
+    if parsed.get("requested_action"):
+        lines.extend(["Requested action:", parsed["requested_action"], ""])
+    if parsed.get("follow_up_questions"):
+        lines.extend(["Follow-up questions:", parsed["follow_up_questions"], ""])
+    return "\n".join(lines).strip()
+
+
+def printable_form_record_payload(parsed: dict, *, created_by_user_id=None,
+                                  created_by_name: str = "") -> tuple[str, dict, str | None]:
+    """Build a direct-create payload from parsed printable-form OCR.
+
+    Returns ``(target_table, payload, error)``. The payload intentionally
+    marks records for review because OCR can misread handwritten content.
+    """
+    if not parsed.get("detected"):
+        return "", {}, "known TaskTrack FORM_ID is required for direct create"
+
+    target = _clean(parsed.get("target_table") or parsed.get("capture_target"))
+    if target not in {"work_tasks", "project_work_tasks", "training_tasks", "personal_items"}:
+        return "", {}, f"direct create is not supported for {target or 'unknown target'}"
+
+    form_title = _clean(parsed.get("form_title")) or "Printable intake form"
+    source = _clean(parsed.get("source")) or "paper-form"
+    form_id = _clean(parsed.get("form_id"))
+    project_number = _clean(parsed.get("project_number"))
+    requested_by = _clean(parsed.get("requested_by"))
+    priority = _clean(parsed.get("priority")) or "Medium"
+    due_date = _clean(parsed.get("due_date"))
+    body = _body_from_parsed(parsed)
+    raw_text = _clean((parsed.get("prefill") or {}).get("text")) or body
+    title = _first_line(
+        parsed.get("request_summary", ""),
+        parsed.get("requested_action", ""),
+        fallback=form_title,
+    )
+
+    common = {
+        "source": source[:32],
+        "created_by_user_id": created_by_user_id,
+        "created_by_name": created_by_name or "",
+    }
+
+    if target == "project_work_tasks":
+        if not project_number:
+            return "", {}, "project_number is required to create a Project Task from this form"
+        payload = {
+            **common,
+            "title": title,
+            "project_number": project_number,
+            "project_name": project_number,
+            "engineer": requested_by,
+            "task_description": body or raw_text,
+            "priority": priority,
+            "status": "Not Started",
+            "due_at": f"{due_date}T17:00" if due_date else "",
+            "notes": f"Created from {form_id or form_title}",
+            "needs_review": 1,
+            "ai_raw_input": raw_text[:8000],
+            "ai_model": "ocr-form-parser",
+        }
+        return target, payload, None
+
+    if target == "work_tasks":
+        payload = {
+            **common,
+            "title": title,
+            "cad_skill_area": "Paper intake",
+            "description": body or raw_text,
+            "requested_by": requested_by,
+            "request_reference": form_id,
+            "priority": priority,
+            "status": "Not Started",
+            "due_date": due_date,
+            "notes": f"Created from {form_title}",
+            "needs_review": 1,
+            "ai_raw_input": raw_text[:8000],
+            "ai_model": "ocr-form-parser",
+            "project_number": project_number,
+        }
+        return target, payload, None
+
+    if target == "training_tasks":
+        payload = {
+            **common,
+            "title": title,
+            "trainees": requested_by,
+            "requested_by": requested_by,
+            "skill_area": "Paper intake",
+            "training_goals": body or raw_text,
+            "additional_context": f"Created from {form_id or form_title}",
+            "priority": priority,
+            "status": "Not Started",
+            "due_date": due_date,
+            "notes": "",
+            "needs_review": 1,
+            "ai_raw_input": raw_text[:8000],
+            "ai_model": "ocr-form-parser",
+            "project_number": project_number,
+        }
+        return target, payload, None
+
+    payload = {
+        **common,
+        "title": title,
+        "category": "Follow-up",
+        "body": body or raw_text,
+        "priority": priority,
+        "status": "New",
+        "due_date": due_date,
+        "source_ref": form_id,
+    }
+    return target, payload, None
+
 def parse_printable_form_ocr(text: str, *, source_ref: str = "") -> dict:
     """Parse OCR text from the printable packet into a capture prefill."""
     raw_text = _clean(text)
@@ -279,4 +405,8 @@ def parse_printable_form_ocr(text: str, *, source_ref: str = "") -> dict:
     }
 
 
-__all__ = ["PRINTABLE_REQUEST_FORMS", "parse_printable_form_ocr"]
+__all__ = [
+    "PRINTABLE_REQUEST_FORMS",
+    "parse_printable_form_ocr",
+    "printable_form_record_payload",
+]

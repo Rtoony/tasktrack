@@ -1,5 +1,7 @@
 """OCR parsing for printable intake forms."""
-from app.services.ocr_forms import parse_printable_form_ocr
+from app.db import get_session
+from app.models import PersonalItem, ProjectWorkTask
+from app.services.ocr_forms import parse_printable_form_ocr, printable_form_record_payload
 
 
 PROJECT_WORK_OCR = """FORM_ID: TT-PROJECT-WORK-REQUEST
@@ -105,3 +107,85 @@ def test_dashboard_capture_accepts_paper_form_prefill(auth_client):
     html = r.get_data(as_text=True)
     assert "Paper / printable form" in html
     assert "values.due_date" in html
+
+
+
+def test_printable_form_record_payload_builds_project_task_payload():
+    parsed = parse_printable_form_ocr(PROJECT_WORK_OCR, source_ref="rm-page-12")
+
+    table, payload, error = printable_form_record_payload(
+        parsed, created_by_user_id=4, created_by_name="OCR Tester"
+    )
+
+    assert error is None
+    assert table == "project_work_tasks"
+    assert payload["project_number"] == "2301.04"
+    assert payload["project_name"] == "2301.04"
+    assert payload["engineer"] == "Mike from Survey"
+    assert payload["priority"] == "High"
+    assert payload["due_at"] == "2026-06-03T17:00"
+    assert payload["needs_review"] == 1
+    assert payload["source"] == "paper-form"
+    assert payload["ai_model"] == "ocr-form-parser"
+    assert payload["created_by_user_id"] == 4
+
+
+def test_ocr_create_api_creates_project_work_review_item(auth_client, temp_app):
+    r = auth_client.post("/api/v1/intake/ocr/create", json={
+        "text": PROJECT_WORK_OCR,
+        "source_ref": "rm-page-12",
+    })
+
+    assert r.status_code == 201
+    body = r.get_json()
+    assert body["created"]["table"] == "project_work_tasks"
+    assert body["parsed"]["form_id"] == "TT-PROJECT-WORK-REQUEST"
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.get(ProjectWorkTask, body["created"]["id"])
+        assert row is not None
+        assert row.project_number == "2301.04"
+        assert row.source == "paper-form"
+        assert row.needs_review == 1
+        assert row.ai_model == "ocr-form-parser"
+        assert row.created_by_user_id == 1
+        assert "grading plan revised" in row.task_description
+        assert "rm-page-12" in row.ai_raw_input
+
+
+def test_ocr_create_api_creates_internal_followup_item(auth_client, temp_app):
+    r = auth_client.post("/api/v1/intake/ocr/create", json={"text": """FORM_ID: TT-GENERAL-FOLLOW-UP
+TARGET_TABLE: personal_items
+REQUESTOR: Office Manager
+DUE_DATE: 2026-06-04
+REQUEST_SUMMARY:
+Ask about the plotter maintenance schedule.
+REQUESTED_ACTION:
+Confirm vendor date and update the office.
+"""})
+
+    assert r.status_code == 201
+    body = r.get_json()
+    assert body["created"]["table"] == "personal_items"
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.get(PersonalItem, body["created"]["id"])
+        assert row is not None
+        assert row.category == "Follow-up"
+        assert row.source == "paper-form"
+        assert row.source_ref == "TT-GENERAL-FOLLOW-UP"
+        assert row.due_date == "2026-06-04"
+        assert "plotter maintenance" in row.body
+
+
+def test_ocr_create_api_rejects_generic_ocr_text(auth_client):
+    r = auth_client.post("/api/v1/intake/ocr/create", json={
+        "text": "Please fix the CAD label on project 2301.04 by Friday.",
+    })
+
+    assert r.status_code == 400
+    body = r.get_json()
+    assert "FORM_ID" in body["error"]
+    assert body["parsed"]["detected"] is False

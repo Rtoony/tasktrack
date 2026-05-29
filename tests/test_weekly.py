@@ -4,7 +4,7 @@ Aggregator is pure-data so we exercise it directly; route layer is
 exercised via the Flask test client for auth gating + admin-only
 buckets + days clamping.
 """
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from app.db import get_session
 from app.models import (
@@ -88,7 +88,7 @@ def test_active_excludes_done(temp_app):
 def test_overdue_counts(temp_app):
     """A row with status active and due_date in the past should count as
     overdue_now in its bucket and roll up to totals."""
-    yesterday = (datetime.now(tz=UTC) - timedelta(days=1)).date().isoformat()
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
     with temp_app.app_context():
         sess = get_session()
         sess.add(WorkTask(title="late", status="In Progress",

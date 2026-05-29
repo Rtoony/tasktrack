@@ -28,7 +28,11 @@ from .. import profile as _profile
 from ..auth import login_required
 from ..config import ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
 from ..db import get_session
-from ..services.ocr_forms import PRINTABLE_REQUEST_FORMS, parse_printable_form_ocr
+from ..services.ocr_forms import (
+    PRINTABLE_REQUEST_FORMS,
+    parse_printable_form_ocr,
+    printable_form_record_payload,
+)
 from ..services.tickets import build_weekly_submission_rows, create_direct_record
 
 bp = Blueprint("intake", __name__)
@@ -121,18 +125,58 @@ def printable_request_forms():
     )
 
 
+def _ocr_request_payload():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    source_ref = (data.get("source_ref") or "").strip()
+    if not text:
+        return data, text, source_ref, jsonify({"error": "text is required"}), 400
+    return data, text, source_ref, None, 200
+
+
 @bp.route("/api/v1/intake/ocr/parse", methods=["POST"])
 @login_required
 def parse_ocr_intake():
-    data = request.get_json(silent=True) or {}
-    text = (data.get("text") or "").strip()
-    if not text:
-        return jsonify({"error": "text is required"}), 400
-    parsed = parse_printable_form_ocr(
-        text,
-        source_ref=(data.get("source_ref") or "").strip(),
-    )
+    _data, text, source_ref, error_response, status = _ocr_request_payload()
+    if error_response is not None:
+        return error_response, status
+    parsed = parse_printable_form_ocr(text, source_ref=source_ref)
     return jsonify(parsed)
+
+
+@bp.route("/api/v1/intake/ocr/create", methods=["POST"])
+@login_required
+def create_ocr_intake():
+    _data, text, source_ref, error_response, status = _ocr_request_payload()
+    if error_response is not None:
+        return error_response, status
+
+    parsed = parse_printable_form_ocr(text, source_ref=source_ref)
+    table, payload, error = printable_form_record_payload(
+        parsed,
+        created_by_user_id=session.get("user_id"),
+        created_by_name=session.get("user_name", ""),
+    )
+    if error:
+        return jsonify({"error": error, "parsed": parsed}), 400
+
+    sess = get_session()
+    new_id, create_error = create_direct_record(
+        sess,
+        table,
+        payload,
+        "OCR Intake",
+        action="created",
+        action_detail=f"OCR form ({parsed.get('form_id') or table})",
+    )
+    if create_error:
+        sess.rollback()
+        return jsonify({"error": create_error, "parsed": parsed}), 400
+    sess.commit()
+    return jsonify({
+        "created": {"table": table, "id": new_id},
+        "parsed": parsed,
+    }), 201
 
 
 @bp.route("/intake/project-work", methods=["GET", "POST"])

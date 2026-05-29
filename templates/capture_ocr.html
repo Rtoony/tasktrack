@@ -83,7 +83,8 @@
     </div>
     <div class="actions">
       <button class="btn secondary" type="button" onclick="parseOcrForm(true)">Parse OCR Form</button>
-      <button class="btn" type="button" onclick="sendToCapture()">Send To Dashboard Capture</button>
+      <button class="btn" type="button" onclick="createReviewItem()">Create Review Item</button>
+      <button class="btn secondary" type="button" onclick="sendToCapture()">Send To Dashboard Capture</button>
       <button class="btn secondary" type="button" onclick="clearForm()">Clear</button>
       <a class="btn secondary" href="/?capture_source=remarkable-ocr">Open Empty Capture</a>
       <span class="status" id="parse_status"></span>
@@ -104,7 +105,7 @@
   </section>
 
   <section class="card">
-    <div class="note">Recommended workflow: write freely on the tablet, export/OCR text, paste it here, then let TaskTrack triage it into a task, project follow-up, training item, or calendar action. Known printable packets are detected as source <code>paper-form</code>; freeform tablet notes stay <code>remarkable-ocr</code>. Keep this as an intake lane; the tablet should not become the database of record.</div>
+    <div class="note">Recommended workflow: for known printable forms, use <strong>Create Review Item</strong> to create the tracker/internal item directly with a review flag. For messy freeform tablet notes, use <strong>Send To Dashboard Capture</strong> and let the AI triage step draft the task. Known printable packets are detected as source <code>paper-form</code>; freeform tablet notes stay <code>remarkable-ocr</code>. Keep this as an intake lane; the tablet should not become the database of record.</div>
   </section>
 </main>
 <script>
@@ -186,6 +187,30 @@ function fallbackPrefill(text) {
     text: lines.join('\n'),
   };
 }
+async function createReviewItem() {
+  const text = document.getElementById('ocr_text').value.trim();
+  if (!text) { alert('Paste OCR text first.'); return; }
+  setParseStatus('Creating review item...');
+  const res = await fetch('/api/v1/intake/ocr/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ text, source_ref: document.getElementById('source_ref').value.trim() })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    if (body.parsed) { parsedOcr = body.parsed; renderParsed(body.parsed); applyParsedToForm(body.parsed); }
+    setParseStatus(body.error || 'Could not create review item', 'error');
+    return;
+  }
+  parsedOcr = body.parsed;
+  renderParsed(body.parsed);
+  applyParsedToForm(body.parsed);
+  const created = body.created || {};
+  setParseStatus(`Created ${created.table || 'item'} #${created.id || ''}.`, 'ok');
+  const tab = ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', personal_items:'followup'})[created.table] || 'triage';
+  setTimeout(() => { window.location = '/?tab=' + encodeURIComponent(tab); }, 650);
+}
+
 async function sendToCapture() {
   const text = document.getElementById('ocr_text').value.trim();
   if (!text) { alert('Paste OCR text first.'); return; }
