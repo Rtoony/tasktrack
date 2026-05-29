@@ -18,7 +18,7 @@
   main { max-width:1220px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
   h1 { font-size:1.65rem; margin-bottom:0.25rem; }
   .sub { color:var(--text-muted); max-width:880px; margin-bottom:1rem; }
-  .card,.stat,.hero { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 18px 38px rgba(0,0,0,0.14); }
+  .card,.stat,.hero,.cover-sheet { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 18px 38px rgba(0,0,0,0.14); }
   .hero { padding:1rem; margin-bottom:1rem; display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; }
   .hero-title { font-size:1.2rem; font-weight:700; }
   .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
@@ -35,6 +35,19 @@
   .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(56,189,248,0.35); }
   .card { padding:1rem; margin-bottom:1rem; }
   .card h2 { font-size:1rem; margin-bottom:0.5rem; }
+  .section-kicker { color:var(--accent); font-family:'IBM Plex Mono', monospace; text-transform:uppercase; letter-spacing:0.08em; font-size:0.66rem; margin-bottom:0.3rem; }
+  .cover-sheet { padding:1.1rem; margin-bottom:1rem; }
+  .cover-grid { display:grid; grid-template-columns:1.25fr 0.75fr; gap:1rem; align-items:start; }
+  .cover-title { font-size:1.42rem; font-weight:700; margin-bottom:0.35rem; }
+  .summary-list { display:grid; gap:0.55rem; margin-top:0.85rem; }
+  .summary-item { border-left:3px solid var(--accent); padding:0.1rem 0 0.1rem 0.65rem; }
+  .summary-item.danger { border-color:var(--danger); }
+  .summary-item.warn { border-color:var(--warn); }
+  .summary-item.ok { border-color:var(--ok); }
+  .summary-label { color:var(--text-dim); font-family:'IBM Plex Mono', monospace; font-size:0.64rem; text-transform:uppercase; letter-spacing:0.08em; }
+  .summary-title { font-weight:700; margin-top:0.08rem; }
+  .summary-detail { color:var(--text-muted); font-size:0.78rem; margin-top:0.12rem; }
+  .packet-section { scroll-margin-top:70px; }
   .stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
   .stat { padding:0.75rem; }
   .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
@@ -54,8 +67,8 @@
   .print-title { font-size:1.15rem; font-weight:700; margin-top:0.12rem; }
   .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
   .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
-  @media (max-width: 980px) { .filters,.stats,.grid { grid-template-columns:1fr; } .hero { flex-direction:column; } .actions { justify-content:flex-start; } .nav a { margin-left:0.5rem; } }
-  @media print { @page { size:letter; margin:0.45in; } body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; } header,.filters,.nav,.btn,.screen-only { display:none !important; } main { max-width:none; padding:0 0 0.15in; } .print-only { display:block !important; } .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; } .print-eyebrow,.print-meta { color:#4b5563; } .card,.hero,.stat { border-color:#d1d5db; background:#fff; box-shadow:none; break-inside:avoid; } .hero,.card { padding:0.12in; margin-bottom:0.12in; } .stats { grid-template-columns:repeat(6,1fr); gap:0.08in; margin-bottom:0.12in; } .stat { padding:0.08in; } .stat-value { color:#111827; font-size:13pt; } .row { border-color:#e5e7eb; padding:0.05in 0; } .row-title { white-space:normal; } .when { color:#374151; } }
+  @media (max-width: 980px) { .filters,.stats,.grid,.cover-grid { grid-template-columns:1fr; } .preset-row { grid-template-columns:1fr; } .hero { flex-direction:column; } .actions { justify-content:flex-start; } .nav a { margin-left:0.5rem; } }
+  @media print { @page { size:letter; margin:0.45in; } body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; } header,.filters,.nav,.btn,.screen-only { display:none !important; } main { max-width:none; padding:0 0 0.15in; } .print-only { display:block !important; } .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; } .print-eyebrow,.print-meta,.summary-label { color:#4b5563; } .card,.hero,.stat,.cover-sheet { border-color:#d1d5db; background:#fff; box-shadow:none; break-inside:avoid; } .cover-sheet,.hero,.card { padding:0.12in; margin-bottom:0.12in; } .cover-grid { grid-template-columns:1.35fr 0.65fr; } .cover-title { font-size:15pt; } .summary-list { gap:0.06in; margin-top:0.08in; } .summary-item { border-color:#111827; } .stats { grid-template-columns:repeat(6,1fr); gap:0.08in; margin-bottom:0.12in; } .stat { padding:0.08in; } .stat-value { color:#111827; font-size:13pt; } .packet-section { break-inside:avoid; } .cover-only .detail-section { display:none !important; } .cover-only .cover-sheet { min-height:8.75in; } .row { border-color:#e5e7eb; padding:0.05in 0; } .row-title { white-space:normal; } .when { color:#374151; } }
 </style>
 </head>
 <body>
@@ -72,7 +85,7 @@
     </nav>
   </div>
 </header>
-<main>
+<main class="{{ 'cover-only' if packet.cover_page else '' }}">
   <section class="print-masthead print-only" aria-label="Printable packet header">
     <div>
       <div class="print-eyebrow">TaskTrack Management Packet</div>
@@ -111,16 +124,46 @@
       <div><label for="intake_limit">Intake Items</label><input id="intake_limit" name="intake_limit" value="{{ packet.intake_limit }}" inputmode="numeric"></div>
       <label class="checkline"><input type="checkbox" name="include_private" value="1" {% if packet.include_private %}checked{% endif %}> Include my private events</label>
       {% if user_role == 'admin' %}<label class="checkline"><input type="checkbox" name="include_incidents" value="1" {% if packet.include_incidents %}checked{% endif %}> Include incidents</label>{% endif %}
+      <label class="checkline"><input type="checkbox" name="cover_page" value="1" {% if packet.cover_page %}checked{% endif %}> Cover page only</label>
       <div class="actions">
         <a class="btn secondary" href="/api/v1/reports/management?{{ request.query_string.decode('utf-8') }}">JSON</a>
         <button class="btn secondary" type="submit">Refresh</button>
+        <button class="btn secondary" type="button" onclick="printCoverPage()">Print Cover</button>
         <button class="btn" type="button" onclick="window.print()">Print Packet</button>
       </div>
       </div>
     </form>
   </section>
 
-  <section class="hero">
+  <section class="cover-sheet packet-section" aria-label="Management packet cover sheet">
+    <div class="cover-grid">
+      <div>
+        <div class="section-kicker">Management cover sheet</div>
+        <div class="cover-title">{{ packet.portfolio.summary.executive_summary.headline }}</div>
+        <div class="meta"><strong>Recommended next step:</strong> {{ packet.portfolio.summary.executive_summary.recommendation }}</div>
+        <div class="summary-list">
+          {% for item in packet.action_summary %}
+          <div class="summary-item {{ item.tone }}">
+            <div class="summary-label">{{ item.label }}</div>
+            <div class="summary-title">{{ item.title }}</div>
+            <div class="summary-detail">{{ item.detail }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <div class="section-kicker">Packet scope</div>
+        <div class="row"><div><div class="row-title">Generated</div><div class="meta">{{ packet.generated_at[:16] }}</div></div><div class="when">now</div></div>
+        <div class="row"><div><div class="row-title">Meeting window</div><div class="meta">Next {{ packet.days }} day{{ '' if packet.days == 1 else 's' }} / {{ packet.meeting_limit }} packet limit</div></div><div class="when">calendar</div></div>
+        <div class="row"><div><div class="row-title">Project packet</div><div class="meta">{{ packet.project_limit }} project limit / {{ packet.at_risk.summary.attention_project_count }} at risk</div></div><div class="when">portfolio</div></div>
+        <div class="row"><div><div class="row-title">Intake review</div><div class="meta">Last {{ packet.intake_days }} day{{ '' if packet.intake_days == 1 else 's' }} / {{ packet.intake.summary.needs_review_count }} need review</div></div><div class="when">forms</div></div>
+        <div class="row"><div><div class="row-title">Privacy</div><div class="meta">Private events {{ 'included' if packet.include_private else 'excluded' }}{% if packet.is_admin %}; incidents {{ 'included' if packet.include_incidents else 'excluded' }}{% endif %}</div></div><div class="when">policy</div></div>
+        {% if packet.selected_preset %}<div class="row"><div><div class="row-title">Preset</div><div class="meta">{{ packet.selected_preset.name }}</div></div><div class="when">saved</div></div>{% endif %}
+      </div>
+    </div>
+  </section>
+
+  <section class="hero detail-section">
     <div>
       <div class="hero-title">{{ packet.portfolio.summary.executive_summary.headline }}</div>
       <div class="hero-meta"><strong>Recommended next step:</strong> {{ packet.portfolio.summary.executive_summary.recommendation }}</div>
@@ -133,7 +176,7 @@
     </div>
   </section>
 
-  <section class="stats">
+  <section class="stats detail-section">
     <div class="stat"><div class="stat-label">Projects</div><div class="stat-value">{{ packet.portfolio.summary.project_count }}</div></div>
     <div class="stat"><div class="stat-label">At Risk</div><div class="stat-value{% if packet.at_risk.summary.attention_project_count %} danger{% endif %}">{{ packet.at_risk.summary.attention_project_count }}</div></div>
     <div class="stat"><div class="stat-label">Overdue</div><div class="stat-value{% if packet.portfolio.summary.overdue_count %} danger{% endif %}">{{ packet.portfolio.summary.overdue_count }}</div></div>
@@ -142,7 +185,8 @@
     <div class="stat"><div class="stat-label">Incidents</div><div class="stat-value{% if packet.incidents and packet.incidents.summary.open_count %} danger{% endif %}">{{ packet.incidents.summary.open_count if packet.incidents else 0 }}</div></div>
   </section>
 
-  <section class="card">
+  <section class="card packet-section detail-section">
+    <div class="section-kicker">Portfolio</div>
     <h2>Executive Portfolio Summary</h2>
     <div class="row">
       <div>
@@ -154,7 +198,8 @@
     <div class="meta">Attention mix: {{ packet.portfolio.summary.attention_counts.at_risk }} at risk / {{ packet.portfolio.summary.attention_counts.scheduled }} scheduled / {{ packet.portfolio.summary.attention_counts.active }} active / {{ packet.portfolio.summary.attention_counts.quiet }} quiet.</div>
   </section>
 
-  <section class="card">
+  <section class="card packet-section detail-section">
+    <div class="section-kicker">Action queue</div>
     <h2>Management Action Queue</h2>
     {% if packet.at_risk.summary.action_projects %}
       {% for row in packet.at_risk.summary.action_projects %}
@@ -170,8 +215,9 @@
     {% else %}<div class="empty">No at-risk projects are visible under the current filters.</div>{% endif %}
   </section>
 
-  <div class="grid">
-    <section class="card">
+  <div class="grid detail-section">
+    <section class="card packet-section">
+      <div class="section-kicker">Intake</div>
       <h2>Intake Review Summary</h2>
       {% if packet.intake.rows %}
         {% for row in packet.intake.rows %}
@@ -187,7 +233,8 @@
       {% else %}<div class="empty">No web, paper, or OCR intake records need review.</div>{% endif %}
     </section>
 
-    <section class="card">
+    <section class="card packet-section">
+      <div class="section-kicker">Calendar</div>
       <h2>Meeting Prep</h2>
       {% if packet.meetings.packets %}
         {% for item in packet.meetings.packets %}
@@ -205,7 +252,8 @@
   </div>
 
   {% if packet.incidents %}
-  <section class="card">
+  <section class="card packet-section detail-section">
+    <div class="section-kicker">Admin only</div>
     <h2>Incident Summary</h2>
     <div class="meta" style="margin-bottom:0.5rem">{{ packet.incidents.summary.open_count }} open / {{ packet.incidents.summary.high_severity_count }} high severity / {{ packet.incidents.summary.follow_up_due_count }} follow-up due.</div>
     {% if packet.incidents.incidents %}
@@ -228,6 +276,12 @@
 function applyManagementPreset(id) {
   window.location = id ? `/reports/management?preset=${encodeURIComponent(id)}` : '/reports/management';
 }
+function printCoverPage() {
+  const box = document.querySelector('[name="cover_page"]');
+  if (box) box.checked = true;
+  document.querySelector('main').classList.add('cover-only');
+  window.print();
+}
 function selectedManagementPresetName() {
   const selected = document.getElementById('management-preset').selectedOptions[0];
   return selected && selected.value ? selected.textContent.replace(' (shared)', '') : 'Management Review';
@@ -244,7 +298,8 @@ function managementFiltersFromForm() {
     project_limit: value('project_limit'),
     intake_days: value('intake_days'),
     intake_limit: value('intake_limit'),
-    include_private: boolFromCheckbox('include_private')
+    include_private: boolFromCheckbox('include_private'),
+    cover_page: boolFromCheckbox('cover_page')
   };
   const incidents = document.querySelector('[name="include_incidents"]');
   if (incidents) filters.include_incidents = incidents.checked;

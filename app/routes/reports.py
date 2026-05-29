@@ -45,7 +45,7 @@ _MEETING_TEXT_FILTER_KEYS = {"project_number", "event_type"}
 _MEETING_BOOL_FILTER_KEYS = {"include_private"}
 _MEETING_LIMIT_FILTER_KEYS = {"days", "limit"}
 _MEETING_FILTER_KEYS = _MEETING_TEXT_FILTER_KEYS | _MEETING_BOOL_FILTER_KEYS | _MEETING_LIMIT_FILTER_KEYS
-_MANAGEMENT_BOOL_FILTER_KEYS = {"include_private", "include_incidents"}
+_MANAGEMENT_BOOL_FILTER_KEYS = {"include_private", "include_incidents", "cover_page"}
 _MANAGEMENT_LIMIT_FILTER_KEYS = {
     "days", "meeting_limit", "project_limit", "intake_days", "intake_limit",
 }
@@ -438,6 +438,44 @@ def _management_context(sess):
     return filters, selected, None, 200
 
 
+def _management_action_summary(*, at_risk: dict, meetings: dict, intake: dict, incidents: dict | None) -> list[dict]:
+    """Return the packet's top management talking points from visible data."""
+    items: list[dict] = []
+    action_projects = (at_risk.get("summary") or {}).get("action_projects") or []
+    if action_projects:
+        first = action_projects[0]
+        title = f"{len(action_projects)} at-risk project{'s' if len(action_projects) != 1 else ''}"
+        detail = first.get("primary_action") or first.get("headline") or "Review project action queue."
+        if first.get("project_number"):
+            detail = f"{first.get('project_number')}: {detail}"
+        items.append({"label": "Project risk", "title": title, "detail": detail, "tone": "danger"})
+
+    intake_count = int((intake.get("summary") or {}).get("needs_review_count") or 0)
+    if intake_count:
+        first_intake = (intake.get("rows") or [{}])[0]
+        detail = first_intake.get("title") or first_intake.get("detail") or "Review intake queue."
+        items.append({"label": "Intake", "title": f"{intake_count} request{'s' if intake_count != 1 else ''} need review", "detail": detail, "tone": "warn"})
+
+    meeting_count = int(meetings.get("count") or 0)
+    if meeting_count:
+        first_packet = (meetings.get("packets") or [{}])[0]
+        event = first_packet.get("event") or {}
+        detail = event.get("title") or "Review upcoming meeting packet."
+        if event.get("project_number"):
+            detail = f"{event.get('project_number')}: {detail}"
+        items.append({"label": "Meetings", "title": f"{meeting_count} packet{'s' if meeting_count != 1 else ''} ready", "detail": detail, "tone": "accent"})
+
+    incident_count = int(((incidents or {}).get("summary") or {}).get("open_count") or 0)
+    if incident_count:
+        first_incident = ((incidents or {}).get("incidents") or [{}])[0]
+        detail = first_incident.get("issue_description") or "Review admin incident queue."
+        items.append({"label": "Incidents", "title": f"{incident_count} open incident{'s' if incident_count != 1 else ''}", "detail": detail, "tone": "danger"})
+
+    if not items:
+        items.append({"label": "Status", "title": "No immediate management blockers", "detail": "No visible at-risk projects, review intake, upcoming packets, or open incidents matched this packet.", "tone": "ok"})
+    return items
+
+
 def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict, str | None]:
     name = str(data.get("name") or "").strip()
     if not name:
@@ -563,6 +601,7 @@ def _management_packet(sess, *, filters: dict | None = None, selected: ReportPre
     include_incidents = is_admin and (
         bool(filters.get("include_incidents")) if "include_incidents" in filters else True
     )
+    cover_page = bool(filters.get("cover_page"))
     meeting_days = _int_arg_value(filters.get("days"), 7, 1, 30)
     meeting_limit = _int_arg_value(filters.get("meeting_limit"), 8, 1, 25)
     project_limit = _int_arg_value(filters.get("project_limit"), 12, 1, MAX_PORTFOLIO_LIMIT)
@@ -602,11 +641,18 @@ def _management_packet(sess, *, filters: dict | None = None, selected: ReportPre
         sess,
         filters={"open_only": True, "limit": 8, "days": 365},
     ) if include_incidents else None
+    action_summary = _management_action_summary(
+        at_risk=at_risk,
+        meetings=meetings,
+        intake=intake,
+        incidents=incidents,
+    )
 
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "include_private": include_private,
         "include_incidents": include_incidents,
+        "cover_page": cover_page,
         "is_admin": is_admin,
         "days": meeting_days,
         "meeting_limit": meeting_limit,
@@ -618,6 +664,7 @@ def _management_packet(sess, *, filters: dict | None = None, selected: ReportPre
         "meetings": meetings,
         "intake": intake,
         "incidents": incidents,
+        "action_summary": action_summary,
         "selected_preset": _preset_to_dict(selected, include_filters=False) if selected else None,
     }
 

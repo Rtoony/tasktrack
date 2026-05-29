@@ -731,6 +731,9 @@ def test_management_packet_json_html_and_admin_incidents(auth_client, temp_app):
     assert body["intake"]["summary"]["needs_review_count"] == 1
     assert body["intake"]["rows"][0]["detail"] == "Review before the management meeting."
     assert body["incidents"] is None
+    assert body["cover_page"] is False
+    assert body["action_summary"][0]["label"] == "Project risk"
+    assert "at-risk project" in body["action_summary"][0]["title"]
     assert "Private portfolio prep" not in str(body)
     assert "Sensitive management incident" not in str(body)
 
@@ -743,6 +746,10 @@ def test_management_packet_json_html_and_admin_incidents(auth_client, temp_app):
     assert "Management Action Queue" in html
     assert "Intake Review Summary" in html
     assert "Meeting Prep" in html
+    assert "Management cover sheet" in html
+    assert "Packet scope" in html
+    assert "Print Cover" in html
+    assert "Cover page only" in html
     assert "Management intake request" in html
     assert "Review before the management meeting." in html
     assert "Print Packet" in html
@@ -784,6 +791,7 @@ def test_management_packet_presets_apply_and_html_controls(auth_client, temp_app
             "intake_limit": 6,
             "include_private": True,
             "include_incidents": False,
+            "cover_page": True,
         },
     })
     assert create.status_code == 201
@@ -806,6 +814,8 @@ def test_management_packet_presets_apply_and_html_controls(auth_client, temp_app
     assert body["intake_days"] == 45
     assert body["intake_limit"] == 6
     assert body["include_private"] is True
+    assert body["cover_page"] is True
+    assert body["action_summary"]
 
     override = auth_client.get(f"/api/v1/reports/management?preset={preset['id']}&project_limit=2&include_private=0")
     assert override.status_code == 200
