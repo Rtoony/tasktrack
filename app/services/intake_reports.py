@@ -59,6 +59,12 @@ INTAKE_REPORT_TABLES = {
 }
 
 DEFAULT_SOURCES = ["web-form", "paper-form", "remarkable-ocr"]
+INTERNAL_CATEGORY_TABS = {
+    "Follow-up": "personal_husband",
+    "Meetings": "personal_father",
+    "Office": "personal_house",
+    "Assets": "personal_cars",
+}
 CSV_FIELDS = [
     "table", "label", "id", "title", "source", "status", "priority",
     "due", "project_number", "needs_review", "created_at", "record_url",
@@ -100,7 +106,8 @@ def _row_payload(table: str, cfg: dict, row) -> dict:
     due_col = cfg.get("due") or ""
     project_col = cfg.get("project") or ""
     review_col = cfg.get("needs_review") or ""
-    tab = cfg.get("tab") or "triage"
+    category = getattr(row, "category", "") if table == "personal_items" else ""
+    tab = INTERNAL_CATEGORY_TABS.get(category, cfg.get("tab") or "triage")
     return {
         "table": table,
         "label": cfg.get("label") or table,
@@ -111,6 +118,7 @@ def _row_payload(table: str, cfg: dict, row) -> dict:
         "priority": getattr(row, "priority", "") or "",
         "due": getattr(row, due_col, "") if due_col else "",
         "project_number": getattr(row, project_col, "") if project_col else "",
+        "category": category,
         "needs_review": bool(getattr(row, review_col, 0)) if review_col else False,
         "created_at": created_text,
         "record_url": f"/?tab={tab}&record={getattr(row, 'id', '')}",

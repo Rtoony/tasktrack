@@ -16,6 +16,7 @@ from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import ActivityLog, CalendarEvent, Comment, PersonnelIssue, to_dict
 from ..services.audit import log_activity
+from ..services.intake_reports import intake_source_report
 from ..services.tickets import (
     TABLE_MODELS,
     done_statuses_for_table,
@@ -125,7 +126,14 @@ def dashboard_stats():
         ).all()
         if _activity_visible_to_current_user(sess, r)
     ][:20]
-    return jsonify({"stats": stats, "recent_activity": recent})
+    intake = intake_source_report(
+        sess,
+        sources=["web-form", "paper-form", "remarkable-ocr"],
+        days=30,
+        limit=25,
+        needs_review=True,
+    )
+    return jsonify({"stats": stats, "recent_activity": recent, "intake": intake})
 
 
 # ── Search ─────────────────────────────────────────────────────────────────

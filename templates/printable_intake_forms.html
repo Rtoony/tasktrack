@@ -21,6 +21,8 @@
   h1 { font-size:18pt; line-height:1.05; margin:0.05in 0 0; }
   .meta-code { border:1.5px solid var(--line); padding:0.08in; font-family:Courier New, monospace; font-size:8pt; line-height:1.35; }
   .sub { color:var(--muted); font-size:9.2pt; margin-top:0.06in; }
+  .online-note { margin-top:0.06in; font-size:8.2pt; color:var(--muted); }
+  .online-note strong { color:var(--ink); }
   .row { display:grid; grid-template-columns:1fr 1fr; gap:0.12in; margin-bottom:0.1in; }
   .row.three { grid-template-columns:1fr 1fr 1fr; }
   .field { border:1.5px solid var(--line); min-height:0.36in; padding:0.04in 0.06in; }
@@ -51,6 +53,7 @@
     <div class="group">
       <a href="/intake">Intake Hub</a>
       <a href="/capture/ocr">OCR Capture</a>
+      <a href="/reports/intake?needs_review=1">Review Queue</a>
       <a href="/?capture_source=paper-form">Dashboard Capture</a>
       <select onchange="if (this.value) window.location=this.value" aria-label="Printable form selector">
         <option value="/intake/printable" {% if selected_key == 'packet' %}selected{% endif %}>Full packet</option>
@@ -61,7 +64,7 @@
     </div>
   </div>
   <div class="screen-note">
-    Print this page to PDF for paper use or import the PDF into reMarkable. The OCR block uses stable labels so a later TaskTrack ingestion tool can read scanned handwriting and route the request into the correct queue.
+    Print this page to PDF for paper use or import the PDF into reMarkable. Each page now lists the matching browser form, so the same request format works whether someone submits online, writes on paper, or sends back a scanned/OCR copy.
   </div>
 
   {% for form in forms %}
@@ -71,11 +74,13 @@
         <div class="brand">TaskTrack intake form</div>
         <h1>{{ form.title }}</h1>
         <div class="sub">Examples: {{ form.examples }}</div>
+        <div class="online-note"><strong>Online equivalent:</strong> {{ form.online_href }}</div>
       </div>
       <div class="meta-code">
         TT_FORM_ID={{ form.form_id }}<br>
         TARGET_TABLE={{ form.target_table }}<br>
-        SOURCE={{ form.source }}
+        SOURCE={{ form.source }}<br>
+        ONLINE_FORM={{ form.online_href }}
       </div>
     </header>
 
@@ -128,7 +133,7 @@
 
     <footer class="footer">
       <span>TaskTrack printable intake / browser PDF / reMarkable-ready</span>
-      <span>Scan or OCR, then paste into /capture/ocr</span>
+      <span>Online: {{ form.online_href }} / OCR: /capture/ocr</span>
     </footer>
   </section>
   {% endfor %}

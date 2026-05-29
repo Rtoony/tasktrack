@@ -117,6 +117,15 @@ def test_update_missing_returns_404(auth_client):
 def test_dashboard_returns_per_table_stats(auth_client):
     _make_work_task(auth_client, title="A", status="Not Started")
     _make_work_task(auth_client, title="B", status="In Progress")
+    submitted = auth_client.post("/intake/project-request", data={
+        "title": "Dashboard intake request",
+        "project_number": "2301.04",
+        "project_name": "Condo Castle",
+        "engineer": "PM",
+        "task_description": "Review this web form from the dashboard.",
+        "priority": "High",
+    })
+    assert submitted.status_code == 200
 
     r = auth_client.get("/api/v1/dashboard")
     assert r.status_code == 200
@@ -127,6 +136,9 @@ def test_dashboard_returns_per_table_stats(auth_client):
     for key in ("total", "active", "by_status", "by_priority"):
         assert key in stats, f"dashboard missing key: {key}"
     assert stats["total"] >= 2
+    assert data["intake"]["summary"]["needs_review_count"] == 1
+    assert data["intake"]["rows"][0]["title"] == "Dashboard intake request"
+    assert data["intake"]["rows"][0]["source"] == "web-form"
 
 
 # ── Search ────────────────────────────────────────────────────────────────

@@ -697,6 +697,16 @@
     <div class="dash-grid" id="dash-stats"></div>
     <div class="dash-card" style="margin:1.25rem 0;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <span>Intake Review</span>
+        <span style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <a class="btn btn-sm btn-export" href="/reports/intake?needs_review=1">Review Queue</a>
+          <a class="btn btn-sm btn-export" href="/intake" target="_blank" rel="noopener">Send Forms</a>
+        </span>
+      </div>
+      <div class="dash-card-body" id="dash-intake-review"><div class="empty-card">No intake requests need review</div></div>
+    </div>
+    <div class="dash-card" style="margin:1.25rem 0;">
+      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Upcoming Operations</span>
         <button class="btn btn-sm btn-export" type="button" onclick="openModal('calendar')">+ Add Event</button>
       </div>
@@ -2193,12 +2203,14 @@ async function loadDashboard() {
   const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0);
   const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0) + (s.calendar_events?.by_status?.done||0);
   const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.personal_items?.by_priority?.High||0);
+  const intakeReview = data.intake?.summary?.needs_review_count || 0;
 
   const statsEl = document.getElementById('dash-stats');
   statsEl.replaceChildren();
   [{l:'Active Items',v:totalActive,c:'accent',sub:'across all categories'},
    {l:'Overdue',v:totalOverdue,c:totalOverdue>0?'danger':'success',sub:totalOverdue>0?'needs attention':'all on track'},
    {l:'High Priority',v:totalHigh,c:totalHigh>0?'warn':'success',sub:'high + critical'},
+   {l:'Intake Review',v:intakeReview,c:intakeReview>0?'warn':'success',sub:'web / paper / OCR'},
    {l:'Completed',v:totalComplete,c:'success',sub:'done items'},
   ].forEach(st => {
     const card = document.createElement('div'); card.className='stat-card';
@@ -2244,9 +2256,56 @@ async function loadDashboard() {
       actEl.appendChild(div);
     });
   }
+  renderDashboardIntake(data.intake);
   loadUpcomingOperations();
   loadCalendarReminders();
   loadProjectSyncStatus();
+}
+
+function intakeRowTab(row) {
+  if (row.table === 'personal_items') {
+    return ({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[row.category] || 'personal_husband';
+  }
+  return ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage'})[row.table] || '';
+}
+
+function openIntakeReviewRow(row) {
+  const tab = intakeRowTab(row);
+  if (!tab || !row.id) return;
+  document.querySelector('.tab-btn[data-tab="' + tab + '"]')?.click();
+  setTimeout(() => editRecord(tab, row.id), 180);
+}
+
+function renderDashboardIntake(intake) {
+  const host = document.getElementById('dash-intake-review');
+  if (!host) return;
+  const rows = Array.isArray(intake?.rows) ? intake.rows.slice(0, 8) : [];
+  host.replaceChildren();
+  if (!rows.length) {
+    host.innerHTML = '<div class="empty-card">No web, paper, or OCR intake requests need review.</div>';
+    return;
+  }
+  rows.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'overdue-item';
+    div.style.cursor = 'pointer';
+    const left = document.createElement('div');
+    const title = document.createElement('span');
+    title.className = 'overdue-title';
+    title.textContent = row.title || '(untitled request)';
+    const meta = document.createElement('span');
+    meta.style.cssText = 'font-size:0.72rem;color:var(--text-light);margin-left:0.5rem';
+    meta.textContent = (row.label || row.table || 'Intake') + (row.source ? ' · ' + row.source : '') + (row.project_number ? ' · ' + row.project_number : '') + (row.priority ? ' · ' + row.priority : '');
+    left.appendChild(title);
+    left.appendChild(meta);
+    const status = document.createElement('span');
+    status.className = 'overdue-date';
+    status.textContent = row.status || 'needs review';
+    div.appendChild(left);
+    div.appendChild(status);
+    div.addEventListener('click', () => openIntakeReviewRow(row));
+    host.appendChild(div);
+  });
 }
 
 function syncStatusSummary(data) {
