@@ -91,6 +91,22 @@
           <a class="btn secondary" href="/reports/management?days=7&project_limit=25&intake_days=30&intake_limit=20">Management Review</a>
           <a class="btn ghost" href="/api/v1/reports/management">JSON</a>
         </div>
+        <div class="quick-row">
+          <div><div class="quick-title">Saved Management Presets</div><div class="quick-meta">One-click packet setups for recurring management conversations.</div></div>
+          <a class="btn ghost" href="/reports/management">Manage</a>
+        </div>
+        <div class="preset-list" style="margin-top:0.7rem">
+          {% if management_presets %}
+            {% for preset in management_presets %}
+            <div class="preset-item">
+              <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Management packet{% if preset.is_shared %} / shared{% endif %}</div></div>
+              <a class="btn secondary" href="/reports/management?preset={{ preset.id }}">Open</a>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty">No saved management presets yet.</div>
+          {% endif %}
+        </div>
       </section>
 
       <section class="card">

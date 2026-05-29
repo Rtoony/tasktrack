@@ -31,7 +31,7 @@ from ..services.project_reports import (
 bp = Blueprint("reports", __name__)
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
-_PRESET_SURFACES = {"portfolio", "incidents", "meetings"}
+_PRESET_SURFACES = {"portfolio", "incidents", "meetings", "management"}
 _TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status", "attention_level"}
 _BOOL_FILTER_KEYS = {"include_inactive", "include_private"}
 _LIST_FILTER_KEYS = {"project_numbers"}
@@ -45,6 +45,11 @@ _MEETING_TEXT_FILTER_KEYS = {"project_number", "event_type"}
 _MEETING_BOOL_FILTER_KEYS = {"include_private"}
 _MEETING_LIMIT_FILTER_KEYS = {"days", "limit"}
 _MEETING_FILTER_KEYS = _MEETING_TEXT_FILTER_KEYS | _MEETING_BOOL_FILTER_KEYS | _MEETING_LIMIT_FILTER_KEYS
+_MANAGEMENT_BOOL_FILTER_KEYS = {"include_private", "include_incidents"}
+_MANAGEMENT_LIMIT_FILTER_KEYS = {
+    "days", "meeting_limit", "project_limit", "intake_days", "intake_limit",
+}
+_MANAGEMENT_FILTER_KEYS = _MANAGEMENT_BOOL_FILTER_KEYS | _MANAGEMENT_LIMIT_FILTER_KEYS
 
 
 def _bool_arg(name: str) -> bool:
@@ -127,6 +132,8 @@ def _preset_keys(surface: str) -> set[str]:
         return _INCIDENT_FILTER_KEYS
     if surface == "meetings":
         return _MEETING_FILTER_KEYS
+    if surface == "management":
+        return _MANAGEMENT_FILTER_KEYS
     return _PORTFOLIO_FILTER_KEYS
 
 
@@ -166,6 +173,22 @@ def _clean_preset_filters(raw, *, surface: str = "portfolio") -> tuple[dict, str
             filters["days"] = _int_arg_value(raw.get("days"), 14, 1, 365)
         if "limit" in raw:
             filters["limit"] = _int_arg_value(raw.get("limit"), 12, 1, 25)
+        return filters, None
+
+    if surface == "management":
+        for key in _MANAGEMENT_BOOL_FILTER_KEYS:
+            if key in raw:
+                filters[key] = bool(raw.get(key))
+        if "days" in raw:
+            filters["days"] = _int_arg_value(raw.get("days"), 7, 1, 30)
+        if "meeting_limit" in raw:
+            filters["meeting_limit"] = _int_arg_value(raw.get("meeting_limit"), 8, 1, 25)
+        if "project_limit" in raw:
+            filters["project_limit"] = _int_arg_value(raw.get("project_limit"), 12, 1, MAX_PORTFOLIO_LIMIT)
+        if "intake_days" in raw:
+            filters["intake_days"] = _int_arg_value(raw.get("intake_days"), 30, 1, 3650)
+        if "intake_limit" in raw:
+            filters["intake_limit"] = _int_arg_value(raw.get("intake_limit"), 12, 1, 50)
         return filters, None
 
     for key in _TEXT_FILTER_KEYS:
@@ -261,6 +284,18 @@ def _request_meeting_filters(*, only_present: bool = False) -> dict:
     if not only_present or "limit" in request.args:
         filters["limit"] = request.args.get("limit")
     cleaned, _ = _clean_preset_filters(filters, surface="meetings")
+    return cleaned
+
+
+def _request_management_filters(*, only_present: bool = False) -> dict:
+    filters: dict = {}
+    for key in _MANAGEMENT_BOOL_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = _bool_arg(key)
+    for key in _MANAGEMENT_LIMIT_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = request.args.get(key)
+    cleaned, _ = _clean_preset_filters(filters, surface="management")
     return cleaned
 
 
@@ -381,6 +416,28 @@ def _incident_context(sess):
     return filters, selected, None, 200
 
 
+def _management_context(sess):
+    selected = None
+    base_filters: dict = {}
+    preset_id = (request.args.get("preset") or "").strip()
+    if preset_id:
+        try:
+            preset_int = int(preset_id)
+        except (TypeError, ValueError):
+            return None, None, "preset must be an integer", 400
+        selected = _load_visible_preset(
+            sess, preset_int, surface="management",
+            user_id=session.get("user_id"), is_admin=_is_admin(),
+        )
+        if selected is None:
+            return None, None, "preset not found", 404
+        base_filters = _preset_filters(selected)
+
+    explicit = _request_management_filters(only_present=True)
+    filters = {**base_filters, **explicit}
+    return filters, selected, None, 200
+
+
 def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict, str | None]:
     name = str(data.get("name") or "").strip()
     if not name:
@@ -411,6 +468,9 @@ def reports_home():
     meeting_presets = sess.scalars(_visible_presets_stmt(
         "meetings", user_id=session.get("user_id"), is_admin=is_admin,
     )).all()
+    management_presets = sess.scalars(_visible_presets_stmt(
+        "management", user_id=session.get("user_id"), is_admin=is_admin,
+    )).all()
     incident_presets = []
     if is_admin:
         incident_presets = sess.scalars(_visible_presets_stmt(
@@ -419,6 +479,7 @@ def reports_home():
     return render_template(
         "reports_home.html",
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        management_presets=[_preset_to_dict(row, include_filters=False) for row in management_presets],
         meeting_presets=[_preset_to_dict(row, include_filters=False) for row in meeting_presets],
         incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
         user_name=session.get("user_name", ""),
@@ -493,19 +554,20 @@ def today_brief_page():
     )
 
 
-def _management_packet(sess):
+def _management_packet(sess, *, filters: dict | None = None, selected: ReportPreset | None = None):
     """Compose the print-ready management packet from existing report services."""
+    filters = filters or {}
     user_id = session.get("user_id")
     is_admin = _is_admin()
-    include_private = _bool_arg("include_private")
+    include_private = bool(filters.get("include_private"))
     include_incidents = is_admin and (
-        "include_incidents" not in request.args or _bool_arg("include_incidents")
+        bool(filters.get("include_incidents")) if "include_incidents" in filters else True
     )
-    meeting_days = _int_arg("days", 7, 1, 30)
-    meeting_limit = _int_arg("meeting_limit", 8, 1, 25)
-    project_limit = _int_arg("project_limit", 12, 1, MAX_PORTFOLIO_LIMIT)
-    intake_days = _int_arg("intake_days", 30, 1, 3650)
-    intake_limit = _int_arg("intake_limit", 12, 1, 50)
+    meeting_days = _int_arg_value(filters.get("days"), 7, 1, 30)
+    meeting_limit = _int_arg_value(filters.get("meeting_limit"), 8, 1, 25)
+    project_limit = _int_arg_value(filters.get("project_limit"), 12, 1, MAX_PORTFOLIO_LIMIT)
+    intake_days = _int_arg_value(filters.get("intake_days"), 30, 1, 3650)
+    intake_limit = _int_arg_value(filters.get("intake_limit"), 12, 1, 50)
 
     portfolio = portfolio_project_report(
         sess,
@@ -556,24 +618,38 @@ def _management_packet(sess):
         "meetings": meetings,
         "intake": intake,
         "incidents": incidents,
+        "selected_preset": _preset_to_dict(selected, include_filters=False) if selected else None,
     }
 
 
 @bp.route("/api/v1/reports/management", methods=["GET"])
 @login_required
 def management_packet_json():
-    return jsonify(_management_packet(get_session()))
+    sess = get_session()
+    filters, selected, error, status = _management_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    return jsonify(_management_packet(sess, filters=filters, selected=selected))
 
 
 @bp.route("/reports/management", methods=["GET"])
 @login_required
 def management_packet_page():
+    sess = get_session()
+    filters, selected, error, status = _management_context(sess)
+    if error:
+        filters = _request_management_filters()
+    presets = sess.scalars(_visible_presets_stmt(
+        "management", user_id=session.get("user_id"), is_admin=_is_admin(),
+    )).all()
     return render_template(
         "management_report.html",
-        packet=_management_packet(get_session()),
+        packet=_management_packet(sess, filters=filters, selected=selected),
+        presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
-    )
+    ), status
 
 
 @bp.route("/api/v1/reports/presets", methods=["GET"])

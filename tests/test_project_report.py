@@ -767,6 +767,62 @@ def test_management_packet_json_html_and_admin_incidents(auth_client, temp_app):
     assert "Incident Summary" in admin_html
     assert "Sensitive management incident" in admin_html
 
+
+def test_management_packet_presets_apply_and_html_controls(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+
+    create = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Recurring PM Packet",
+        "surface": "management",
+        "filters": {
+            "days": 3,
+            "meeting_limit": 4,
+            "project_limit": 5,
+            "intake_days": 45,
+            "intake_limit": 6,
+            "include_private": True,
+            "include_incidents": False,
+        },
+    })
+    assert create.status_code == 201
+    preset = create.get_json()
+    assert preset["surface"] == "management"
+    assert preset["filters"]["meeting_limit"] == 4
+    assert preset["filters"]["include_private"] is True
+
+    listed = auth_client.get("/api/v1/reports/presets?surface=management")
+    assert listed.status_code == 200
+    assert [row["name"] for row in listed.get_json()["presets"]] == ["Recurring PM Packet"]
+
+    packet = auth_client.get(f"/api/v1/reports/management?preset={preset['id']}")
+    assert packet.status_code == 200
+    body = packet.get_json()
+    assert body["selected_preset"]["id"] == preset["id"]
+    assert body["days"] == 3
+    assert body["meeting_limit"] == 4
+    assert body["project_limit"] == 5
+    assert body["intake_days"] == 45
+    assert body["intake_limit"] == 6
+    assert body["include_private"] is True
+
+    override = auth_client.get(f"/api/v1/reports/management?preset={preset['id']}&project_limit=2&include_private=0")
+    assert override.status_code == 200
+    overridden = override.get_json()
+    assert overridden["project_limit"] == 2
+    assert overridden["include_private"] is False
+
+    page = auth_client.get(f"/reports/management?preset={preset['id']}")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Saved Preset" in html
+    assert "Loaded preset: Recurring PM Packet" in html
+    assert "saveManagementPreset" in html
+    assert "updateManagementPreset" in html
+    assert "deleteManagementPreset" in html
+
+
 def test_portfolio_action_queue_csv_export(auth_client, temp_app):
     with temp_app.app_context():
         sess = get_session()
@@ -788,6 +844,11 @@ def test_reports_home_renders_command_center(client, auth_client):
         "name": "Management review",
         "surface": "portfolio",
         "filters": {"client": "Acme", "limit": 5},
+    }).get_json()
+    management_preset = auth_client.post("/api/v1/reports/presets", json={
+        "name": "Weekly PM Packet",
+        "surface": "management",
+        "filters": {"days": 7, "project_limit": 25, "intake_days": 30},
     }).get_json()
 
     r = auth_client.get("/reports")
@@ -821,6 +882,9 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert "openProjectReport" in html
     assert f'/reports/projects?preset={preset["id"]}' in html
     assert "Management review" in html
+    assert "Saved Management Presets" in html
+    assert "Weekly PM Packet" in html
+    assert f'/reports/management?preset={management_preset["id"]}' in html
 
     with client.session_transaction() as s:
         s.clear()

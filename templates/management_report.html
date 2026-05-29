@@ -24,7 +24,9 @@
   .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
   .filters { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.65rem; align-items:end; }
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
-  input { width:100%; padding:0.42rem 0.5rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  input, select { width:100%; padding:0.42rem 0.5rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  .preset-row { display:grid; grid-template-columns:minmax(220px,1fr) auto auto auto auto; gap:0.65rem; align-items:end; margin-bottom:0.75rem; }
+  .inline-note { color:var(--text-dim); font-size:0.72rem; margin-top:0.22rem; }
   .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
   .checkline input { width:auto; }
   .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
@@ -83,7 +85,25 @@
   <p class="sub">A print-first packet for management conversations: executive portfolio summary, at-risk action queue, intake review, meeting prep, and admin-only incidents.</p>
 
   <section class="card screen-only">
-    <form class="filters" method="get" action="/reports/management">
+    <form method="get" action="/reports/management" id="management-filter-form">
+      {% if error %}<div class="danger" style="margin-bottom:0.75rem">{{ error }}</div>{% endif %}
+      <div class="preset-row">
+        <div>
+          <label for="management-preset">Saved Preset</label>
+          <select id="management-preset" name="preset" onchange="applyManagementPreset(this.value)">
+            <option value="">Custom packet</option>
+            {% for preset in presets %}
+            <option value="{{ preset.id }}" {% if packet.selected_preset and packet.selected_preset.id == preset.id %}selected{% endif %}>{{ preset.name }}{% if preset.is_shared %} (shared){% endif %}</option>
+            {% endfor %}
+          </select>
+          {% if packet.selected_preset %}<div class="inline-note">Loaded preset: {{ packet.selected_preset.name }}</div>{% endif %}
+        </div>
+        <label class="checkline"><input type="checkbox" id="management-preset-share" {% if packet.selected_preset and packet.selected_preset.is_shared %}checked{% endif %}> Share preset</label>
+        <button class="btn secondary" type="button" onclick="saveManagementPreset()">Save New</button>
+        <button class="btn secondary" type="button" onclick="updateManagementPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Update Loaded</button>
+        <button class="btn secondary" type="button" onclick="deleteManagementPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Delete</button>
+      </div>
+      <div class="filters">
       <div><label for="days">Meeting Days</label><input id="days" name="days" value="{{ packet.days }}" inputmode="numeric"></div>
       <div><label for="meeting_limit">Meetings</label><input id="meeting_limit" name="meeting_limit" value="{{ packet.meeting_limit }}" inputmode="numeric"></div>
       <div><label for="project_limit">Projects</label><input id="project_limit" name="project_limit" value="{{ packet.project_limit }}" inputmode="numeric"></div>
@@ -95,6 +115,7 @@
         <a class="btn secondary" href="/api/v1/reports/management?{{ request.query_string.decode('utf-8') }}">JSON</a>
         <button class="btn secondary" type="submit">Refresh</button>
         <button class="btn" type="button" onclick="window.print()">Print Packet</button>
+      </div>
       </div>
     </form>
   </section>
@@ -203,5 +224,78 @@
 
   <section class="print-footer print-only">TaskTrack management packet generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives are admin-gated.</section>
 </main>
+<script>
+function applyManagementPreset(id) {
+  window.location = id ? `/reports/management?preset=${encodeURIComponent(id)}` : '/reports/management';
+}
+function selectedManagementPresetName() {
+  const selected = document.getElementById('management-preset').selectedOptions[0];
+  return selected && selected.value ? selected.textContent.replace(' (shared)', '') : 'Management Review';
+}
+function boolFromCheckbox(name) {
+  const el = document.querySelector(`[name="${name}"]`);
+  return !!(el && el.checked);
+}
+function managementFiltersFromForm() {
+  const value = id => document.getElementById(id).value;
+  const filters = {
+    days: value('days'),
+    meeting_limit: value('meeting_limit'),
+    project_limit: value('project_limit'),
+    intake_days: value('intake_days'),
+    intake_limit: value('intake_limit'),
+    include_private: boolFromCheckbox('include_private')
+  };
+  const incidents = document.querySelector('[name="include_incidents"]');
+  if (incidents) filters.include_incidents = incidents.checked;
+  return filters;
+}
+function managementPresetPayload(name) {
+  return {
+    name: name.trim(),
+    surface: 'management',
+    is_shared: document.getElementById('management-preset-share').checked,
+    filters: managementFiltersFromForm()
+  };
+}
+async function saveManagementPreset() {
+  const name = prompt('Preset name for this management packet:', selectedManagementPresetName());
+  if (!name || !name.trim()) return;
+  const res = await fetch('/api/v1/reports/presets', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(managementPresetPayload(name))
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not save preset'); return; }
+  window.location = `/reports/management?preset=${encodeURIComponent(body.id)}`;
+}
+async function updateManagementPreset() {
+  const id = document.getElementById('management-preset').value;
+  if (!id) return;
+  const name = prompt('Update loaded preset name:', selectedManagementPresetName());
+  if (!name || !name.trim()) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(managementPresetPayload(name))
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(body.error || 'Could not update preset'); return; }
+  window.location = `/reports/management?preset=${encodeURIComponent(body.id)}`;
+}
+async function deleteManagementPreset() {
+  const id = document.getElementById('management-preset').value;
+  if (!id) return;
+  if (!confirm('Delete this management packet preset?')) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {method: 'DELETE'});
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    alert(body.error || 'Could not delete preset');
+    return;
+  }
+  window.location = '/reports/management';
+}
+</script>
 </body>
 </html>
