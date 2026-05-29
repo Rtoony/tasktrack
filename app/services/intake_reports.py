@@ -67,8 +67,33 @@ INTERNAL_CATEGORY_TABS = {
 }
 CSV_FIELDS = [
     "table", "label", "id", "title", "source", "status", "priority",
-    "due", "project_number", "needs_review", "created_at", "record_url",
+    "due", "project_number", "requester", "source_ref", "detail",
+    "needs_review", "created_at", "record_url",
 ]
+
+DETAIL_FIELDS = {
+    "work_tasks": ["description", "clarifications_needed", "starter_note", "notes"],
+    "project_work_tasks": ["task_description", "notes"],
+    "training_tasks": ["training_goals", "additional_context", "notes"],
+    "personal_items": ["body", "source_ref"],
+    "inbox_items": ["body", "source_ref"],
+}
+
+REQUESTER_FIELDS = {
+    "work_tasks": ["requested_by"],
+    "project_work_tasks": ["engineer"],
+    "training_tasks": ["requested_by", "trainees"],
+    "personal_items": ["created_by_name"],
+    "inbox_items": ["created_by_name"],
+}
+
+
+def _first_text(row, fields: list[str]) -> str:
+    for field in fields:
+        value = (getattr(row, field, "") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _parse_dt(raw) -> datetime | None:
@@ -108,6 +133,9 @@ def _row_payload(table: str, cfg: dict, row) -> dict:
     review_col = cfg.get("needs_review") or ""
     category = getattr(row, "category", "") if table == "personal_items" else ""
     tab = INTERNAL_CATEGORY_TABS.get(category, cfg.get("tab") or "triage")
+    detail = _first_text(row, DETAIL_FIELDS.get(table, []))
+    requester = _first_text(row, REQUESTER_FIELDS.get(table, []))
+    source_ref = (getattr(row, "source_ref", "") or getattr(row, "request_reference", "") or "").strip()
     return {
         "table": table,
         "label": cfg.get("label") or table,
@@ -118,6 +146,9 @@ def _row_payload(table: str, cfg: dict, row) -> dict:
         "priority": getattr(row, "priority", "") or "",
         "due": getattr(row, due_col, "") if due_col else "",
         "project_number": getattr(row, project_col, "") if project_col else "",
+        "requester": requester,
+        "source_ref": source_ref,
+        "detail": detail[:500],
         "category": category,
         "needs_review": bool(getattr(row, review_col, 0)) if review_col else False,
         "created_at": created_text,

@@ -34,6 +34,7 @@
   th,td { padding:0.52rem; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
   th { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; }
   .meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.15rem; }
+  .detail { color:var(--text-muted); font-size:0.78rem; margin-top:0.28rem; max-width:42rem; white-space:pre-wrap; }
   .pill { display:inline-block; border:1px solid var(--border); border-radius:999px; padding:0.08rem 0.42rem; color:var(--text-muted); font-size:0.7rem; }
   .review { color:var(--warn); font-weight:700; }
   .empty { color:var(--text-dim); font-style:italic; }
@@ -99,7 +100,7 @@
       <tbody>
         {% for row in packet.rows %}
         <tr>
-          <td><strong>{{ row.title }}</strong><div class="meta">{{ row.label }} #{{ row.id }}{% if row.needs_review %} <span class="review">/ needs review</span>{% endif %}</div></td>
+          <td><strong>{{ row.title }}</strong><div class="meta">{{ row.label }} #{{ row.id }}{% if row.requester %} / {{ row.requester }}{% endif %}{% if row.needs_review %} <span class="review">/ needs review</span>{% endif %}</div>{% if row.detail %}<div class="detail">{{ row.detail }}</div>{% endif %}</td>
           <td><span class="pill">{{ row.source }}</span></td>
           <td>{{ row.status }}{% if row.priority %}<div class="meta">{{ row.priority }}</div>{% endif %}</td>
           <td>{{ row.due or '-' }}</td>

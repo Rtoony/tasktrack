@@ -37,6 +37,7 @@
   .queue { display:grid; gap:0.65rem; }
   .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.8rem; align-items:center; padding:0.82rem 0.9rem; border:1px solid var(--border); background:rgba(17,22,29,0.5); border-radius:var(--radius); }
   .row-title { font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-detail { color:var(--text-muted); font-size:0.78rem; margin-top:0.35rem; max-width:54rem; white-space:pre-wrap; }
   .row-meta { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.35rem; color:var(--text-muted); font-size:0.75rem; }
   .pill { border:1px solid var(--border); color:var(--text-muted); border-radius:999px; padding:0.08rem 0.45rem; font-size:0.69rem; }
   .pill.review { color:var(--warn); border-color:rgba(251,191,36,0.4); }
@@ -196,7 +197,7 @@ function renderRows(rows) {
     title.textContent = row.title || '(untitled request)';
     const meta = document.createElement('div');
     meta.className = 'row-meta';
-    const chips = [row.label, row.source, row.project_number, row.category, row.priority, row.status].filter(Boolean);
+    const chips = [row.label, row.source, row.project_number, row.category, row.requester, row.priority, row.status].filter(Boolean);
     chips.forEach(value => {
       const chip = document.createElement('span');
       chip.className = 'pill';
@@ -215,6 +216,12 @@ function renderRows(rows) {
     }
     left.appendChild(title);
     left.appendChild(meta);
+    if (row.detail) {
+      const detail = document.createElement('div');
+      detail.className = 'row-detail';
+      detail.textContent = row.detail;
+      left.appendChild(detail);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'row-actions';

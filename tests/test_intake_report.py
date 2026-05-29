@@ -40,7 +40,9 @@ def test_intake_source_report_defaults_include_web_forms(auth_client):
     body = report.get_json()
     assert "web-form" in body["filters"]["sources"]
     assert body["summary"]["by_source"]["web-form"] == 1
-    assert any(row["title"] == "Default report web form item" for row in body["rows"])
+    row = next(row for row in body["rows"] if row["title"] == "Default report web form item")
+    assert row["detail"] == "Review this web form in the intake report."
+    assert row["requester"] == "PM"
 
 
 def test_intake_source_report_json_and_review_filter(auth_client, temp_app):
@@ -81,7 +83,11 @@ def test_intake_source_report_csv_and_html(auth_client):
     csv_text = csv_r.get_data(as_text=True)
     assert "project_work_tasks" in csv_text
     assert "paper-form" in csv_text
-    assert "record_url" in csv_text.splitlines()[0]
+    assert "Need the grading plan revised" in csv_text
+    header = csv_text.splitlines()[0]
+    assert "detail" in header
+    assert "requester" in header
+    assert "record_url" in header
 
     html_r = auth_client.get("/reports/intake?sources=paper-form")
     assert html_r.status_code == 200
@@ -120,5 +126,6 @@ def test_intake_source_report_includes_reviewable_internal_followups(auth_client
     assert body["summary"]["by_table"]["personal_items"] == 1
     row = next(row for row in body["rows"] if row["title"] == "Default report follow-up form")
     assert row["category"] == "Office"
+    assert row["detail"] == "Review this internal follow-up request."
     assert row["needs_review"] is True
     assert row["record_url"].startswith("/?tab=personal_house&record=")
