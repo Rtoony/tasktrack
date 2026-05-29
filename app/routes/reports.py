@@ -451,6 +451,13 @@ def _today_brief_packet(sess):
         sess,
         filters={"open_only": True, "limit": 5, "days": 365},
     ) if is_admin else None
+    intake = intake_source_report(
+        sess,
+        sources=["web-form", "paper-form", "remarkable-ocr"],
+        days=14,
+        limit=8,
+        needs_review=True,
+    )
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "days": meeting_days,
@@ -458,6 +465,7 @@ def _today_brief_packet(sess):
         "meetings": meetings,
         "at_risk": portfolio,
         "action_projects": portfolio.get("summary", {}).get("action_projects", []),
+        "intake": intake,
         "incidents": incidents,
     }
 

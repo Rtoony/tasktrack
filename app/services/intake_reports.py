@@ -58,7 +58,7 @@ INTAKE_REPORT_TABLES = {
     },
 }
 
-DEFAULT_SOURCES = ["paper-form", "remarkable-ocr"]
+DEFAULT_SOURCES = ["web-form", "paper-form", "remarkable-ocr"]
 CSV_FIELDS = [
     "table", "label", "id", "title", "source", "status", "priority",
     "due", "project_number", "needs_review", "created_at", "record_url",

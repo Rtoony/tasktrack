@@ -22,6 +22,27 @@ def _create_ocr_item(client):
     return r.get_json()["created"]
 
 
+
+
+def test_intake_source_report_defaults_include_web_forms(auth_client):
+    r = auth_client.post("/intake/project-request", data={
+        "title": "Default report web form item",
+        "project_number": "2301.04",
+        "project_name": "Condo Castle",
+        "engineer": "PM",
+        "task_description": "Review this web form in the intake report.",
+        "priority": "High",
+    })
+    assert r.status_code == 200
+
+    report = auth_client.get("/api/v1/reports/intake")
+    assert report.status_code == 200
+    body = report.get_json()
+    assert "web-form" in body["filters"]["sources"]
+    assert body["summary"]["by_source"]["web-form"] == 1
+    assert any(row["title"] == "Default report web form item" for row in body["rows"])
+
+
 def test_intake_source_report_json_and_review_filter(auth_client, temp_app):
     created = _create_ocr_item(auth_client)
     with temp_app.app_context():

@@ -626,12 +626,22 @@ def test_today_brief_json_and_html(auth_client, temp_app):
             visibility="private",
             created_by_user_id=1,
         ))
+        sess.add(WorkTask(
+            title="Review web form request",
+            source="web-form",
+            status="Not Started",
+            priority="High",
+            needs_review=1,
+            due_date="",
+        ))
         sess.commit()
 
     r = auth_client.get("/api/v1/reports/today")
     assert r.status_code == 200
     body = r.get_json()
     assert body["meetings"]["count"] >= 1
+    assert body["intake"]["summary"]["needs_review_count"] == 1
+    assert body["intake"]["rows"][0]["title"] == "Review web form request"
     assert any(packet["event"]["title"] == "Today project sync" for packet in body["meetings"]["packets"])
     assert any(row["project_number"] == "8800.10" for row in body["action_projects"])
     assert "Private today prep" not in str(body)
@@ -642,6 +652,8 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert "Today Brief" in html
     assert "TaskTrack Today Brief" in html
     assert "Today project sync" in html
+    assert "New Intake Requests" in html
+    assert "Review web form request" in html
     assert "At-Risk Action Queue" in html
     assert "Private today prep" not in html
     assert "@page { size: letter" in html

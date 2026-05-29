@@ -56,13 +56,13 @@
 </header>
 <main>
   <h1>Intake Source Report</h1>
-  <p class="sub">Review items created from paper forms, reMarkable OCR, and other capture sources. This is the audit queue for the form-to-TaskTrack workflow.</p>
+  <p class="sub">Review items created from web forms, paper forms, reMarkable OCR, and other capture sources. This is the audit queue for the form-to-TaskTrack workflow.</p>
 
   <section class="card">
     <form class="filters" method="get" action="/reports/intake">
       <div>
         <label for="sources">Sources</label>
-        <input id="sources" name="sources" value="{{ ','.join(packet.filters.sources) }}" placeholder="paper-form,remarkable-ocr">
+        <input id="sources" name="sources" value="{{ ','.join(packet.filters.sources) }}" placeholder="web-form,paper-form,remarkable-ocr">
       </div>
       <div>
         <label for="days">Days</label>
