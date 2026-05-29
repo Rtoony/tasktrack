@@ -44,7 +44,7 @@ INTAKE_REPORT_TABLES = {
         "title": "title",
         "due": "due_date",
         "project": "",
-        "needs_review": "",
+        "needs_review": "needs_review",
         "tab": "followup",
     },
     "inbox_items": {

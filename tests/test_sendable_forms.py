@@ -77,6 +77,7 @@ def test_general_followup_submission_creates_internal_item(client, temp_app):
         assert row.category == "Office"
         assert row.source == "web-form"
         assert row.source_ref == "Office meeting"
+        assert row.needs_review == 1
         assert row.due_date == "2026-06-10"
 
 
@@ -112,3 +113,28 @@ def test_cad_and_training_forms_tag_source_and_review(client, temp_app):
         assert training_row is not None
         assert training_row.source == "web-form"
         assert training_row.needs_review == 1
+
+
+def test_general_followup_can_be_marked_reviewed(auth_client, temp_app):
+    r = auth_client.post("/intake/general-follow-up", data={
+        "title": "Review office intake",
+        "category": "Office",
+        "body": "Confirm this came through the intake review queue.",
+        "priority": "High",
+    })
+    assert r.status_code == 200
+
+    with temp_app.app_context():
+        sess = get_session()
+        row = sess.scalar(select(PersonalItem).where(PersonalItem.title == "Review office intake"))
+        assert row is not None
+        row_id = row.id
+        assert row.needs_review == 1
+
+    confirmed = auth_client.post(f"/api/v1/personal_items/{row_id}/confirm", json={})
+    assert confirmed.status_code == 200
+    assert confirmed.get_json()["needs_review"] == 0
+
+    report = auth_client.get("/api/v1/reports/intake?needs_review=1")
+    assert report.status_code == 200
+    assert "Review office intake" not in str(report.get_json())

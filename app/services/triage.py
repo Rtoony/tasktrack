@@ -86,7 +86,7 @@ TRIAGE_PRESET_KEYS = (
     "source",
 )
 
-TRIAGE_CONFIRM_TABLES = {"work_tasks", "project_work_tasks", "training_tasks"}
+TRIAGE_CONFIRM_TABLES = {"work_tasks", "project_work_tasks", "training_tasks", "personal_items"}
 
 
 def _triage_build_user_message(raw_text, presets, target):

@@ -2276,6 +2276,21 @@ function openIntakeReviewRow(row) {
   setTimeout(() => editRecord(tab, row.id), 180);
 }
 
+async function markIntakeReviewed(row, button) {
+  if (!row?.table || !row?.id) return;
+  if (button) button.disabled = true;
+  const res = await api('POST', '/api/v1/' + row.table + '/' + row.id + '/confirm', {});
+  if (res && !res.error) {
+    toast('intake item marked reviewed');
+    loadDashboard();
+    const tab = intakeRowTab(row);
+    if (tab) loadTable(tab);
+  } else {
+    if (button) button.disabled = false;
+    toast(res?.error || 'review update failed');
+  }
+}
+
 function renderDashboardIntake(intake) {
   const host = document.getElementById('dash-intake-review');
   if (!host) return;
@@ -2298,11 +2313,23 @@ function renderDashboardIntake(intake) {
     meta.textContent = (row.label || row.table || 'Intake') + (row.source ? ' · ' + row.source : '') + (row.project_number ? ' · ' + row.project_number : '') + (row.priority ? ' · ' + row.priority : '');
     left.appendChild(title);
     left.appendChild(meta);
+    const right = document.createElement('span');
+    right.style.cssText = 'display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end';
     const status = document.createElement('span');
     status.className = 'overdue-date';
     status.textContent = row.status || 'needs review';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn btn-sm btn-export';
+    button.textContent = 'Mark reviewed';
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      markIntakeReviewed(row, button);
+    });
+    right.appendChild(status);
+    right.appendChild(button);
     div.appendChild(left);
-    div.appendChild(status);
+    div.appendChild(right);
     div.addEventListener('click', () => openIntakeReviewRow(row));
     host.appendChild(div);
   });
@@ -2511,7 +2538,8 @@ async function loadTable(table) {
       tr.appendChild(makeCell(formatPromotedTarget(r),'cell-supporting'));
       tr.appendChild(makeTriageActions(r));
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
-      tr.appendChild(makeCell(r.title,'cell-title'));
+      if (r.needs_review) tr.classList.add('ai-review');
+      tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'intake') : ''));
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
@@ -3840,7 +3868,15 @@ function renderField(f,value) {
   wrap.appendChild(input); return wrap;
 }
 
-const AI_REVIEW_TABLES = { work: 'work_tasks', project: 'project_work_tasks', training: 'training_tasks' };
+const AI_REVIEW_TABLES = {
+  work: 'work_tasks',
+  project: 'project_work_tasks',
+  training: 'training_tasks',
+  personal_husband: 'personal_items',
+  personal_father: 'personal_items',
+  personal_house: 'personal_items',
+  personal_cars: 'personal_items',
+};
 const AI_DESCRIPTION_FIELD = { work: 'description', project: 'task_description', training: 'training_goals' };
 
 function buildForm(table,data) {
@@ -3878,7 +3914,7 @@ function buildReviewBanner(table, data) {
   box.style.marginBottom = '0.9rem';
   const label = document.createElement('div');
   label.className = 'clarify-label';
-  label.textContent = 'AI Intake \u00b7 needs review';
+  label.textContent = 'Intake \u00b7 needs review';
   box.appendChild(label);
   const copy = document.createElement('div');
   copy.style.fontSize = '0.82rem';
@@ -3888,16 +3924,16 @@ function buildReviewBanner(table, data) {
   if (data.source) provenance.push('source: ' + data.source);
   if (data.ai_model) provenance.push('model: ' + data.ai_model);
   if (data.created_at) provenance.push('captured: ' + formatDateTime(data.created_at));
-  copy.textContent = 'This task was drafted by the Intake agent. Review and edit fields below, then confirm.' + (provenance.length ? '  [' + provenance.join(' \u00b7 ') + ']' : '');
+  copy.textContent = 'This record came from an intake source. Review and edit fields below, then confirm.' + (provenance.length ? '  [' + provenance.join(' \u00b7 ') + ']' : '');
   box.appendChild(copy);
   const confirmBtn = document.createElement('button');
   confirmBtn.type = 'button';
   confirmBtn.className = 'btn btn-primary';
-  confirmBtn.textContent = 'Confirm \u00b7 clear AI flag';
+  confirmBtn.textContent = 'Confirm \u00b7 clear review flag';
   confirmBtn.addEventListener('click', async () => {
     const res = await api('POST', '/api/v1/' + apiTable + '/' + data.id + '/confirm', {});
     if (res && !res.error) {
-      toast('task confirmed');
+      toast('intake item reviewed');
       closeModal();
       loadTable(table);
       loadDashboard();

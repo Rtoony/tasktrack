@@ -1,8 +1,8 @@
 """AI Intake (triage) routes.
 
 `/api/v1/triage` accepts session OR token auth (for email_intake.py).
-`/api/v1/<table>/<id>/confirm` clears the AI needs_review flag once an
-operator has reviewed an AI-generated row.
+`/api/v1/<table>/<id>/confirm` clears the needs_review flag once an
+operator has reviewed an AI/OCR/web-form intake row.
 
 Token auth uses the `triage` scope (TASKTRACK_TOKEN_TRIAGE); the legacy
 single-secret TASKTRACK_TOKEN is still accepted for one release with

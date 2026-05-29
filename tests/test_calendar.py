@@ -331,6 +331,7 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert "Intake Review" in html
     assert 'id="dash-intake-review"' in html
     assert "/reports/intake?needs_review=1" in html
+    assert "Mark reviewed" in html
     assert "Reminder Queue" in html
     assert 'data-tab="calendar"' in html
     assert 'id="sec-calendar"' in html

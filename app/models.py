@@ -209,6 +209,7 @@ class PersonalItem(Base):
     priority: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))
     status: Mapped[str] = mapped_column(Text, server_default=text("'New'"))
     due_date: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    needs_review: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     source: Mapped[str] = mapped_column(Text, server_default=text("'manual'"))
     source_ref: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_by_user_id: Mapped[int | None] = mapped_column(Integer)

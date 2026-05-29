@@ -129,6 +129,7 @@ ALLOWED_TABLES = {
             "priority",
             "status",
             "due_date",
+            "needs_review",
             "source",
             "source_ref",
         ],
@@ -242,6 +243,7 @@ SIMPLE_SUBMISSION_CONFIGS = {
         "submit_label": "Submit Follow-Up",
         "success_noun": "follow-up request",
         "source": "web-form",
+        "needs_review": True,
         "form_id": "TT-WEB-GENERAL-FOLLOW-UP",
         "audience": "Send when the request is real but does not clearly belong to CAD, project work, training, or incident reporting.",
         "fields": [

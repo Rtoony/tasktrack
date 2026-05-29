@@ -99,3 +99,22 @@ def test_report_center_and_admin_link_to_intake_report(auth_client, admin_client
     admin = admin_client.get("/admin")
     assert admin.status_code == 200
     assert "/reports/intake" in admin.get_data(as_text=True)
+
+
+def test_intake_source_report_includes_reviewable_internal_followups(auth_client):
+    r = auth_client.post("/intake/general-follow-up", data={
+        "title": "Default report follow-up form",
+        "category": "Office",
+        "body": "Review this internal follow-up request.",
+        "priority": "Medium",
+    })
+    assert r.status_code == 200
+
+    report = auth_client.get("/api/v1/reports/intake?needs_review=1")
+    assert report.status_code == 200
+    body = report.get_json()
+    assert body["summary"]["by_table"]["personal_items"] == 1
+    row = next(row for row in body["rows"] if row["title"] == "Default report follow-up form")
+    assert row["category"] == "Office"
+    assert row["needs_review"] is True
+    assert row["record_url"].startswith("/?tab=personal_house&record=")
