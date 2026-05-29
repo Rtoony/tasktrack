@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intake Source Report - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --warn:#fbbf24; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:rgba(24,33,43,0.92); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
+  .head-inner { max-width:1160px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1160px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.55rem; margin-bottom:0.2rem; }
+  .sub { color:var(--text-muted); max-width:820px; margin-bottom:1rem; }
+  .card,.stat { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); }
+  .card { padding:1rem; margin-bottom:1rem; }
+  .actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.42rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .filters { display:grid; grid-template-columns:1.4fr 0.7fr 0.7fr auto; gap:0.65rem; align-items:end; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input,select { width:100%; padding:0.42rem 0.5rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  .stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .stat { padding:0.75rem; }
+  .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .stat-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+  th,td { padding:0.52rem; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  th { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; }
+  .meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.15rem; }
+  .pill { display:inline-block; border:1px solid var(--border); border-radius:999px; padding:0.08rem 0.42rem; color:var(--text-muted); font-size:0.7rem; }
+  .review { color:var(--warn); font-weight:700; }
+  .empty { color:var(--text-dim); font-style:italic; }
+  @media (max-width: 900px) { .filters,.stats { grid-template-columns:1fr; } table { font-size:0.78rem; } .nav a { margin-left:0.5rem; } }
+  @media print { @page { size:letter; margin:0.45in; } body { background:#fff; color:#111827; font-size:9.5pt; } header,.filters,.btn { display:none !important; } main { max-width:none; padding:0; } .card,.stat { background:#fff; border-color:#d1d5db; box-shadow:none; } th,td { border-color:#e5e7eb; } .stat-value { color:#111827; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Intake Report</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/capture/ocr">OCR Capture</a>
+      {% if user_role == 'admin' %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>Intake Source Report</h1>
+  <p class="sub">Review items created from paper forms, reMarkable OCR, and other capture sources. This is the audit queue for the form-to-TaskTrack workflow.</p>
+
+  <section class="card">
+    <form class="filters" method="get" action="/reports/intake">
+      <div>
+        <label for="sources">Sources</label>
+        <input id="sources" name="sources" value="{{ ','.join(packet.filters.sources) }}" placeholder="paper-form,remarkable-ocr">
+      </div>
+      <div>
+        <label for="days">Days</label>
+        <input id="days" name="days" type="number" min="1" max="3650" value="{{ packet.filters.days }}">
+      </div>
+      <div>
+        <label for="needs_review">Review</label>
+        <select id="needs_review" name="needs_review">
+          <option value="" {% if packet.filters.needs_review is none %}selected{% endif %}>All</option>
+          <option value="1" {% if packet.filters.needs_review is sameas true %}selected{% endif %}>Needs review</option>
+          <option value="0" {% if packet.filters.needs_review is sameas false %}selected{% endif %}>Reviewed</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Apply</button>
+    </form>
+    <div class="actions" style="margin-top:0.75rem">
+      <a class="btn secondary" href="/api/v1/reports/intake.csv?{{ request.query_string.decode('utf-8') }}">CSV</a>
+      <a class="btn secondary" href="/api/v1/reports/intake?{{ request.query_string.decode('utf-8') }}">JSON</a>
+      <button class="btn secondary" type="button" onclick="window.print()">Print</button>
+      <a class="btn secondary" href="/capture/ocr">Add OCR Intake</a>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><div class="stat-label">Items</div><div class="stat-value">{{ packet.summary.count }}</div></div>
+    <div class="stat"><div class="stat-label">Needs Review</div><div class="stat-value">{{ packet.summary.needs_review_count }}</div></div>
+    <div class="stat"><div class="stat-label">Generated</div><div class="stat-value" style="font-size:1rem">{{ packet.generated_at[:16] }}</div></div>
+  </section>
+
+  <section class="card">
+    {% if packet.rows %}
+    <table>
+      <thead><tr><th>Item</th><th>Source</th><th>Status</th><th>Due</th><th>Project</th><th>Open</th></tr></thead>
+      <tbody>
+        {% for row in packet.rows %}
+        <tr>
+          <td><strong>{{ row.title }}</strong><div class="meta">{{ row.label }} #{{ row.id }}{% if row.needs_review %} <span class="review">/ needs review</span>{% endif %}</div></td>
+          <td><span class="pill">{{ row.source }}</span></td>
+          <td>{{ row.status }}{% if row.priority %}<div class="meta">{{ row.priority }}</div>{% endif %}</td>
+          <td>{{ row.due or '-' }}</td>
+          <td>{{ row.project_number or '-' }}</td>
+          <td><a class="btn secondary" href="{{ row.record_url }}">Open</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="empty">No matching intake records found.</div>{% endif %}
+  </section>
+</main>
+</body>
+</html>

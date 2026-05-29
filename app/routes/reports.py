@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
+from ..services.intake_reports import intake_report_csv, intake_source_report
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
     incident_csv_rows,
@@ -226,6 +227,25 @@ def _request_incident_filters(*, only_present: bool = False) -> dict:
 
 def _incident_filters() -> dict:
     return _request_incident_filters()
+
+
+def _request_intake_filters() -> dict:
+    sources = []
+    sources.extend(request.args.getlist("source"))
+    sources.extend(request.args.getlist("sources"))
+    if not sources:
+        raw = (request.args.get("source") or request.args.get("sources") or "").strip()
+        if raw:
+            sources = [raw]
+    needs_review = None
+    if "needs_review" in request.args:
+        needs_review = _bool_arg("needs_review")
+    return {
+        "sources": sources or None,
+        "days": _int_arg("days", 30, 1, 3650),
+        "limit": _int_arg("limit", 100, 1, 500),
+        "needs_review": needs_review,
+    }
 
 
 def _request_meeting_filters(*, only_present: bool = False) -> dict:
@@ -531,6 +551,39 @@ def report_presets_delete(preset_id: int):
     sess.delete(row)
     sess.commit()
     return jsonify({"ok": True})
+
+
+@bp.route("/api/v1/reports/intake", methods=["GET"])
+@login_required
+def intake_report_json():
+    filters = _request_intake_filters()
+    packet = intake_source_report(get_session(), **filters)
+    return jsonify(packet)
+
+
+@bp.route("/api/v1/reports/intake.csv", methods=["GET"])
+@login_required
+def intake_report_csv_route():
+    filters = _request_intake_filters()
+    packet = intake_source_report(get_session(), **filters)
+    return Response(
+        intake_report_csv(packet),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=intake_source_report_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
+@bp.route("/reports/intake", methods=["GET"])
+@login_required
+def intake_report_page():
+    filters = _request_intake_filters()
+    packet = intake_source_report(get_session(), **filters)
+    return render_template(
+        "intake_report.html",
+        packet=packet,
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
 
 
 @bp.route("/api/v1/reports/incidents", methods=["GET"])
