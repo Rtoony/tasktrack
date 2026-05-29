@@ -113,7 +113,11 @@ def submit_hub():
             "auth_required": True,
         },
     ]
-    return render_template("submit_hub.html", forms=forms)
+    return render_template(
+        "submit_hub.html",
+        forms=forms,
+        origin=request.url_root.rstrip("/"),
+    )
 
 
 @bp.route("/intake/printable")
@@ -328,6 +332,7 @@ def _render_simple_submission(config_key):
         values=values,
         error=error,
         success=success,
+        form_url=request.url,
     )
 
 

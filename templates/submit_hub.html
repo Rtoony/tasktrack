@@ -26,8 +26,15 @@
   .card-meta { display:inline-flex; width:max-content; max-width:100%; padding:0.18rem 0.5rem; border-radius:999px; background:#eef4ff; color:#1d4ed8; font-size:0.72rem; font-weight:700; margin-bottom:0.55rem; }
   .card-next { color:var(--text-muted); border-top:1px solid var(--border); padding-top:0.65rem; margin-bottom:0.9rem; font-size:0.82rem; line-height:1.45; }
   .lock { display:inline-flex; align-items:center; padding:0.1rem 0.4rem; border-radius:999px; background:#f3f4f6; color:#6b7280; font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; }
-  .btn { display:inline-block; text-decoration:none; background:var(--accent); color:#fff; padding:0.7rem 0.95rem; border-radius:10px; font-size:0.88rem; font-weight:600; }
+  .btn { display:inline-block; text-decoration:none; background:var(--accent); color:#fff; padding:0.7rem 0.95rem; border-radius:10px; font-size:0.88rem; font-weight:600; border:1px solid transparent; cursor:pointer; }
   .btn:hover { background:var(--accent-hover); }
+  .btn.copy { background:#fff; color:var(--accent); border-color:#bfdbfe; }
+  .btn.copy:hover { background:#eef4ff; }
+  .card-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:auto; }
+  .form-link { margin-top:0.75rem; padding-top:0.7rem; border-top:1px solid var(--border); }
+  .form-link label { display:block; font-size:0.68rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.28rem; }
+  .share-row { display:flex; gap:0.45rem; align-items:center; }
+  .share-field { min-width:0; flex:1; border:1px solid var(--border); border-radius:8px; padding:0.55rem 0.6rem; font:0.76rem 'IBM Plex Mono',monospace; color:var(--text-muted); background:#f9fafb; }
   .process { margin-top:1rem; padding:1rem 1.1rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
   .process h2 { font-size:1rem; margin-bottom:0.65rem; }
   .process ol { margin-left:1.2rem; color:var(--text-muted); line-height:1.55; }
@@ -60,7 +67,16 @@
         <p>{{ form["copy"] }}</p>
         <div class="card-meta">{{ form["queue"] }}</div>
         <div class="card-next">{{ form["next_step"] }}</div>
-        <a class="btn" href="{{ form.href }}">Open Form</a>
+        <div class="card-actions">
+          <a class="btn" href="{{ form.href }}">Open Form</a>
+          <button class="btn copy" type="button" data-copy-url="{{ origin }}{{ form.href }}" onclick="copyShareLink(this)">Copy Link</button>
+        </div>
+        <div class="form-link">
+          <label>Direct link</label>
+          <div class="share-row">
+            <input class="share-field" type="text" value="{{ origin }}{{ form.href }}" readonly onclick="this.select()">
+          </div>
+        </div>
       </article>
       {% endfor %}
     </section>
@@ -74,5 +90,21 @@
     </section>
     <a class="back" href="/">Back to TaskTrack Dashboard</a>
   </main>
+<script>
+async function copyShareLink(button) {
+  const url = button.dataset.copyUrl;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (err) {
+    const field = button.closest('.card').querySelector('.share-field');
+    field.focus();
+    field.select();
+    document.execCommand('copy');
+  }
+  const old = button.textContent;
+  button.textContent = 'Copied';
+  setTimeout(() => { button.textContent = old; }, 1400);
+}
+</script>
 </body>
 </html>

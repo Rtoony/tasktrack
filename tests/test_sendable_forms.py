@@ -14,6 +14,8 @@ def test_hub_lists_practical_sendable_forms(client):
     assert "General Follow-Up" in html
     assert "/intake/general-follow-up" in html
     assert "Submit CAD changes, fixes, or manager follow-up requests" in html
+    assert "Copy Link" in html
+    assert "http://localhost/intake/project-request" in html
 
 
 def test_project_request_form_renders_pdf_style(client):
@@ -22,6 +24,9 @@ def test_project_request_form_renders_pdf_style(client):
     html = r.get_data(as_text=True)
     assert "TT-WEB-PROJECT-WORK-REQUEST" in html
     assert "Print / Save PDF" in html
+    assert "Copy Form Link" in html
+    assert "Share link" in html
+    assert "http://localhost/intake/project-request" in html
     assert "Project Number" in html
     assert "What needs to be done?" in html
     assert "request form" in html

@@ -45,6 +45,9 @@
   .btn-primary { background:var(--accent); color:#fff; }
   .btn-secondary { background:#fff; color:var(--accent); border:1px solid #bfdbfe; }
   .btn-link { color:var(--accent); text-decoration:none; font-weight:700; }
+  .share-strip { margin:1rem 1.15rem 0; padding:0.75rem 0.85rem; border-radius:var(--radius); border:1px solid var(--line); background:#fff; display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0.6rem; align-items:center; }
+  .share-strip strong { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); }
+  .share-strip input { min-width:0; width:100%; border:1px solid var(--line); border-radius:var(--radius); padding:0.55rem 0.6rem; font:0.76rem 'IBM Plex Mono',monospace; color:var(--muted); background:var(--soft); }
   .print-note { color:var(--muted); font-size:0.78rem; margin-top:0.35rem; }
   @media (max-width:760px) {
     .masthead,.field-grid { grid-template-columns:1fr; }
@@ -55,7 +58,7 @@
     @page { size:letter; margin:0.45in; }
     body { background:#fff; }
     .page { max-width:none; padding:0; }
-    .toolbar,.btn,.btn-link,.actions { display:none !important; }
+    .toolbar,.btn,.btn-link,.actions,.share-strip { display:none !important; }
     .sheet { border:0; box-shadow:none; border-radius:0; }
     .masthead { padding:0 0 0.12in; }
     .notice,.banner { margin:0.12in 0 0; }
@@ -72,6 +75,7 @@
     <div class="toolbar">
       <div>Sendable request form - submit online or print/save as PDF.</div>
       <div class="toolbar-actions">
+        <button class="btn btn-secondary" type="button" data-copy-url="{{ form_url }}" onclick="copyFormLink(this)">Copy Form Link</button>
         <button class="btn btn-secondary" type="button" onclick="window.print()">Print / Save PDF</button>
         <a class="btn btn-secondary" href="/intake">All Forms</a>
       </div>
@@ -93,6 +97,12 @@
       </header>
 
       <div class="notice"><strong>Best use:</strong> {{ config.get('audience', 'Fill this out when a request needs to become tracked work.') }}<div class="print-note">For paper use, print this page and write clearly. For online use, fill it out and submit.</div></div>
+
+      <div class="share-strip" aria-label="Direct form link">
+        <strong>Share link</strong>
+        <input type="text" value="{{ form_url }}" readonly onclick="this.select()">
+        <button class="btn btn-secondary" type="button" data-copy-url="{{ form_url }}" onclick="copyFormLink(this)">Copy</button>
+      </div>
 
       {% if error %}<div class="banner error">{{ error }}</div>{% endif %}
       {% if success %}<div class="banner success">{{ success }}</div>{% endif %}
@@ -127,5 +137,23 @@
       </form>
     </section>
   </main>
+<script>
+async function copyFormLink(button) {
+  const url = button.dataset.copyUrl;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (err) {
+    const field = document.querySelector('.share-strip input');
+    if (field) {
+      field.focus();
+      field.select();
+      document.execCommand('copy');
+    }
+  }
+  const old = button.textContent;
+  button.textContent = 'Copied';
+  setTimeout(() => { button.textContent = old; }, 1400);
+}
+</script>
 </body>
 </html>
