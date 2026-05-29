@@ -65,6 +65,14 @@ def submit_hub():
             "auth_required": False,
         },
         {
+            "title": "Project Work Request",
+            "copy": "Submit one project-specific task, deliverable, review item, or agency/client follow-up in a clean request form.",
+            "queue": "Routes to Project Tasks",
+            "next_step": "Managers review scope, priority, billing phase, and due timing from the Project Tasks queue.",
+            "href": "/intake/project-request",
+            "auth_required": False,
+        },
+        {
             "title": "Weekly Project Work Submission",
             "copy": "Use this on Friday to submit next week’s project tasks in one batch.",
             "queue": "Creates Project Work tasks",
@@ -86,6 +94,14 @@ def submit_hub():
             "queue": "Routes to Training",
             "next_step": "The request becomes planned coaching or training work with a skill area and goals.",
             "href": "/intake/training",
+            "auth_required": False,
+        },
+        {
+            "title": "General Follow-Up",
+            "copy": "Submit office follow-ups, meeting action items, equipment notes, or management questions that need a tracked next step.",
+            "queue": "Routes to Internal Follow-Up",
+            "next_step": "The item lands in the internal queue for review, assignment, or conversion into a larger task.",
+            "href": "/intake/general-follow-up",
             "auth_required": False,
         },
         {
@@ -280,7 +296,12 @@ def _render_simple_submission(config_key):
             "status": ALLOWED_TABLES[config["table"]]["status_flow"][0],
         })
 
-        if "priority" in ALLOWED_TABLES[config["table"]]["fields"] and not payload.get("priority"):
+        table_fields = ALLOWED_TABLES[config["table"]]["fields"]
+        if "source" in table_fields and not payload.get("source"):
+            payload["source"] = config.get("source", "web-form")
+        if "needs_review" in table_fields and config.get("needs_review", True):
+            payload["needs_review"] = 1
+        if "priority" in table_fields and not payload.get("priority"):
             payload["priority"] = "Medium"
         if config["table"] == "personnel_issues" and not payload.get("severity"):
             payload["severity"] = "Medium"
@@ -308,6 +329,20 @@ def _render_simple_submission(config_key):
         error=error,
         success=success,
     )
+
+
+@bp.route("/intake/project-request", methods=["GET", "POST"])
+@intake_auth_required
+@limiter.limit(_intake_post_limit, methods=["POST"])
+def submit_project_request():
+    return _render_simple_submission("project-request")
+
+
+@bp.route("/intake/general-follow-up", methods=["GET", "POST"])
+@intake_auth_required
+@limiter.limit(_intake_post_limit, methods=["POST"])
+def submit_general_followup():
+    return _render_simple_submission("general-follow-up")
 
 
 @bp.route("/intake/cad-development", methods=["GET", "POST"])
