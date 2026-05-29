@@ -68,6 +68,7 @@
     <div class="actions">
       <a class="btn" href="/reports/today">Today Brief</a>
       <a class="btn secondary" href="/capture/ocr">OCR Landing Page</a>
+      <a class="btn secondary" href="/intake/review?needs_review=1">Intake Review Queue</a>
       <a class="btn secondary" href="/reports/intake">Intake Source Report</a>
       <a class="btn secondary" href="/?capture_source=remarkable-ocr">Quick OCR Capture</a>
       <a class="btn secondary" href="/testing">Testing Checklist</a>
@@ -157,7 +158,8 @@
         <h2>Intake Review</h2>
         <p>Audit scanned forms, reMarkable OCR captures, and other source-tagged items that need operator review.</p>
         <div class="actions">
-          <a class="btn" href="/reports/intake?needs_review=1">Needs Review</a>
+          <a class="btn" href="/intake/review?needs_review=1">Review Queue</a>
+          <a class="btn secondary" href="/reports/intake?needs_review=1">Audit Report</a>
           <a class="btn secondary" href="/reports/intake?sources=web-form,paper-form,remarkable-ocr&days=30">Web/Paper/OCR Last 30</a>
           <a class="btn ghost" href="/api/v1/reports/intake.csv?sources=web-form,paper-form,remarkable-ocr&days=30">CSV</a>
         </div>

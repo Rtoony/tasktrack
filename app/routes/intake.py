@@ -120,6 +120,17 @@ def submit_hub():
     )
 
 
+@bp.route("/intake/review")
+@login_required
+def intake_review_queue():
+    """Operator-facing queue for reviewing submitted intake records."""
+    return render_template(
+        "intake_review.html",
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
 @bp.route("/intake/printable")
 @intake_auth_required
 def printable_request_forms():

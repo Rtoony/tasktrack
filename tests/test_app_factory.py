@@ -90,7 +90,7 @@ def test_printable_intake_packet_renders_for_paper_and_remarkable(client):
     assert "TARGET_TABLE=project_work_tasks" in html
     assert "ONLINE_FORM=/intake/project-request" in html
     assert "Online equivalent:" in html
-    assert "/reports/intake?needs_review=1" in html
+    assert "/intake/review?needs_review=1" in html
     assert "/capture/ocr" in html
     assert "reMarkable layout" in html
 

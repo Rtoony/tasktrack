@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<title>Intake Review - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:7px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(56,189,248,0.15), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:rgba(24,33,43,0.92); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
+  .head-inner { max-width:1220px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1220px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.65rem; margin-bottom:0.25rem; }
+  .sub { color:var(--text-muted); max-width:860px; margin-bottom:1rem; }
+  .card,.stat { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 18px 38px rgba(0,0,0,0.16); }
+  .card { padding:1rem; margin-bottom:1rem; }
+  .filters { display:grid; grid-template-columns:1.4fr 0.55fr 0.55fr 0.65fr auto; gap:0.65rem; align-items:end; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input,select { width:100%; padding:0.45rem 0.52rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  .actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.44rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(56,189,248,0.35); }
+  .btn.danger { background:transparent; color:var(--danger); border:1px solid rgba(248,113,113,0.4); }
+  .btn:disabled { opacity:0.55; cursor:not-allowed; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .stat { padding:0.78rem; }
+  .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .stat-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  .queue { display:grid; gap:0.65rem; }
+  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.8rem; align-items:center; padding:0.82rem 0.9rem; border:1px solid var(--border); background:rgba(17,22,29,0.5); border-radius:var(--radius); }
+  .row-title { font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .row-meta { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.35rem; color:var(--text-muted); font-size:0.75rem; }
+  .pill { border:1px solid var(--border); color:var(--text-muted); border-radius:999px; padding:0.08rem 0.45rem; font-size:0.69rem; }
+  .pill.review { color:var(--warn); border-color:rgba(251,191,36,0.4); }
+  .pill.done { color:var(--ok); border-color:rgba(52,211,153,0.4); }
+  .row-actions { display:flex; gap:0.45rem; flex-wrap:wrap; justify-content:flex-end; }
+  .empty,.status { color:var(--text-dim); font-style:italic; padding:0.4rem 0; }
+  .status.error { color:var(--danger); }
+  @media (max-width: 900px) { .filters,.stats,.row { grid-template-columns:1fr; } .row-actions { justify-content:flex-start; } .nav a { margin-left:0.5rem; } }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Intake Review</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/intake">Forms</a>
+      <a href="/reports/intake">Intake Report</a>
+      <a href="/reports">Reports</a>
+      {% if user_role == 'admin' %}<a href="/admin">Admin</a>{% endif %}
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>Intake Review Queue</h1>
+  <p class="sub">Process web-form, paper-form, and OCR-created records after they land. Open the record for edits, or clear the review flag directly when the request is already clean.</p>
+
+  <section class="card">
+    <form class="filters" id="filters">
+      <div>
+        <label for="sources">Sources</label>
+        <input id="sources" name="sources" value="web-form,paper-form,remarkable-ocr">
+      </div>
+      <div>
+        <label for="days">Days</label>
+        <input id="days" name="days" type="number" min="1" max="3650" value="30">
+      </div>
+      <div>
+        <label for="limit">Limit</label>
+        <input id="limit" name="limit" type="number" min="1" max="500" value="100">
+      </div>
+      <div>
+        <label for="needs_review">Queue</label>
+        <select id="needs_review" name="needs_review">
+          <option value="1">Needs review</option>
+          <option value="">All intake</option>
+          <option value="0">Reviewed</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Refresh</button>
+    </form>
+    <div class="actions" style="margin-top:0.75rem">
+      <a class="btn secondary" href="/intake">Send Forms</a>
+      <a class="btn secondary" href="/capture/ocr">OCR Capture</a>
+      <a class="btn ghost" id="report-link" href="/reports/intake?needs_review=1">Report View</a>
+      <a class="btn ghost" id="csv-link" href="/api/v1/reports/intake.csv?needs_review=1">CSV</a>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat"><div class="stat-label">Visible Items</div><div class="stat-value" id="stat-count">0</div></div>
+    <div class="stat"><div class="stat-label">Need Review</div><div class="stat-value" id="stat-review">0</div></div>
+    <div class="stat"><div class="stat-label">Web Forms</div><div class="stat-value" id="stat-web">0</div></div>
+    <div class="stat"><div class="stat-label">Paper / OCR</div><div class="stat-value" id="stat-paper">0</div></div>
+  </section>
+
+  <section class="card">
+    <div class="actions" style="justify-content:space-between;margin-bottom:0.65rem">
+      <div class="status" id="queue-status">Loading intake queue...</div>
+      <button class="btn secondary" type="button" onclick="loadQueue()">Reload</button>
+    </div>
+    <div class="queue" id="queue"></div>
+  </section>
+</main>
+<script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const TABLE_TAB = { work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage' };
+const CATEGORY_TAB = { 'Follow-up':'personal_husband', 'Meetings':'personal_father', 'Office':'personal_house', 'Assets':'personal_cars' };
+
+function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function queueParams() {
+  const params = new URLSearchParams();
+  const sources = document.getElementById('sources').value.trim();
+  const days = document.getElementById('days').value || '30';
+  const limit = document.getElementById('limit').value || '100';
+  const review = document.getElementById('needs_review').value;
+  if (sources) params.set('sources', sources);
+  params.set('days', days);
+  params.set('limit', limit);
+  if (review !== '') params.set('needs_review', review);
+  return params;
+}
+function hydrateFiltersFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('sources')) document.getElementById('sources').value = params.get('sources');
+  if (params.has('days')) document.getElementById('days').value = params.get('days');
+  if (params.has('limit')) document.getElementById('limit').value = params.get('limit');
+  if (params.has('needs_review')) document.getElementById('needs_review').value = params.get('needs_review');
+}
+function rowRecordUrl(row) {
+  if (row.record_url) return row.record_url;
+  if (row.table === 'personal_items') return '/?tab=' + (CATEGORY_TAB[row.category] || 'personal_husband') + '&record=' + row.id;
+  return '/?tab=' + (TABLE_TAB[row.table] || 'triage') + '&record=' + row.id;
+}
+function setStatus(text, cls='') {
+  const el = document.getElementById('queue-status');
+  el.textContent = text;
+  el.className = 'status' + (cls ? ' ' + cls : '');
+}
+function updateStats(packet) {
+  const summary = packet.summary || {};
+  const bySource = summary.by_source || {};
+  document.getElementById('stat-count').textContent = summary.count || 0;
+  document.getElementById('stat-review').textContent = summary.needs_review_count || 0;
+  document.getElementById('stat-web').textContent = bySource['web-form'] || 0;
+  document.getElementById('stat-paper').textContent = (bySource['paper-form'] || 0) + (bySource['remarkable-ocr'] || 0);
+}
+function updateLinks(params) {
+  const query = params.toString();
+  document.getElementById('report-link').href = '/reports/intake' + (query ? '?' + query : '');
+  document.getElementById('csv-link').href = '/api/v1/reports/intake.csv' + (query ? '?' + query : '');
+  history.replaceState(null, '', '/intake/review' + (query ? '?' + query : ''));
+}
+async function markReviewed(row, button) {
+  button.disabled = true;
+  button.textContent = 'Saving...';
+  const res = await fetch('/api/v1/' + row.table + '/' + row.id + '/confirm', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'X-CSRF-Token':CSRF_TOKEN },
+    body:'{}'
+  });
+  if (!res.ok) {
+    let msg = 'review update failed';
+    try { msg = (await res.json()).error || msg; } catch {}
+    setStatus(msg, 'error');
+    button.disabled = false;
+    button.textContent = 'Mark reviewed';
+    return;
+  }
+  setStatus('Marked reviewed: ' + (row.title || ('#' + row.id)));
+  loadQueue();
+}
+function renderRows(rows) {
+  const host = document.getElementById('queue');
+  host.replaceChildren();
+  if (!rows.length) {
+    host.innerHTML = '<div class="empty">No matching intake records.</div>';
+    return;
+  }
+  rows.forEach(row => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    const left = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'row-title';
+    title.textContent = row.title || '(untitled request)';
+    const meta = document.createElement('div');
+    meta.className = 'row-meta';
+    const chips = [row.label, row.source, row.project_number, row.category, row.priority, row.status].filter(Boolean);
+    chips.forEach(value => {
+      const chip = document.createElement('span');
+      chip.className = 'pill';
+      chip.textContent = value;
+      meta.appendChild(chip);
+    });
+    const review = document.createElement('span');
+    review.className = 'pill ' + (row.needs_review ? 'review' : 'done');
+    review.textContent = row.needs_review ? 'needs review' : 'reviewed';
+    meta.appendChild(review);
+    if (row.created_at) {
+      const created = document.createElement('span');
+      created.className = 'pill';
+      created.textContent = row.created_at.slice(0, 16);
+      meta.appendChild(created);
+    }
+    left.appendChild(title);
+    left.appendChild(meta);
+
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+    const open = document.createElement('a');
+    open.className = 'btn secondary';
+    open.href = rowRecordUrl(row);
+    open.textContent = 'Open Record';
+    actions.appendChild(open);
+    if (row.needs_review) {
+      const done = document.createElement('button');
+      done.className = 'btn';
+      done.type = 'button';
+      done.textContent = 'Mark reviewed';
+      done.addEventListener('click', () => markReviewed(row, done));
+      actions.appendChild(done);
+    }
+    div.appendChild(left);
+    div.appendChild(actions);
+    host.appendChild(div);
+  });
+}
+async function loadQueue() {
+  const params = queueParams();
+  updateLinks(params);
+  setStatus('Loading intake queue...');
+  const res = await fetch('/api/v1/reports/intake?' + params.toString());
+  if (res.status === 401) { window.location = '/login'; return; }
+  if (!res.ok) { setStatus('Could not load intake queue', 'error'); return; }
+  const packet = await res.json();
+  updateStats(packet);
+  renderRows(packet.rows || []);
+  setStatus('Loaded ' + ((packet.rows || []).length) + ' intake item' + (((packet.rows || []).length) === 1 ? '' : 's') + '.');
+}
+document.getElementById('filters').addEventListener('submit', event => { event.preventDefault(); loadQueue(); });
+hydrateFiltersFromUrl();
+loadQueue();
+</script>
+</body>
+</html>

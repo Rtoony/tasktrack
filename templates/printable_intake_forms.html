@@ -53,7 +53,7 @@
     <div class="group">
       <a href="/intake">Intake Hub</a>
       <a href="/capture/ocr">OCR Capture</a>
-      <a href="/reports/intake?needs_review=1">Review Queue</a>
+      <a href="/intake/review?needs_review=1">Review Queue</a>
       <a href="/?capture_source=paper-form">Dashboard Capture</a>
       <select onchange="if (this.value) window.location=this.value" aria-label="Printable form selector">
         <option value="/intake/printable" {% if selected_key == 'packet' %}selected{% endif %}>Full packet</option>

@@ -18,6 +18,24 @@ def test_hub_lists_practical_sendable_forms(client):
     assert "http://localhost/intake/project-request" in html
 
 
+def test_intake_review_queue_requires_login(client):
+    unauth = client.get("/intake/review")
+    assert unauth.status_code == 302
+    assert "/login" in unauth.headers["Location"]
+
+
+def test_intake_review_queue_renders_for_authenticated_user(auth_client):
+    r = auth_client.get("/intake/review?needs_review=1")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Intake Review Queue" in html
+    assert "/api/v1/reports/intake" in html
+    assert "Mark reviewed" in html
+    assert "Open Record" in html
+    assert "/reports/intake" in html
+    assert "/api/v1/reports/intake.csv" in html
+
+
 def test_project_request_form_renders_pdf_style(client):
     r = client.get("/intake/project-request")
     assert r.status_code == 200
