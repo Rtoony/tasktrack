@@ -127,6 +127,9 @@ def test_project_report_html_renders(auth_client, temp_app):
     assert "print-footer" in html
     assert "@page { size: letter" in html
     assert "Management Brief" in html
+    assert "Recommendation:" in html
+    assert "Open Work" in html
+    assert "Project management brief metrics" in html
     assert "Management Action Queue" in html
     assert "Resolve overdue Project Tasks: Late exhibit" in html
     assert "TaskTrack Overlay" in html
@@ -335,6 +338,10 @@ def test_portfolio_project_report_filters_summary_and_privacy(auth_client, temp_
     assert body["summary"]["site_count"] == 1
     assert body["summary"]["overdue_count"] == 1
     assert body["summary"]["attention_project_count"] == 1
+    assert body["summary"]["open_total"] >= 1
+    assert body["summary"]["attention_counts"]["at_risk"] == 1
+    assert "at-risk project" in body["summary"]["executive_summary"]["headline"]
+    assert body["summary"]["executive_summary"]["primary_focus"]["project_number"] == "8800.10"
     assert body["summary"]["action_projects"][0]["project_number"] == "8800.10"
     assert body["summary"]["action_projects"][0]["primary_action"] == "Resolve overdue Project Tasks: Portfolio late item"
     assert body["include_private"] is False
@@ -377,6 +384,9 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert "print-masthead" in html
     assert "print-footer" in html
     assert "@page { size: letter" in html
+    assert "Executive Summary" in html
+    assert "Recommended next step" in html
+    assert "Primary focus:" in html
     assert "At Risk Projects" in html
     assert 'id="attention_level"' in html
     assert "Management Action Queue" in html

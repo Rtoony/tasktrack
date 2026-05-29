@@ -40,6 +40,11 @@
   .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
   .summary-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
   .summary-card { padding:0.75rem; }
+  .executive-summary { padding:0.95rem 1rem; margin-bottom:1rem; }
+  .executive-summary h2 { font-size:1rem; margin-bottom:0.45rem; }
+  .executive-headline { font-size:1.06rem; font-weight:700; }
+  .executive-recommendation { color:var(--text-muted); margin-top:0.25rem; }
+  .executive-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.55rem; margin-top:0.75rem; }
   .summary-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
   .summary-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
   .summary-value.danger { color:var(--danger); }
@@ -67,7 +72,7 @@
   .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
   .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
   .more { color:var(--text-dim); font-size:0.72rem; margin-top:0.35rem; }
-  @media (max-width: 1000px) { .filters,.summary-grid { grid-template-columns:repeat(2,1fr); } .cols { grid-template-columns:1fr; } .hero,.project-head { flex-direction:column; } .chips { justify-content:flex-start; } }
+  @media (max-width: 1000px) { .filters,.summary-grid,.executive-metrics { grid-template-columns:repeat(2,1fr); } .cols { grid-template-columns:1fr; } .hero,.project-head { flex-direction:column; } .chips { justify-content:flex-start; } }
   @media print {
     @page { size: letter; margin: 0.45in; }
     body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; }
@@ -78,7 +83,7 @@
     .print-eyebrow,.print-meta { color:#4b5563; }
     .print-title { color:#111827; }
     .print-footer { color:#4b5563; border-color:#d1d5db; }
-    .hero,.project-card,.summary-card,.section { border-color:#d1d5db; background:#fff; box-shadow:none; }
+    .hero,.project-card,.summary-card,.section,.executive-summary { border-color:#d1d5db; background:#fff; box-shadow:none; }
     .hero,.project-card { padding:0.12in; margin-bottom:0.12in; }
     .summary-grid { grid-template-columns:repeat(7,1fr); gap:0.08in; margin-bottom:0.12in; }
     .summary-card { padding:0.08in; }
@@ -167,6 +172,22 @@
     </div>
   </section>
 
+  {% set executive = packet.summary.executive_summary %}
+  <section class="summary-card executive-summary">
+    <h2>Executive Summary</h2>
+    <div class="executive-headline">{{ executive.headline }}</div>
+    <div class="executive-recommendation"><strong>Recommended next step:</strong> {{ executive.recommendation }}</div>
+    {% if executive.primary_focus %}
+    <div class="mini-meta" style="margin-top:0.45rem"><strong>Primary focus:</strong> {{ executive.primary_focus.project_number }}{% if executive.primary_focus.name %} - {{ executive.primary_focus.name }}{% endif %}{% if executive.primary_focus.primary_action %} / {{ executive.primary_focus.primary_action }}{% endif %}</div>
+    {% endif %}
+    <div class="executive-metrics">
+      <div class="summary-card"><div class="summary-label">At Risk</div><div class="summary-value{% if packet.summary.attention_counts.at_risk %} danger{% endif %}">{{ packet.summary.attention_counts.at_risk }}</div></div>
+      <div class="summary-card"><div class="summary-label">Scheduled</div><div class="summary-value">{{ packet.summary.attention_counts.scheduled }}</div></div>
+      <div class="summary-card"><div class="summary-label">Active</div><div class="summary-value">{{ packet.summary.attention_counts.active }}</div></div>
+      <div class="summary-card"><div class="summary-label">Quiet</div><div class="summary-value">{{ packet.summary.attention_counts.quiet }}</div></div>
+    </div>
+  </section>
+
   <section class="summary-grid">
     <div class="summary-card"><div class="summary-label">Projects</div><div class="summary-value">{{ packet.summary.project_count }}</div></div>
     <div class="summary-card"><div class="summary-label">Sites</div><div class="summary-value">{{ packet.summary.site_count }}</div></div>
@@ -222,7 +243,7 @@
         </div>
       </div>
       {% if report.management_brief %}
-      <div class="mini-meta" style="margin:0 0 0.75rem"><strong>Brief:</strong> {{ report.management_brief.headline }}</div>
+      <div class="mini-meta" style="margin:0 0 0.75rem"><strong>Brief:</strong> {{ report.management_brief.headline }} <strong style="margin-left:0.5rem">Next:</strong> {{ report.management_brief.recommendation }}</div>
       {% endif %}
       {% set overlay = report.operator_overlay or {} %}
       {% if overlay.operator_status or overlay.priority or overlay.tags or overlay.next_review_date %}

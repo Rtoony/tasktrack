@@ -472,6 +472,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
     overdue_count = 0
     upcoming_count = 0
     action_projects = []
+    attention_counts = {"at_risk": 0, "scheduled": 0, "active": 0, "quiet": 0}
     for report in reports:
         site_count += int(report.get("counts", {}).get("sites") or 0)
         overdue_count += len(report.get("overdue_items") or [])
@@ -481,12 +482,14 @@ def _portfolio_summary(reports: list[dict]) -> dict:
             open_counts[key] += int(report.get("open_counts", {}).get(key) or 0)
         project = report.get("project") or {}
         brief = report.get("management_brief") or {}
+        attention = brief.get("attention_level") or "quiet"
+        attention_counts[attention] = attention_counts.get(attention, 0) + 1
         action = (report.get("action_queue") or [{}])[0]
         action_projects.append({
             "project_number": project.get("project_number") or "",
             "name": project.get("name") or "",
             "client": project.get("client") or "",
-            "attention_level": brief.get("attention_level") or "quiet",
+            "attention_level": attention,
             "headline": brief.get("headline") or "",
             "primary_action": action.get("title") or "",
             "primary_action_detail": action.get("detail") or "",
@@ -505,14 +508,41 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         row.get("next_due") or "9999",
         row.get("project_number") or "",
     ))
+    open_total = sum(open_counts.values())
+    primary_focus = action_projects[0] if action_projects else {}
+    if not reports:
+        headline = "No projects matched the current portfolio filters."
+        recommendation = "Broaden the filters or select specific project numbers before printing a management packet."
+    elif attention_project_count:
+        headline = f"{_plural(attention_project_count, 'at-risk project')} with {_plural(overdue_count, 'overdue linked item')}."
+        recommendation = "Start with the management action queue; confirm owner, next date, and unblock path for each at-risk project."
+    elif upcoming_count:
+        headline = f"{_plural(len(reports), 'project')} in scope with {_plural(upcoming_count, 'upcoming project event')}."
+        recommendation = "Use the upcoming event list as the meeting-prep spine and confirm project status before each touchpoint."
+    elif open_total:
+        headline = f"{_plural(open_total, 'open linked item')} across {_plural(len(reports), 'project')}."
+        recommendation = "Review active work by project and pick the next highest-leverage follow-up."
+    else:
+        headline = f"{_plural(len(reports), 'project')} in scope with no visible open work or upcoming events."
+        recommendation = "No immediate management action is indicated from visible TaskTrack records."
+
     return {
         "project_count": len(reports),
         "site_count": site_count,
         "record_counts": counts,
         "open_counts": open_counts,
+        "open_total": open_total,
         "overdue_count": overdue_count,
         "upcoming_event_count": upcoming_count,
         "attention_project_count": attention_project_count,
+        "attention_counts": attention_counts,
+        "executive_summary": {
+            "headline": headline,
+            "recommendation": recommendation,
+            "primary_focus": primary_focus,
+            "attention_counts": attention_counts,
+            "open_total": open_total,
+        },
         "action_projects": action_projects[:8],
     }
 

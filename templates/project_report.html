@@ -35,6 +35,10 @@
   .meta { color:var(--text-muted); margin-top:0.25rem; }
   .chips { display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.75rem; }
   .chip { border:1px solid var(--border); background:rgba(17,22,29,0.65); border-radius:999px; padding:0.18rem 0.55rem; color:var(--text-muted); font-size:0.74rem; }
+  .brief-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.6rem; margin-top:0.75rem; }
+  .brief-pill { border:1px solid var(--border); border-radius:var(--radius); padding:0.55rem 0.65rem; background:rgba(17,22,29,0.36); }
+  .brief-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.62rem; }
+  .brief-value { font-size:1.05rem; font-weight:700; margin-top:0.16rem; }
   .grid { display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
   .stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.8rem; }
   .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.66rem; }
@@ -60,7 +64,7 @@
   .print-meta { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; font-size:0.72rem; text-align:right; }
   .print-footer { color:var(--text-muted); border-top:1px solid var(--border); margin-top:1rem; padding-top:0.45rem; font-size:0.72rem; }
   .error { background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.35); padding:0.9rem 1rem; border-radius:var(--radius); color:var(--danger); }
-  @media (max-width: 920px) { .cols { grid-template-columns:1fr; } .grid { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width: 920px) { .cols { grid-template-columns:1fr; } .grid,.brief-grid { grid-template-columns:repeat(2,1fr); } }
   @media print {
     @page { size: letter; margin: 0.45in; }
     body { background:#fff; color:#111827; font-size:9.5pt; line-height:1.28; }
@@ -71,7 +75,7 @@
     .print-eyebrow,.print-meta { color:#4b5563; }
     .print-title { color:#111827; }
     .print-footer { color:#4b5563; border-color:#d1d5db; }
-    .card,.hero,.stat { border-color:#d1d5db; background:#fff; break-inside:avoid; box-shadow:none; }
+    .card,.hero,.stat,.brief-pill { border-color:#d1d5db; background:#fff; break-inside:avoid; box-shadow:none; }
     .card { padding:0.12in; margin-bottom:0.12in; }
     .hero { padding:0.12in; margin-bottom:0.12in; }
     .grid { gap:0.08in; margin-bottom:0.12in; }
@@ -166,9 +170,14 @@
       <div class="row">
         <div>
           <div class="row-title">{{ brief.headline }}</div>
-          <div class="row-meta">{{ brief.recommendation }}</div>
+          <div class="row-meta"><strong>Recommendation:</strong> {{ brief.recommendation }}</div>
         </div>
         <div class="when{% if brief.attention_level == 'at_risk' %} danger{% endif %}">{{ brief.attention_level|replace('_', ' ') }}</div>
+      </div>
+      <div class="brief-grid" aria-label="Project management brief metrics">
+        <div class="brief-pill"><div class="brief-label">Open Work</div><div class="brief-value">{{ brief.open_count }}</div></div>
+        <div class="brief-pill"><div class="brief-label">Overdue</div><div class="brief-value{% if brief.overdue_count %} danger{% endif %}">{{ brief.overdue_count }}</div></div>
+        <div class="brief-pill"><div class="brief-label">Upcoming</div><div class="brief-value">{{ brief.upcoming_event_count }}</div></div>
       </div>
       {% else %}<div class="empty">No management brief is available.</div>{% endif %}
     </section>
