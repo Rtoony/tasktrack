@@ -633,6 +633,8 @@ def test_today_brief_json_and_html(auth_client, temp_app):
             priority="High",
             needs_review=1,
             due_date="",
+            requested_by="Operations",
+            description="Manager submitted a browser request.",
         ))
         sess.commit()
 
@@ -641,7 +643,11 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     body = r.get_json()
     assert body["meetings"]["count"] >= 1
     assert body["intake"]["summary"]["needs_review_count"] == 1
+    assert body["intake_days"] == 14
+    assert body["project_limit"] == 8
     assert body["intake"]["rows"][0]["title"] == "Review web form request"
+    assert body["intake"]["rows"][0]["requester"] == "Operations"
+    assert body["intake"]["rows"][0]["detail"] == "Manager submitted a browser request."
     assert any(packet["event"]["title"] == "Today project sync" for packet in body["meetings"]["packets"])
     assert any(row["project_number"] == "8800.10" for row in body["action_projects"])
     assert "Private today prep" not in str(body)
@@ -654,6 +660,12 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert "Today project sync" in html
     assert "New Intake Requests" in html
     assert "Review web form request" in html
+    assert "Manager submitted a browser request." in html
+    assert "Operations" in html
+    assert "Run Order" in html
+    assert "Clear intake review" in html
+    assert "/intake/review?needs_review=1" in html
+    assert "/reports/meetings?days=1&limit=8" in html
     assert "At-Risk Action Queue" in html
     assert "Private today prep" not in html
     assert "@page { size: letter" in html

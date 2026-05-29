@@ -432,6 +432,8 @@ def _today_brief_packet(sess):
     meeting_days = _int_arg("days", 1, 1, 14)
     meeting_limit = _int_arg("meeting_limit", 8, 1, 25)
     project_limit = _int_arg("project_limit", 8, 1, MAX_PORTFOLIO_LIMIT)
+    intake_days = _int_arg("intake_days", 14, 1, 3650)
+    intake_limit = _int_arg("intake_limit", 8, 1, 50)
     meetings = meeting_packet_batch_report(
         sess,
         days=meeting_days,
@@ -454,13 +456,17 @@ def _today_brief_packet(sess):
     intake = intake_source_report(
         sess,
         sources=["web-form", "paper-form", "remarkable-ocr"],
-        days=14,
-        limit=8,
+        days=intake_days,
+        limit=intake_limit,
         needs_review=True,
     )
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "days": meeting_days,
+        "meeting_limit": meeting_limit,
+        "project_limit": project_limit,
+        "intake_days": intake_days,
+        "intake_limit": intake_limit,
         "include_private": include_private,
         "meetings": meetings,
         "at_risk": portfolio,
