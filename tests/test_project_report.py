@@ -664,6 +664,12 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert "Operations" in html
     assert "Run Order" in html
     assert "Clear intake review" in html
+    assert "Packet presets" in html
+    assert "Intake Catch-Up" in html
+    assert "Meeting Prep" in html
+    assert "Management Review" in html
+    assert "Include My Private" in html
+    assert "/reports/today?intake_days=30&intake_limit=25&project_limit=8" in html
     assert "/intake/review?needs_review=1" in html
     assert "/reports/meetings?days=1&limit=8" in html
     assert "At-Risk Action Queue" in html

@@ -23,6 +23,8 @@
   .hero-title { font-size:1.2rem; font-weight:700; }
   .hero-meta { color:var(--text-muted); margin-top:0.25rem; }
   .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+  .preset-strip { display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; }
+  .preset-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-right:0.15rem; }
   .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.42rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
   .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; align-items:start; }
@@ -54,7 +56,7 @@
   @media print {
     @page { size: letter; margin: 0.45in; }
     body { background:#fff; color:#111827; font-size:9.5pt; line-height:1.28; }
-    header,.nav,.btn { display:none !important; }
+    header,.nav,.btn,.screen-tools { display:none !important; }
     main { max-width:none; padding:0 0 0.15in; }
     .print-only { display:block !important; }
     .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; }
@@ -107,6 +109,17 @@
       <a class="btn secondary" href="/api/v1/reports/today?{{ request.query_string.decode('utf-8') }}">JSON</a>
       <a class="btn secondary" href="/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit={{ packet.project_limit }}">At-Risk CSV</a>
       <button class="btn" type="button" onclick="window.print()">Print Packet</button>
+    </div>
+  </section>
+
+  <section class="card screen-tools">
+    <div class="preset-strip" aria-label="Today Brief quick presets">
+      <span class="preset-label">Packet presets</span>
+      <a class="btn secondary" href="/reports/today">Daily</a>
+      <a class="btn secondary" href="/reports/today?intake_days=30&intake_limit=25&project_limit=8">Intake Catch-Up</a>
+      <a class="btn secondary" href="/reports/today?days=7&meeting_limit=15&project_limit=8&intake_limit=8">Meeting Prep</a>
+      <a class="btn secondary" href="/reports/today?days=7&meeting_limit=12&project_limit=25&intake_days=30&intake_limit=20">Management Review</a>
+      <a class="btn secondary" href="/reports/today?include_private=1&days={{ packet.days }}&meeting_limit={{ packet.meeting_limit }}&project_limit={{ packet.project_limit }}&intake_days={{ packet.intake_days }}&intake_limit={{ packet.intake_limit }}">Include My Private</a>
     </div>
   </section>
 

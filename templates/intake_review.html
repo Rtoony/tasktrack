@@ -25,6 +25,8 @@
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
   input,select { width:100%; padding:0.45rem 0.52rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
   .actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
+  .quick-presets { display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border); }
+  .quick-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-right:0.15rem; }
   .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.44rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
   .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
   .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(56,189,248,0.35); }
@@ -90,6 +92,14 @@
       </div>
       <button class="btn" type="submit">Refresh</button>
     </form>
+    <div class="quick-presets" aria-label="Intake review quick presets">
+      <span class="quick-label">Quick presets</span>
+      <a class="btn ghost" href="/intake/review?sources=web-form,paper-form,remarkable-ocr&needs_review=1&days=30&limit=100">Needs Review</a>
+      <a class="btn ghost" href="/intake/review?sources=web-form&needs_review=1&days=30&limit=100">Web Forms</a>
+      <a class="btn ghost" href="/intake/review?sources=paper-form,remarkable-ocr&needs_review=1&days=30&limit=100">Paper / OCR</a>
+      <a class="btn ghost" href="/intake/review?sources=web-form,paper-form,remarkable-ocr&needs_review=1&days=1&limit=100">Today</a>
+      <a class="btn ghost" href="/intake/review?sources=web-form,paper-form,remarkable-ocr&needs_review=&days=30&limit=100">All Intake</a>
+    </div>
     <div class="actions" style="margin-top:0.75rem">
       <a class="btn secondary" href="/intake">Send Forms</a>
       <a class="btn secondary" href="/capture/ocr">OCR Capture</a>

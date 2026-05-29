@@ -34,6 +34,10 @@ def test_intake_review_queue_renders_for_authenticated_user(auth_client):
     assert "Open Record" in html
     assert "row-detail" in html
     assert "row.detail" in html
+    assert "Quick presets" in html
+    assert "Paper / OCR" in html
+    assert "/intake/review?sources=paper-form,remarkable-ocr&needs_review=1&days=30&limit=100" in html
+    assert "All Intake" in html
     assert "/reports/intake" in html
     assert "/api/v1/reports/intake.csv" in html
 
