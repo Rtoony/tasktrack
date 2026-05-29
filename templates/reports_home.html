@@ -67,6 +67,7 @@
     <p>Fast paths for today's shakedown: capture a real note, check the daily packet, open the calendar, and print/export the reports that matter.</p>
     <div class="actions">
       <a class="btn" href="/reports/today">Today Brief</a>
+      <a class="btn secondary" href="/reports/management">Management Packet</a>
       <a class="btn secondary" href="/capture/ocr">OCR Landing Page</a>
       <a class="btn secondary" href="/intake/review?needs_review=1">Intake Review Queue</a>
       <a class="btn secondary" href="/reports/intake">Intake Source Report</a>
@@ -82,6 +83,16 @@
 
   <div class="grid">
     <div>
+      <section class="card">
+        <h2>Management Packet</h2>
+        <p>Assemble the existing Today Brief, portfolio executive summary, at-risk actions, intake review, meeting prep, and admin incident summary into one print-ready packet.</p>
+        <div class="actions">
+          <a class="btn" href="/reports/management">Build Packet</a>
+          <a class="btn secondary" href="/reports/management?days=7&project_limit=25&intake_days=30&intake_limit=20">Management Review</a>
+          <a class="btn ghost" href="/api/v1/reports/management">JSON</a>
+        </div>
+      </section>
+
       <section class="card">
         <h2>Project Status One-Pager</h2>
         <p>Open a focused project report with linked tasks, calendar items, overlay context, map links, and recent activity.</p>

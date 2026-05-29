@@ -33,6 +33,8 @@ def test_admin_panel_serves_admin(admin_client):
     assert "Pages & Reports" in html
     assert "Report Center" in html
     assert "Today Brief" in html
+    assert "Management Packet" in html
+    assert "/reports/management" in html
     assert "Portfolio Reports" in html
     assert "At-Risk Queue" in html
     assert "At-Risk CSV" in html

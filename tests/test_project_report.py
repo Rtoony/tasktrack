@@ -1,6 +1,8 @@
 """Project status report MVP tests."""
 from datetime import datetime, timedelta
 
+from sqlalchemy import select
+
 from app.db import get_session
 from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectSite, ProjectWorkTask, ReportPreset, WorkTask
 
@@ -412,7 +414,9 @@ def test_portfolio_project_report_auth_and_dashboard_link(client, auth_client):
     with client.session_transaction() as s:
         s.clear()
     assert client.get("/api/v1/reports/projects").status_code == 401
+    assert client.get("/api/v1/reports/management").status_code == 401
     assert client.get("/reports/projects").status_code == 302
+    assert client.get("/reports/management").status_code == 302
     assert client.get("/reports").status_code == 302
 
 def test_project_report_errors_and_auth(client, auth_client):
@@ -687,6 +691,82 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert "@page { size: letter" in html
 
 
+
+def test_management_packet_json_html_and_admin_incidents(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        _seed_portfolio_projects(sess)
+        project = sess.scalar(select(Project).where(Project.project_number == "8800.10"))
+        sess.add(WorkTask(
+            title="Management intake request",
+            source="web-form",
+            status="Not Started",
+            priority="High",
+            needs_review=1,
+            requested_by="PM",
+            description="Review before the management meeting.",
+        ))
+        sess.add(PersonnelIssue(
+            person_name="Incident Employee",
+            observed_by="Supervisor",
+            cad_skill_area="Civil 3D",
+            issue_description="Sensitive management incident",
+            incident_context="Private incident context",
+            recommended_training="Private training plan",
+            severity="High",
+            status="Observed",
+            project_number="8800.10",
+            project_id=project.id if project else None,
+        ))
+        sess.commit()
+
+    r = auth_client.get("/api/v1/reports/management?days=7&project_limit=5&intake_days=30&intake_limit=5")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["days"] == 7
+    assert body["project_limit"] == 5
+    assert body["intake_limit"] == 5
+    assert body["portfolio"]["summary"]["executive_summary"]["headline"]
+    assert body["at_risk"]["summary"]["action_projects"][0]["project_number"] == "8800.10"
+    assert body["intake"]["summary"]["needs_review_count"] == 1
+    assert body["intake"]["rows"][0]["detail"] == "Review before the management meeting."
+    assert body["incidents"] is None
+    assert "Private portfolio prep" not in str(body)
+    assert "Sensitive management incident" not in str(body)
+
+    page = auth_client.get("/reports/management?days=7&project_limit=5&intake_days=30&intake_limit=5")
+    assert page.status_code == 200
+    html = page.get_data(as_text=True)
+    assert "Management Packet" in html
+    assert "TaskTrack Management Packet" in html
+    assert "Executive Portfolio Summary" in html
+    assert "Management Action Queue" in html
+    assert "Intake Review Summary" in html
+    assert "Meeting Prep" in html
+    assert "Management intake request" in html
+    assert "Review before the management meeting." in html
+    assert "Print Packet" in html
+    assert "@page { size:letter" in html
+    assert "Sensitive management incident" not in html
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+
+    admin_json = auth_client.get("/api/v1/reports/management?project_limit=5")
+    assert admin_json.status_code == 200
+    admin_body = admin_json.get_json()
+    assert admin_body["include_incidents"] is True
+    assert admin_body["incidents"]["summary"]["open_count"] == 1
+    assert admin_body["incidents"]["incidents"][0]["issue_description"] == "Sensitive management incident"
+
+    admin_page = auth_client.get("/reports/management?project_limit=5")
+    assert admin_page.status_code == 200
+    admin_html = admin_page.get_data(as_text=True)
+    assert "Incident Summary" in admin_html
+    assert "Sensitive management incident" in admin_html
+
 def test_portfolio_action_queue_csv_export(auth_client, temp_app):
     with temp_app.app_context():
         sess = get_session()
@@ -715,6 +795,9 @@ def test_reports_home_renders_command_center(client, auth_client):
     html = r.get_data(as_text=True)
     assert "Report Center" in html
     assert "Testing Launchpad" in html
+    assert "Management Packet" in html
+    assert "/reports/management" in html
+    assert "/api/v1/reports/management" in html
     assert "Triage Inbox" in html
     assert "OCR Landing Page" in html
     assert "Quick OCR Capture" in html

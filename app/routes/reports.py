@@ -493,6 +493,89 @@ def today_brief_page():
     )
 
 
+def _management_packet(sess):
+    """Compose the print-ready management packet from existing report services."""
+    user_id = session.get("user_id")
+    is_admin = _is_admin()
+    include_private = _bool_arg("include_private")
+    include_incidents = is_admin and (
+        "include_incidents" not in request.args or _bool_arg("include_incidents")
+    )
+    meeting_days = _int_arg("days", 7, 1, 30)
+    meeting_limit = _int_arg("meeting_limit", 8, 1, 25)
+    project_limit = _int_arg("project_limit", 12, 1, MAX_PORTFOLIO_LIMIT)
+    intake_days = _int_arg("intake_days", 30, 1, 3650)
+    intake_limit = _int_arg("intake_limit", 12, 1, 50)
+
+    portfolio = portfolio_project_report(
+        sess,
+        filters={"limit": project_limit},
+        user_id=user_id,
+        include_private=include_private,
+        is_admin=is_admin,
+    )
+    at_risk = portfolio_project_report(
+        sess,
+        filters={"attention_level": "at_risk", "limit": project_limit},
+        user_id=user_id,
+        include_private=include_private,
+        is_admin=is_admin,
+    )
+    meetings = meeting_packet_batch_report(
+        sess,
+        days=meeting_days,
+        limit=meeting_limit,
+        user_id=user_id,
+        include_private=include_private,
+        is_admin=is_admin,
+    )
+    intake = intake_source_report(
+        sess,
+        sources=["web-form", "paper-form", "remarkable-ocr"],
+        days=intake_days,
+        limit=intake_limit,
+        needs_review=True,
+    )
+    incidents = incident_report(
+        sess,
+        filters={"open_only": True, "limit": 8, "days": 365},
+    ) if include_incidents else None
+
+    return {
+        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        "include_private": include_private,
+        "include_incidents": include_incidents,
+        "is_admin": is_admin,
+        "days": meeting_days,
+        "meeting_limit": meeting_limit,
+        "project_limit": project_limit,
+        "intake_days": intake_days,
+        "intake_limit": intake_limit,
+        "portfolio": portfolio,
+        "at_risk": at_risk,
+        "meetings": meetings,
+        "intake": intake,
+        "incidents": incidents,
+    }
+
+
+@bp.route("/api/v1/reports/management", methods=["GET"])
+@login_required
+def management_packet_json():
+    return jsonify(_management_packet(get_session()))
+
+
+@bp.route("/reports/management", methods=["GET"])
+@login_required
+def management_packet_page():
+    return render_template(
+        "management_report.html",
+        packet=_management_packet(get_session()),
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
 @bp.route("/api/v1/reports/presets", methods=["GET"])
 @login_required
 def report_presets_list():
