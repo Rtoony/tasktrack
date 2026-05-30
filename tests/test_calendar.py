@@ -331,6 +331,10 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'id="core-tracker-cards"' in html
     assert 'id="core-review-queue"' in html
     assert 'id="core-due-soon"' in html
+    assert 'class="modal-overlay record-overlay"' in html
+    assert 'class="modal record-drawer"' in html
+    assert 'id="modal-meta"' in html
+    assert "renderModalHeader" in html
     assert "B&amp;R Intake Form" in html
     assert "Upcoming Operations" in html
     assert "Intake Review" in html

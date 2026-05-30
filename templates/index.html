@@ -317,17 +317,35 @@
   .badge-private { background:#fce7f3; color:#9d174d; }
   .badge-shared { background:#ede9fe; color:#6d28d9; }
 
-  /* ── Modal ───────────────────────────────── */
-  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); backdrop-filter:blur(2px); z-index:200; align-items:center; justify-content:center; }
+  /* ── Modal / record drawer ────────────────── */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(22,22,22,0.42); backdrop-filter:blur(2px); z-index:200; align-items:center; justify-content:center; }
   .modal-overlay.open { display:flex; }
   .modal { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:100%; max-width:560px; max-height:90vh; overflow-y:auto; animation:modalIn 0.15s ease-out; }
   @keyframes modalIn { from{opacity:0;transform:translateY(8px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+  @keyframes drawerIn { from{opacity:0;transform:translateX(18px)} to{opacity:1;transform:translateX(0)} }
   .modal-header { padding:1rem 1.25rem 0.6rem; display:flex; justify-content:space-between; align-items:center; }
   .modal-header h3 { font-size:0.95rem; font-weight:600; }
-  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--text-light); cursor:pointer; padding:4px 8px; border-radius:4px; }
+  .modal-close { background:none; border:none; font-size:1.1rem; color:var(--text-light); cursor:pointer; padding:4px 8px; border-radius:var(--radius); }
   .modal-close:hover { background:var(--bg); color:var(--text); }
   .modal-body { padding:0.4rem 1.25rem 1.25rem; }
   .modal-footer { padding:0.6rem 1.25rem 1rem; display:flex; gap:0.5rem; justify-content:flex-end; border-top:1px solid var(--border-light); }
+  .record-overlay { align-items:stretch; justify-content:flex-end; }
+  .record-drawer { width:min(620px, 100vw); max-width:none; height:100vh; max-height:none; border-left:1px solid var(--border); border-radius:0; display:flex; flex-direction:column; overflow:hidden; animation:drawerIn 0.18s cubic-bezier(0,0,0.3,1); }
+  .record-drawer .modal-header { align-items:flex-start; gap:1rem; padding:1rem 1.25rem 0.85rem; border-bottom:1px solid var(--border); background:var(--surface); }
+  .record-drawer .modal-body { flex:1; overflow-y:auto; padding:1rem 1.25rem 1.25rem; }
+  .record-drawer .modal-footer { padding:0.75rem 1.25rem; border-top:1px solid var(--border); background:var(--surface); flex-wrap:wrap; }
+  .drawer-heading { min-width:0; flex:1; }
+  .drawer-eyebrow { font-family:'IBM Plex Mono',monospace; font-size:0.68rem; color:var(--text-light); margin-bottom:0.25rem; }
+  .drawer-title-row { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
+  .drawer-title-row h3 { font-size:1.1rem; line-height:1.25; letter-spacing:-0.02em; color:var(--text); }
+  .drawer-meta { display:flex; flex-wrap:wrap; align-items:center; gap:0.35rem; margin-top:0.65rem; }
+  .record-drawer .field { margin-bottom:0.9rem; }
+  .record-drawer .field input,.record-drawer .field select,.record-drawer .field textarea { border:0; border-bottom:1px solid #8d8d8d; background:var(--bg); border-radius:0; padding:0.5rem 0.6rem; }
+  .record-drawer .field input:focus,.record-drawer .field select:focus,.record-drawer .field textarea:focus { box-shadow:none; border-color:var(--accent); outline:2px solid var(--accent); outline-offset:-2px; }
+  @media (max-width:720px) {
+    .record-drawer { width:100vw; }
+    .record-drawer .modal-footer { justify-content:flex-start; }
+  }
   .btn-cancel { background:var(--bg); color:var(--text-muted); border:1px solid var(--border); }
   .btn-cancel:hover { background:var(--border-light); color:var(--text); }
   .btn-danger { background:var(--danger); color:#fff; }
@@ -1406,11 +1424,17 @@
 </main>
 
 <!-- ── CRUD Modal ────────────────────────────── -->
-<div class="modal-overlay" id="modal-overlay">
-  <div class="modal">
+<div class="modal-overlay record-overlay" id="modal-overlay">
+  <div class="modal record-drawer">
     <div class="modal-header">
-      <h3 id="modal-title">Add Record</h3>
-      <button class="modal-close" onclick="closeModal()">&times;</button>
+      <div class="drawer-heading">
+        <div class="drawer-eyebrow" id="modal-eyebrow">Record</div>
+        <div class="drawer-title-row">
+          <h3 id="modal-title">Add Record</h3>
+        </div>
+        <div class="drawer-meta" id="modal-meta"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal()" aria-label="Close record drawer">&times;</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
@@ -4632,6 +4656,31 @@ async function loadLinks(table, recordId) {
 }
 
 /* ── Modal open/close ──────────────────────── */
+function modalTitleForRecord(table, data, fallbackLabel) {
+  if (!data || !data.id) return 'Add ' + fallbackLabel;
+  return dashboardRowTitle(data);
+}
+
+function renderModalHeader(table, data, labels) {
+  const label = labels[table] || 'Record';
+  const eyebrow = document.getElementById('modal-eyebrow');
+  const title = document.getElementById('modal-title');
+  const meta = document.getElementById('modal-meta');
+  if (eyebrow) eyebrow.textContent = (data && data.id ? 'Edit' : 'Create') + ' / ' + label;
+  if (title) title.textContent = modalTitleForRecord(table, data, label);
+  if (!meta) return;
+  meta.replaceChildren();
+  meta.appendChild(coreTag(API_MAP[table] || table, 'gray'));
+  if (data && data.id) meta.appendChild(coreTag('#' + data.id, 'gray'));
+  if (data?.project_number) meta.appendChild(coreTag(data.project_number, 'blue'));
+  if (data?.source) meta.appendChild(coreTag(data.source, coreStatusTone(data.source)));
+  if (data?.priority) meta.appendChild(coreTag(data.priority + ' priority', coreStatusTone(data.priority)));
+  if (data?.severity) meta.appendChild(coreTag(data.severity + ' impact', coreStatusTone(data.severity)));
+  if (data?.status) meta.appendChild(coreTag(data.status, coreStatusTone(data.status)));
+  if (data?.visibility) meta.appendChild(coreTag(data.visibility, coreStatusTone(data.visibility)));
+  if (!data || !data.id) meta.appendChild(coreTag('new record', 'blue'));
+}
+
 function openModal(table,data) {
   editingTable=table; editingId=data?data.id:null;
   window.__currentModalData = data || {};
@@ -4647,7 +4696,7 @@ function openModal(table,data) {
     personal_house:'Office Item',
     personal_cars:'Asset Item',
   };
-  document.getElementById('modal-title').textContent=(editingId?'Edit ':'Add ')+labels[table];
+  renderModalHeader(table, data || {}, labels);
   const body=document.getElementById('modal-body');
   body.replaceChildren();
   body.appendChild(buildForm(table,data||{}));
@@ -4775,6 +4824,7 @@ async function doPromote() {
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   renderMeetingPacketButton('', {});
+  document.getElementById('modal-meta')?.replaceChildren();
   window.__currentModalData = {};
   editingId=null; editingTable=null;
 }
