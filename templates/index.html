@@ -285,6 +285,20 @@
   .cell-desc { color:var(--text-muted); font-size:0.78rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:260px; }
   .cell-supporting { color:var(--text-muted); font-size:0.78rem; }
   .cell-actions { display:flex; gap:2px; white-space:nowrap; }
+  tr.table-record-row { cursor:pointer; }
+  tr.table-record-row:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+  tr.table-record-row:focus-visible td { background:var(--accent-light); }
+
+  .tracker-summary { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:0.5rem; margin:-0.35rem 0 0.8rem; }
+  .tracker-summary-card { background:var(--surface); border:1px solid var(--border); padding:0.65rem 0.75rem; min-width:0; }
+  .tracker-summary-value { font-family:'IBM Plex Mono',monospace; font-size:1.05rem; font-weight:600; line-height:1; color:var(--text); }
+  .tracker-summary-value.warn { color:var(--warn); }
+  .tracker-summary-value.danger { color:var(--danger); }
+  .tracker-summary-value.success { color:var(--success); }
+  .tracker-summary-label { margin-top:0.25rem; color:var(--text-light); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tracker-summary-note { margin-top:0.15rem; color:var(--text-muted); font-size:0.68rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tracker-status-strip { display:flex; height:0.38rem; margin-top:0.5rem; background:#e0e0e0; overflow:hidden; }
+  .tracker-status-seg { min-width:2px; }
 
   .empty-state { text-align:center; padding:2.5rem 1rem; color:var(--text-light); font-size:0.85rem; }
   .empty-state strong { color:var(--text-muted); }
@@ -526,6 +540,7 @@
     .core-hero-main { border-right:none; border-bottom:1px solid var(--border); }
     .core-tracker-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .core-activity-grid { grid-template-columns:1fr; }
+    .tracker-summary { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .search-input { width:160px; }
     .search-input:focus { width:220px; }
     .workspace-shell { grid-template-columns:1fr; }
@@ -1666,6 +1681,18 @@ const CORE_TABLE_TO_TAB = {
   personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal_husband',
   calendar_events:'calendar',
 };
+const TRACKER_STATUS_FLOW = {
+  work:['Not Started','In Progress','On Hold','Complete'],
+  project:['Not Started','In Progress','On Hold','Complete'],
+  training:['Not Started','In Progress','On Hold','Complete'],
+  personnel:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed'],
+  triage:['New','In Progress','Done','Archived'],
+  calendar:['scheduled','tentative','done','cancelled'],
+  personal_husband:['New','In Progress','Done','Archived'],
+  personal_father:['New','In Progress','Done','Archived'],
+  personal_house:['New','In Progress','Done','Archived'],
+  personal_cars:['New','In Progress','Done','Archived'],
+};
 const sortState = {
   work:{col:'id',order:'asc'},
   project:{col:'id',order:'asc'},
@@ -2794,6 +2821,113 @@ function formatTimeAgo(ts) {
   return Math.floor(diff/86400)+'d ago';
 }
 
+function trackerDoneStatuses(table) {
+  if (table === 'personnel') return new Set(['Closed']);
+  if (table === 'calendar') return new Set(['done', 'cancelled']);
+  if (table === 'triage' || INTERNAL_QUEUE_TABS.includes(table)) return new Set(['Done', 'Archived']);
+  return new Set(['Complete']);
+}
+
+function trackerDisplayRowsForTab(table, rows) {
+  if (!INTERNAL_QUEUE_TABS.includes(table)) return rows || [];
+  const cat = INTERNAL_QUEUE_CATEGORIES[table];
+  return (rows || []).filter(r => r.category === cat);
+}
+
+function ensureTrackerSummary(table) {
+  const section = document.getElementById('sec-' + table);
+  if (!section) return null;
+  let host = document.getElementById('tracker-summary-' + table);
+  if (host) return host;
+  const filter = section.querySelector('.filter-bar');
+  host = document.createElement('div');
+  host.id = 'tracker-summary-' + table;
+  host.className = 'tracker-summary';
+  host.setAttribute('aria-label', 'Tracker summary');
+  if (filter) filter.insertAdjacentElement('afterend', host);
+  else section.prepend(host);
+  return host;
+}
+
+function trackerSummaryCard(value, label, note, tone) {
+  const card = document.createElement('div');
+  card.className = 'tracker-summary-card';
+  const v = document.createElement('div');
+  v.className = 'tracker-summary-value ' + (tone || '');
+  v.textContent = value;
+  const l = document.createElement('div');
+  l.className = 'tracker-summary-label';
+  l.textContent = label;
+  const n = document.createElement('div');
+  n.className = 'tracker-summary-note';
+  n.textContent = note || '';
+  card.appendChild(v); card.appendChild(l); card.appendChild(n);
+  return card;
+}
+
+function renderTrackerSummary(table, baseRows, filteredRows) {
+  const host = ensureTrackerSummary(table);
+  if (!host) return;
+  const rows = trackerDisplayRowsForTab(table, baseRows || []);
+  const filtered = filteredRows || [];
+  const done = trackerDoneStatuses(table);
+  const openRows = rows.filter(r => !done.has(r.status));
+  const overdueRows = rows.filter(r => isOverdue(r));
+  const reviewRows = rows.filter(r => r.needs_review || (table === 'triage' && !done.has(r.status)));
+  host.replaceChildren();
+  host.appendChild(trackerSummaryCard(openRows.length, 'Open', rows.length + ' total', openRows.length ? '' : 'success'));
+  host.appendChild(trackerSummaryCard(overdueRows.length, 'Overdue', overdueRows.length ? 'needs attention' : 'clear', overdueRows.length ? 'danger' : 'success'));
+  host.appendChild(trackerSummaryCard(reviewRows.length, table === 'triage' ? 'In queue' : 'Review', reviewRows.length ? 'requires triage' : 'none flagged', reviewRows.length ? 'warn' : 'success'));
+  host.appendChild(trackerSummaryCard(filtered.length, 'Showing', filtered.length === rows.length ? 'no filter' : 'filtered', ''));
+
+  const statusCard = trackerSummaryCard(rows.length, 'Status mix', 'by current queue', '');
+  const strip = document.createElement('div');
+  strip.className = 'tracker-status-strip';
+  const counts = Object.create(null);
+  rows.forEach(r => { counts[r.status || 'Unknown'] = (counts[r.status || 'Unknown'] || 0) + 1; });
+  const statuses = TRACKER_STATUS_FLOW[table] || Object.keys(counts);
+  const total = Math.max(rows.length, 1);
+  statuses.forEach(status => {
+    const count = counts[status] || 0;
+    if (!count) return;
+    const seg = document.createElement('span');
+    seg.className = 'tracker-status-seg';
+    seg.title = status + ': ' + count;
+    seg.style.width = Math.max(4, count / total * 100) + '%';
+    seg.style.background = ({red:'#da1e28', green:'#24a148', purple:'#8a3ffc', amber:'#f1c21b', blue:'#0f62fe', teal:'#007d79'})[coreStatusTone(status)] || '#c6c6c6';
+    strip.appendChild(seg);
+  });
+  if (!strip.children.length) {
+    const seg = document.createElement('span');
+    seg.className = 'tracker-status-seg';
+    seg.style.width = '100%';
+    seg.style.background = '#e0e0e0';
+    strip.appendChild(seg);
+  }
+  statusCard.appendChild(strip);
+  host.appendChild(statusCard);
+}
+
+function interactiveRowTarget(target) {
+  return Boolean(target && typeof target.closest === 'function' && target.closest('button,a,input,select,textarea,label'));
+}
+
+function wireRecordRow(tr, table, row) {
+  if (!tr || !row?.id) return;
+  tr.classList.add('table-record-row');
+  tr.tabIndex = 0;
+  tr.addEventListener('click', event => {
+    if (interactiveRowTarget(event.target)) return;
+    editRecord(table, row.id);
+  });
+  tr.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    if (interactiveRowTarget(event.target)) return;
+    event.preventDefault();
+    editRecord(table, row.id);
+  });
+}
+
 /* ── Load Table (with filters) ─────────────── */
 async function loadTable(table) {
   const st = sortState[table];
@@ -2809,6 +2943,7 @@ async function loadTable(table) {
   const overdueFilter = document.getElementById('filter-'+table+'-overdue')?.checked || false;
 
   let filtered = data;
+  let baseRows = trackerDisplayRowsForTab(table, data);
   // Internal queues share the legacy personal_items table; filter to this tab's category.
   if (INTERNAL_QUEUE_TABS.includes(table)) {
     filtered = filtered.filter(r => r.category === INTERNAL_QUEUE_CATEGORIES[table]);
@@ -2822,6 +2957,8 @@ async function loadTable(table) {
   if (typeFilter && table === 'calendar') filtered = filtered.filter(r => r.event_type === typeFilter);
   if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
+
+  renderTrackerSummary(table, baseRows, filtered);
 
   const tbody = document.getElementById('tbody-'+table);
   const empty = document.getElementById('empty-'+table);
@@ -2919,6 +3056,7 @@ async function loadTable(table) {
       tr.appendChild(makeDateCell(r.reported_date));
       tr.appendChild(makeActions(table,r.id,r.person_name));
     }
+    wireRecordRow(tr, table, r);
     tbody.appendChild(tr);
   });
 

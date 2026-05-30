@@ -335,6 +335,9 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'class="modal record-drawer"' in html
     assert 'id="modal-meta"' in html
     assert "renderModalHeader" in html
+    assert "renderTrackerSummary" in html
+    assert "wireRecordRow" in html
+    assert "tracker-summary" in html
     assert "B&amp;R Intake Form" in html
     assert "Upcoming Operations" in html
     assert "Intake Review" in html
