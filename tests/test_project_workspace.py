@@ -310,6 +310,10 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert 'id="workspace-overlay"' in html
+    assert 'id="project-command"' in html
+    assert 'id="project-command-number"' in html
+    assert 'runProjectCommand' in html
+    assert 'initProjectCommand' in html
     assert 'openProjectWorkspaceById' in html
     assert 'openProjectWorkspaceSmart' in html
     assert 'focusProjectOnMapSmart' in html
