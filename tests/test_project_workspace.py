@@ -335,5 +335,10 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'workspaceActivitySection' in html
     assert 'workspaceActivityRow' in html
     assert 'workspaceOverlayCard' in html
+    assert 'workspaceOverlayEditorCard' in html
+    assert 'workspace-overlay-form' in html
     assert 'workspaceEditOverlay' in html
+    assert 'workspaceSaveOverlayEdit' in html
+    assert 'workspaceCancelOverlayEdit' in html
+    assert 'Internal project notes' in html
     assert 'loadProjectSyncStatus' in html

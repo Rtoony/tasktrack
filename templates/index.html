@@ -386,6 +386,11 @@
   .workspace-meta-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.05em; }
   .workspace-meta-value { font-size:0.8rem; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:0.1rem; }
   .workspace-actions { display:flex; flex-wrap:wrap; gap:0.45rem; margin-top:0.75rem; }
+  .workspace-overlay-form { margin-top:0.75rem; display:flex; flex-direction:column; gap:0.65rem; }
+  .workspace-overlay-grid { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:0.65rem; }
+  .workspace-overlay-form .field { margin-bottom:0; }
+  .workspace-overlay-form textarea { min-height:76px; }
+  .workspace-overlay-editor-note { font-size:0.72rem; color:var(--text-light); }
   .workspace-counts { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:0.45rem; }
   .workspace-count { border:1px solid var(--border-light); border-radius:var(--radius); background:var(--bg); padding:0.5rem; }
   .workspace-count-value { font-size:1.05rem; font-weight:700; color:var(--accent); }
@@ -554,6 +559,7 @@
     .search-input:focus { width:220px; }
     .workspace-shell { grid-template-columns:1fr; }
     .workspace-counts { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .workspace-overlay-grid { grid-template-columns:1fr; }
   }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
@@ -3627,6 +3633,7 @@ function makeActions(table,id,label) {
    Read-only operator cockpit for a project. The backend owns project
    identity and linked records; this view only aggregates and deep-links. */
 let workspaceState = null;
+let workspaceOverlayEditing = false;
 const WORKSPACE_SECTIONS = [
   { key:'project_work_tasks', label:'Project Tasks', tab:'project' },
   { key:'calendar_events', label:'Calendar', tab:'calendar' },
@@ -3636,6 +3643,7 @@ const WORKSPACE_SECTIONS = [
 ];
 
 function closeProjectWorkspace() {
+  workspaceOverlayEditing = false;
   document.getElementById('workspace-overlay').classList.remove('open');
 }
 
@@ -3685,6 +3693,7 @@ async function openProjectWorkspace(path) {
     return;
   }
   workspaceState = data;
+  workspaceOverlayEditing = false;
   renderProjectWorkspace(data);
   updateWorkspaceDeepLink(data.project?.project_number);
 }
@@ -3855,7 +3864,79 @@ function workspaceActivitySection(rows) {
   return section;
 }
 
+function workspaceOverlayInput(key, label, value, opts = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+  const l = document.createElement('label');
+  l.setAttribute('for', 'workspace-overlay-' + key);
+  l.textContent = label;
+  let input;
+  if (opts.options) {
+    input = document.createElement('select');
+    opts.options.forEach(option => {
+      const opt = document.createElement('option');
+      opt.value = option;
+      opt.textContent = option || '—';
+      input.appendChild(opt);
+    });
+  } else if (opts.textarea) {
+    input = document.createElement('textarea');
+    input.rows = opts.rows || 3;
+  } else {
+    input = document.createElement('input');
+    input.type = opts.type || 'text';
+  }
+  input.id = 'workspace-overlay-' + key;
+  input.value = value || '';
+  wrap.appendChild(l); wrap.appendChild(input);
+  return wrap;
+}
+
+function workspaceOverlayEditorCard(data) {
+  const overlay = data.operator_overlay || {};
+  const card = document.createElement('div');
+  card.className = 'workspace-card';
+  const title = document.createElement('div');
+  title.className = 'workspace-section-title';
+  title.textContent = 'Edit TaskTrack Overlay';
+  card.appendChild(title);
+  const note = document.createElement('div');
+  note.className = 'workspace-overlay-editor-note';
+  note.textContent = 'TaskTrack-only project context. Imported master-list fields remain read-only.';
+  card.appendChild(note);
+
+  const form = document.createElement('div');
+  form.className = 'workspace-overlay-form';
+  const grid = document.createElement('div');
+  grid.className = 'workspace-overlay-grid';
+  grid.appendChild(workspaceOverlayInput('operator_status', 'Internal status', overlay.operator_status));
+  grid.appendChild(workspaceOverlayInput('priority', 'Priority', overlay.priority, { options:['', 'Low', 'Medium', 'High', 'Critical'] }));
+  grid.appendChild(workspaceOverlayInput('tags', 'Tags', overlay.tags));
+  grid.appendChild(workspaceOverlayInput('next_review_date', 'Next review', overlay.next_review_date, { type:'date' }));
+  form.appendChild(grid);
+  form.appendChild(workspaceOverlayInput('internal_notes', 'Internal project notes', overlay.internal_notes, { textarea:true, rows:4 }));
+  form.appendChild(workspaceOverlayInput('report_note', 'Report note', overlay.report_note, { textarea:true, rows:3 }));
+
+  const actions = document.createElement('div');
+  actions.className = 'workspace-actions';
+  const cancel = document.createElement('button');
+  cancel.type = 'button';
+  cancel.className = 'btn btn-cancel';
+  cancel.textContent = 'Cancel';
+  cancel.addEventListener('click', workspaceCancelOverlayEdit);
+  const save = document.createElement('button');
+  save.type = 'button';
+  save.className = 'btn btn-primary';
+  save.textContent = 'Save Overlay';
+  save.addEventListener('click', workspaceSaveOverlayEdit);
+  actions.appendChild(cancel); actions.appendChild(save);
+  form.appendChild(actions);
+  card.appendChild(form);
+  return card;
+}
+
 function workspaceOverlayCard(data) {
+  if (workspaceOverlayEditing && data.can_edit_overlay) return workspaceOverlayEditorCard(data);
   const overlay = data.operator_overlay || {};
   const card = document.createElement('div');
   card.className = 'workspace-card';
@@ -3998,32 +4079,34 @@ function renderProjectWorkspace(data) {
 
 function workspaceProject() { return workspaceState?.project || {}; }
 
-async function workspaceEditOverlay() {
+function workspaceEditOverlay() {
   const p = workspaceProject();
   if (!p.id) { toast('No project loaded'); return; }
-  const current = workspaceState?.operator_overlay || {};
-  const operatorStatus = prompt('Internal status', current.operator_status || '');
-  if (operatorStatus === null) return;
-  const priority = prompt('Priority', current.priority || '');
-  if (priority === null) return;
-  const tags = prompt('Tags', current.tags || '');
-  if (tags === null) return;
-  const nextReview = prompt('Next review date (YYYY-MM-DD)', current.next_review_date || '');
-  if (nextReview === null) return;
-  const internalNotes = prompt('Internal notes', current.internal_notes || '');
-  if (internalNotes === null) return;
-  const reportNote = prompt('Report note', current.report_note || '');
-  if (reportNote === null) return;
+  workspaceOverlayEditing = true;
+  renderProjectWorkspace(workspaceState);
+  setTimeout(() => document.getElementById('workspace-overlay-operator_status')?.focus(), 0);
+}
+
+function workspaceCancelOverlayEdit() {
+  workspaceOverlayEditing = false;
+  renderProjectWorkspace(workspaceState);
+}
+
+async function workspaceSaveOverlayEdit() {
+  const p = workspaceProject();
+  if (!p.id) { toast('No project loaded'); return; }
+  const value = key => document.getElementById('workspace-overlay-' + key)?.value || '';
   const updated = await api('PATCH', '/api/v1/projects/' + encodeURIComponent(p.id) + '/overlay', {
-    operator_status: operatorStatus,
-    priority,
-    tags,
-    next_review_date: nextReview,
-    internal_notes: internalNotes,
-    report_note: reportNote,
+    operator_status: value('operator_status'),
+    priority: value('priority'),
+    tags: value('tags'),
+    next_review_date: value('next_review_date'),
+    internal_notes: value('internal_notes'),
+    report_note: value('report_note'),
   });
   if (!updated || updated.error) { toast(updated?.error || 'Overlay update failed'); return; }
   workspaceState.operator_overlay = updated;
+  workspaceOverlayEditing = false;
   renderProjectWorkspace(workspaceState);
   toast('Project overlay updated');
 }
