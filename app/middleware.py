@@ -32,10 +32,8 @@ def init_request_middleware(app):
     def _end_request(response):
         rid = g.get("request_id", "-")
         response.headers["X-Request-Id"] = rid
-        # Security headers. The BR intake design currently loads its React
-        # runtime from unpkg; localize that bundle before tightening CSP again.
-        # style-src allows 'unsafe-inline' because dashboard CSS variables are
-        # set in a <style> block.
+        # Security headers. style-src allows 'unsafe-inline' because
+        # dashboard CSS variables are set in a <style> block.
         response.headers.setdefault("X-Frame-Options", "DENY")
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
         response.headers.setdefault("Referrer-Policy", "same-origin")
@@ -46,7 +44,7 @@ def init_request_middleware(app):
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             # OSM tile servers — added for the Atlas-lite map tab.

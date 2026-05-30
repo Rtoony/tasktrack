@@ -64,12 +64,15 @@ def test_unified_request_form_renders_br_shell(auth_client):
     r = auth_client.get("/intake/request?type=cad&project=1588.01")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "Submit a request" in html
+    assert "Submit a Request" in html
     assert "Brelje &amp; Race" in html
     assert "window.TT_INTAKE" in html
     assert "/api/v1/intake/submit" in html
     assert "/api/v1/projects/search" in html
     assert "breljerace-logo-white.png" in html
+    assert "js/br-intake.bundle.js" in html
+    assert "unpkg.com" not in html
+    assert "text/babel" not in html
     assert "sk-" not in html.lower()
 
 
