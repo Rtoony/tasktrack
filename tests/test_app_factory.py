@@ -8,6 +8,11 @@ Re-enabled in Phase 1D-2j once Alembic owned schema and the legacy
 runtime mutation that tripped fresh-init was deleted.
 """
 
+from werkzeug.security import generate_password_hash
+
+from app.db import get_session
+from app.models import User
+
 
 def test_healthz_via_test_client(client):
     r = client.get("/healthz")
@@ -103,3 +108,32 @@ def test_printable_intake_packet_renders_for_paper_and_remarkable(client):
     assert 'class="page remarkable"' in single_html
 
     assert client.get("/intake/printable?form=missing").status_code == 404
+
+
+def test_login_redirect_preserves_next_path(client, temp_app):
+    unauth = client.get(
+        "/intake/request?type=cad&project=1588.01",
+        follow_redirects=False,
+    )
+    assert unauth.status_code == 302
+    assert "/login?next=" in unauth.headers["Location"]
+
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(User(
+            email="next@example.com",
+            display_name="Next User",
+            password_hash=generate_password_hash("test-pass"),
+            role="user",
+        ))
+        sess.commit()
+
+    logged_in = client.post(
+        unauth.headers["Location"],
+        data={"email": "next@example.com", "password": "test-pass"},
+        follow_redirects=False,
+    )
+    assert logged_in.status_code == 302
+    assert logged_in.headers["Location"].endswith(
+        "/intake/request?type=cad&project=1588.01"
+    )

@@ -14,6 +14,14 @@ from functools import wraps
 from flask import g, jsonify, redirect, request, session, url_for
 
 
+def _current_path_for_login() -> str:
+    return request.full_path.rstrip("?")
+
+
+def _redirect_to_login():
+    return redirect(url_for("auth.login", next=_current_path_for_login()))
+
+
 def login_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -23,7 +31,7 @@ def login_required(f):
                     "error": "Unauthorized",
                     "request_id": g.get("request_id", "-"),
                 }), 401
-            return redirect(url_for("auth.login"))
+            return _redirect_to_login()
         return f(*args, **kwargs)
     return decorated
 
@@ -37,7 +45,7 @@ def admin_required(f):
                     "error": "Unauthorized",
                     "request_id": g.get("request_id", "-"),
                 }), 401
-            return redirect(url_for("auth.login"))
+            return _redirect_to_login()
         if session.get("user_role") != "admin":
             if request.is_json or request.path.startswith("/api/"):
                 return jsonify({

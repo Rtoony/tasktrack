@@ -18,6 +18,15 @@ from ..models import ApprovedEmail, User
 bp = Blueprint("auth", __name__)
 
 
+def _safe_next_url(raw: str | None) -> str:
+    target = (raw or "").strip()
+    if not target or not target.startswith("/"):
+        return ""
+    if target.startswith("//") or target.startswith("/\\"):
+        return ""
+    return target
+
+
 def _skip_limit_for_tests() -> bool:
     """Bypass rate limits inside the pytest test client."""
     return bool(current_app.config.get("TESTING"))
@@ -27,8 +36,9 @@ def _skip_limit_for_tests() -> bool:
 @limiter.limit("10 per minute; 100 per hour", methods=["POST"],
                exempt_when=_skip_limit_for_tests)
 def login():
+    next_url = _safe_next_url(request.values.get("next"))
     if "user_id" in session:
-        return redirect(url_for("main.index"))
+        return redirect(next_url or url_for("main.index"))
 
     error = None
     if request.method == "POST":
@@ -46,10 +56,10 @@ def login():
             session["user_email"] = user.email
             session["user_name"] = user.display_name
             session["user_role"] = user.role
-            return redirect(url_for("main.index"))
+            return redirect(next_url or url_for("main.index"))
         error = "Invalid email or password."
 
-    return render_template("login.html", error=error, mode="login")
+    return render_template("login.html", error=error, mode="login", next_url=next_url)
 
 
 @bp.route("/register", methods=["GET", "POST"])
@@ -93,7 +103,7 @@ def register():
                     sess.commit()
                     success = "Account created! You can now log in."
 
-    return render_template("login.html", error=error, success=success, mode="register")
+    return render_template("login.html", error=error, success=success, mode="register", next_url="")
 
 
 @bp.route("/logout")

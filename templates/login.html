@@ -165,7 +165,7 @@
   <div class="helper-panel">Registration only works for emails already approved by an admin. If you only need to submit work, use <a href="/intake">Submission Forms</a>.</div>
   <p class="toggle">Already have an account? <a href="/login">Sign in</a></p>
   {% else %}
-  <form method="POST" action="/login">
+  <form method="POST" action="{{ url_for('auth.login', next=next_url) if next_url else url_for('auth.login') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="field">
       <label>Email</label>
