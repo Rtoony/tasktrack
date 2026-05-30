@@ -157,10 +157,16 @@ def create_app(db_path=None) -> Flask:
         from .services.health import start_background_probes
         start_background_probes()
 
-    from .cli import create_admin_command, db_upgrade_command, init_db_command
+    from .cli import (
+        adoption_metrics_command,
+        create_admin_command,
+        db_upgrade_command,
+        init_db_command,
+    )
     app.cli.add_command(init_db_command)
     app.cli.add_command(db_upgrade_command)
     app.cli.add_command(create_admin_command)
+    app.cli.add_command(adoption_metrics_command)
 
     return app
 

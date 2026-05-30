@@ -7,6 +7,7 @@ shim that delegates to Alembic so existing deploy notes keep working.
 `flask create-admin` bootstraps the first admin user on a fresh deploy
 without manual SQL.
 """
+import json
 import logging
 import os
 import re
@@ -22,6 +23,7 @@ from werkzeug.security import generate_password_hash
 
 from .db import DB_PATH, get_session
 from .models import ApprovedEmail, User
+from .services.adoption_metrics import adoption_metrics
 
 LOG = logging.getLogger("tasktrack.cli")
 
@@ -125,3 +127,23 @@ def create_admin_command(email: str, name: str, password: str):
 
     sess.commit()
     click.echo(f"create-admin: {action} {email} (role=admin)")
+
+
+@click.command("adoption-metrics")
+@click.option("--days", default=14, show_default=True, help="Trial window in days.")
+@click.option("--json-output", is_flag=True, help="Emit the full JSON packet.")
+@with_appcontext
+def adoption_metrics_command(days: int, json_output: bool):
+    """Report read-only evidence for the TaskTrack daily-use trial."""
+    packet = adoption_metrics(get_session(), days=days)
+    if json_output:
+        click.echo(json.dumps(packet, indent=2, sort_keys=True))
+        return
+    summary = packet["summary"]
+    click.echo(f"TaskTrack adoption metrics ({packet['window']['days']} days)")
+    click.echo(f"active_days: {summary['active_days']}")
+    click.echo(f"created_or_followup_records: {summary['created_or_followup_records']}")
+    click.echo(f"project_linked_records: {summary['project_linked_records']}")
+    click.echo(f"future_calendar_events: {summary['future_calendar_events']}")
+    click.echo(f"open_inbox: {summary['open_inbox']}")
+    click.echo(f"targets_met: {summary['targets_met']}")

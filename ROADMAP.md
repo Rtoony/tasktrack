@@ -4,6 +4,21 @@ Private internal operations tracker on Nexus. Near-term focus is daily
 work coordination, project-linked follow-up, internal calendar, and
 management-ready reporting without waiting for the full OrdoCAD suite.
 
+## 2026-05-30 Strategy Pivot
+
+TaskTrack is now part of a stabilization-and-adoption sprint, not an
+OrdoCAD-first migration. The immediate goal is to prove real daily use before
+more suite architecture is built.
+
+- Use TaskTrack as the likely adoption-proof workflow for two weeks: inbox,
+  today view, follow-ups, project-linked tasks, and management reports.
+- Do not add CAD Project Setup metadata here.
+- Do not cut TaskTrack over to OrdoCAD until a separate canonical project
+  writer decision is made and OrdoCAD has earned a live product role.
+- If TaskTrack is chosen as the canonical project writer, keep the write path
+  narrow and make other project views read from it instead of duplicating the
+  master list.
+
 ## Shipped
 
 - Flask app factory + Alembic-managed schema (was a 2,500-line
