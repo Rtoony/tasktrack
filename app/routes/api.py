@@ -6,7 +6,7 @@ RBAC scoping.
 """
 import csv
 import io
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, jsonify, request, session
 from sqlalchemy import desc, or_, select, text
@@ -80,6 +80,30 @@ def _activity_visible_to_current_user(sess, row: ActivityLog) -> bool:
 
 # ── Dashboard ───────────────────────────────────────────────────────────────
 
+def _date_from_due_value(raw_value):
+    if not raw_value:
+        return None
+
+    value = str(raw_value).strip()
+    if not value:
+        return None
+
+    try:
+        if "T" in value:
+            return datetime.fromisoformat(value).date()
+        return datetime.fromisoformat(value).date()
+    except ValueError:
+        return None
+
+
+def _is_due_soon_value(raw_value, *, days: int = 14) -> bool:
+    due_on = _date_from_due_value(raw_value)
+    if due_on is None:
+        return False
+    today = date.today()
+    return today <= due_on <= today + timedelta(days=days)
+
+
 @bp.route("/api/v1/dashboard")
 @login_required
 def dashboard_stats():
@@ -98,6 +122,13 @@ def dashboard_stats():
         due_field = overdue_field_for_table(cfg)
         if due_field:
             overdue = [r for r in active if is_overdue_value(r.get(due_field))]
+        due_soon = []
+        if due_field:
+            due_soon = [
+                r for r in active
+                if not is_overdue_value(r.get(due_field))
+                and _is_due_soon_value(r.get(due_field))
+            ]
 
         by_status = {}
         for r in all_rows:
@@ -115,6 +146,8 @@ def dashboard_stats():
             "active": len(active),
             "overdue": len(overdue),
             "overdue_items": overdue[:10],
+            "due_soon": len(due_soon),
+            "due_soon_items": due_soon[:10],
             "by_status": by_status,
             "by_priority": by_priority,
         }

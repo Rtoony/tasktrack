@@ -327,6 +327,11 @@ def test_dashboard_includes_calendar_surface(auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200
     html = r.data.decode("utf-8")
+    assert 'id="core-loop"' in html
+    assert 'id="core-tracker-cards"' in html
+    assert 'id="core-review-queue"' in html
+    assert 'id="core-due-soon"' in html
+    assert "B&amp;R Intake Form" in html
     assert "Upcoming Operations" in html
     assert "Intake Review" in html
     assert 'id="dash-intake-review"' in html

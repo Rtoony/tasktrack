@@ -7,20 +7,19 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <style>
-  /* Dark-only palette. The light/dark toggle was removed in favor of a
-     single deliberate dark identity for TaskTrack. --accent is swapped
-     per active tab via the body:has() selectors below, giving each
-     tab a recognizable color without restyling everything. */
+  /* Carbon/IBM Plex palette. The first GUI redesign pass moves TaskTrack
+     from the older dark-only look to a flat, dense Carbon Gray-10 shell
+     while keeping the existing Flask/Jinja dashboard behavior intact. */
   :root {
-    --bg: #11161d; --surface: #18212b; --border: #2a3643; --border-light: #22303c;
-    --text: #ecf2f8; --text-muted: #a5b2bf; --text-light: #7f91a3;
-    --accent: #60a5fa; --accent-hover: #3b82f6; --accent-light: #182c45;
-    --danger: #f87171; --danger-hover: #ef4444; --danger-light: #3a1f26;
-    --warn: #fbbf24; --warn-light: #3a3214;
-    --success: #34d399; --success-light: #15372f;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.35); --shadow-md: 0 6px 20px rgba(0,0,0,0.35);
-    --shadow-lg: 0 16px 40px rgba(0,0,0,0.45);
-    --radius: 8px; --radius-lg: 12px;
+    --bg: #f4f4f4; --surface: #ffffff; --border: #e0e0e0; --border-light: #f4f4f4;
+    --text: #161616; --text-muted: #525252; --text-light: #6f6f6f;
+    --accent: #0f62fe; --accent-hover: #0353e9; --accent-light: #edf5ff;
+    --danger: #da1e28; --danger-hover: #a2191f; --danger-light: #fff1f1;
+    --warn: #8a6d00; --warn-light: #fcf4d6;
+    --success: #198038; --success-light: #defbe6;
+    --shadow-sm: none; --shadow-md: 0 2px 6px rgba(0,0,0,0.12);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.18);
+    --radius: 0; --radius-lg: 0;
   }
 
   /* Per-tab accent colors. The :has() selector tints --accent based on
@@ -28,18 +27,19 @@
      stable so only intentionally accent-tinted UI (tab indicator,
      primary button, focus rings, stat-card values, section heading
      bar) shifts color when you switch tabs. */
-  body:has(.tab-btn.active[data-tab="triage"])           { --accent:#fbbf24; --accent-hover:#f59e0b; --accent-light:#3a2a05; }
-  body:has(.tab-btn.active[data-tab="map"])              { --accent:#2dd4bf; --accent-hover:#14b8a6; --accent-light:#062f2a; }
-  body:has(.tab-btn.active[data-tab="competency"])       { --accent:#a78bfa; --accent-hover:#8b5cf6; --accent-light:#251a3d; }
-  body:has(.tab-btn.active[data-tab="project"])          { --accent:#818cf8; --accent-hover:#6366f1; --accent-light:#1e1f4a; }
-  body:has(.tab-btn.active[data-tab="work"])             { --accent:#22d3ee; --accent-hover:#06b6d4; --accent-light:#062f3d; }
-  body:has(.tab-btn.active[data-tab="training"])         { --accent:#34d399; --accent-hover:#10b981; --accent-light:#0a3a2a; }
-  body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#facc15; --accent-hover:#eab308; --accent-light:#3a3008; }
-  body:has(.tab-btn.active[data-tab="calendar"])         { --accent:#38bdf8; --accent-hover:#0ea5e9; --accent-light:#082f49; }
-  body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#fb7185; --accent-hover:#f43f5e; --accent-light:#3a121d; }
-  body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#a78bfa; --accent-hover:#8b5cf6; --accent-light:#251a3d; }
-  body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#fb923c; --accent-hover:#f97316; --accent-light:#3a1d08; }
-  body:has(.tab-btn.active[data-tab="personal_cars"])    { --accent:#94a3b8; --accent-hover:#64748b; --accent-light:#1f2730; }
+  body:has(.tab-btn.active[data-tab="dashboard"])        { --accent:#0f62fe; --accent-hover:#0353e9; --accent-light:#edf5ff; }
+  body:has(.tab-btn.active[data-tab="triage"])           { --accent:#8a3ffc; --accent-hover:#6929c4; --accent-light:#f6f2ff; }
+  body:has(.tab-btn.active[data-tab="map"])              { --accent:#007d79; --accent-hover:#005d5d; --accent-light:#d9fbfb; }
+  body:has(.tab-btn.active[data-tab="competency"])       { --accent:#8a3ffc; --accent-hover:#6929c4; --accent-light:#f6f2ff; }
+  body:has(.tab-btn.active[data-tab="project"])          { --accent:#0f62fe; --accent-hover:#0353e9; --accent-light:#edf5ff; }
+  body:has(.tab-btn.active[data-tab="work"])             { --accent:#0072c3; --accent-hover:#00539a; --accent-light:#e5f6ff; }
+  body:has(.tab-btn.active[data-tab="training"])         { --accent:#198038; --accent-hover:#0e6027; --accent-light:#defbe6; }
+  body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#da1e28; --accent-hover:#a2191f; --accent-light:#fff1f1; }
+  body:has(.tab-btn.active[data-tab="calendar"])         { --accent:#007d79; --accent-hover:#005d5d; --accent-light:#d9fbfb; }
+  body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#9f1853; --accent-hover:#740937; --accent-light:#fff0f7; }
+  body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#8a3ffc; --accent-hover:#6929c4; --accent-light:#f6f2ff; }
+  body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#ba4e00; --accent-hover:#8a3800; --accent-light:#fff2e8; }
+  body:has(.tab-btn.active[data-tab="personal_cars"])    { --accent:#525252; --accent-hover:#393939; --accent-light:#e0e0e0; }
   /* Section heading colored bar — sits left of every section title to
      anchor the per-tab color in the content area. */
   .section-heading { position:relative; padding-left:0.85rem; }
@@ -191,6 +191,61 @@
   .activity-action { font-weight:500; color:var(--text); }
   .activity-time { font-size:0.68rem; color:var(--text-light); float:right; }
   .empty-card { padding:2rem; text-align:center; color:var(--text-light); font-size:0.85rem; }
+  .legacy-stat-grid { display:none; }
+
+  /* ── Carbon daily cockpit ─────────────────── */
+  .core-loop { display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.25rem; }
+  .core-hero { display:grid; grid-template-columns:minmax(0,1fr) minmax(320px,430px); background:var(--surface); border:1px solid var(--border); }
+  .core-hero-main { padding:1.2rem 1.25rem; border-right:1px solid var(--border); }
+  .core-kicker { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text-light); margin-bottom:0.35rem; }
+  .core-title { font-size:1.55rem; font-weight:600; letter-spacing:-0.02em; color:var(--text); line-height:1.2; }
+  .core-subtitle { margin-top:0.35rem; font-size:0.84rem; color:var(--text-muted); }
+  .core-actions { display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:1rem; }
+  .core-stat-strip { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .core-stat-tile { padding:1rem; border-left:1px solid var(--border); background:var(--surface); }
+  .core-stat-tile:first-child { border-left:none; }
+  .core-stat-value { font-family:'IBM Plex Mono',monospace; font-size:1.75rem; font-weight:600; line-height:1; color:var(--text); }
+  .core-stat-value.warn { color:var(--warn); }
+  .core-stat-value.danger { color:var(--danger); }
+  .core-stat-label { margin-top:0.4rem; font-size:0.72rem; color:var(--text-muted); }
+  .core-stat-note { margin-top:0.15rem; font-size:0.68rem; color:var(--text-light); }
+  .core-section-label { font-size:0.68rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-light); margin:0.15rem 0 -0.25rem; }
+  .core-tracker-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:0.75rem; }
+  .core-tracker-card { text-align:left; background:var(--surface); border:1px solid var(--border); padding:0.9rem; min-height:128px; cursor:pointer; color:var(--text); font-family:inherit; transition:border-color 0.12s, background 0.12s; }
+  .core-tracker-card:hover { border-color:var(--accent); background:var(--accent-light); }
+  .core-tracker-head { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
+  .core-tracker-title { font-size:0.88rem; font-weight:600; line-height:1.25; }
+  .core-tracker-table { margin-top:0.12rem; font-family:'IBM Plex Mono',monospace; color:var(--text-light); font-size:0.66rem; }
+  .core-tracker-count { font-family:'IBM Plex Mono',monospace; font-size:1.45rem; font-weight:600; line-height:1; }
+  .core-tracker-caption { font-size:0.62rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.04em; }
+  .core-mini-bar { display:flex; height:0.42rem; background:#e0e0e0; margin-top:0.9rem; overflow:hidden; }
+  .core-mini-seg { min-width:2px; height:100%; }
+  .core-tracker-foot { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-top:0.55rem; font-size:0.72rem; color:var(--text-muted); }
+  .core-work-grid { display:grid; grid-template-columns:2fr 1fr; gap:0.75rem; }
+  .core-panel { background:var(--surface); border:1px solid var(--border); min-width:0; }
+  .core-panel-head { min-height:2.75rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.65rem 0.85rem; border-bottom:1px solid var(--border); }
+  .core-panel-title { display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; font-weight:600; }
+  .core-panel-hint { font-size:0.68rem; color:var(--text-light); }
+  .core-list { max-height:340px; overflow-y:auto; }
+  .core-row { width:100%; border:0; border-bottom:1px solid var(--border-light); background:transparent; color:var(--text); display:flex; align-items:center; gap:0.75rem; justify-content:space-between; padding:0.68rem 0.85rem; font-family:inherit; text-align:left; cursor:pointer; }
+  .core-row:hover { background:var(--accent-light); }
+  .core-row:last-child { border-bottom:none; }
+  .core-row-accent { box-shadow:inset 3px 0 0 #f1c21b; }
+  .core-row-main { min-width:0; flex:1; }
+  .core-row-title { display:block; font-size:0.82rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .core-row-meta { margin-top:0.18rem; display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; color:var(--text-light); font-size:0.68rem; }
+  .core-row-side { display:flex; align-items:center; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap; max-width:45%; }
+  .core-tag { display:inline-flex; align-items:center; gap:0.25rem; height:1.25rem; padding:0 0.45rem; font-size:0.68rem; font-weight:500; white-space:nowrap; background:#e0e0e0; color:#393939; }
+  .core-tag.blue { background:#d0e2ff; color:#0043ce; }
+  .core-tag.green { background:#a7f0ba; color:#0e6027; }
+  .core-tag.red { background:#ffd7d9; color:#a2191f; }
+  .core-tag.purple { background:#e8daff; color:#6929c4; }
+  .core-tag.teal { background:#9ef0f0; color:#005d5d; }
+  .core-tag.amber { background:#fcf4d6; color:#684e00; }
+  .core-tag.cyan { background:#bae6ff; color:#00539a; }
+  .core-date { font-family:'IBM Plex Mono',monospace; font-size:0.75rem; color:var(--text-muted); white-space:nowrap; }
+  .core-activity-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); }
+  .core-empty { padding:1.6rem 1rem; color:var(--text-light); font-size:0.82rem; text-align:center; }
 
   /* ── Filter bar ──────────────────────────── */
   .filter-bar { display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; }
@@ -449,6 +504,10 @@
     .field-row { flex-direction:column; gap:0; }
     td,th { padding:0.45rem 0.55rem; font-size:0.78rem; }
     .dash-cols { grid-template-columns:1fr; }
+    .core-hero, .core-work-grid { grid-template-columns:1fr; }
+    .core-hero-main { border-right:none; border-bottom:1px solid var(--border); }
+    .core-tracker-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .core-activity-grid { grid-template-columns:1fr; }
     .search-input { width:160px; }
     .search-input:focus { width:220px; }
     .workspace-shell { grid-template-columns:1fr; }
@@ -525,6 +584,67 @@
 
   <!-- ── DASHBOARD ──────────────────────────── -->
   <section id="sec-dashboard" class="section active">
+
+    <div class="core-loop" id="core-loop">
+      <div class="core-hero">
+        <div class="core-hero-main">
+          <div class="core-kicker">Work / Dashboard</div>
+          <h1 class="core-title" id="core-greeting" data-user="{{ user_name|e }}">TaskTrack daily cockpit</h1>
+          <p class="core-subtitle" id="core-date-line">Loading TaskTrack status...</p>
+          <div class="core-actions">
+            <button class="btn btn-primary" type="button" onclick="openModal('project')">+ Project Task</button>
+            <button class="btn btn-export" type="button" onclick="openModal('work')">+ CAD Dev</button>
+            <a class="btn btn-export" href="/intake/request">B&amp;R Intake Form</a>
+            <a class="btn btn-export" href="/reports">Reports</a>
+          </div>
+        </div>
+        <div class="core-stat-strip" aria-label="TaskTrack daily summary">
+          <div class="core-stat-tile">
+            <div class="core-stat-value" id="core-open-count">0</div>
+            <div class="core-stat-label">Open items</div>
+            <div class="core-stat-note">across work queues</div>
+          </div>
+          <div class="core-stat-tile">
+            <div class="core-stat-value warn" id="core-review-count">0</div>
+            <div class="core-stat-label">Need review</div>
+            <div class="core-stat-note">web, paper, OCR</div>
+          </div>
+          <div class="core-stat-tile">
+            <div class="core-stat-value danger" id="core-overdue-count">0</div>
+            <div class="core-stat-label">Overdue</div>
+            <div class="core-stat-note">active only</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="core-section-label">Trackers</div>
+      <div class="core-tracker-grid" id="core-tracker-cards"></div>
+
+      <div class="core-work-grid">
+        <section class="core-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag amber">Review</span><span>Needs review</span></div>
+            <span class="core-panel-hint">Confirm or route captures</span>
+          </div>
+          <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
+        </section>
+        <section class="core-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag blue">Due</span><span>Due soon</span></div>
+            <span class="core-panel-hint">14 day window</span>
+          </div>
+          <div class="core-list" id="core-due-soon"><div class="core-empty">No due items in the next 14 days.</div></div>
+        </section>
+      </div>
+
+      <section class="core-panel">
+        <div class="core-panel-head">
+          <div class="core-panel-title"><span class="core-tag teal">Flow</span><span>Recent activity</span></div>
+          <span class="core-panel-hint">Latest changes across TaskTrack</span>
+        </div>
+        <div class="core-activity-grid" id="core-recent-activity"><div class="core-empty">No activity yet.</div></div>
+      </section>
+    </div>
 
     <!-- Capture & triage card (was the standalone AI Intake tab) -->
     <div class="dash-card capture-card" style="margin-bottom:1.25rem;">
@@ -694,7 +814,7 @@
       </div>
     </div>
 
-    <div class="dash-grid" id="dash-stats"></div>
+    <div class="dash-grid legacy-stat-grid" id="dash-stats" aria-hidden="true"></div>
     <div class="dash-card" style="margin:1.25rem 0;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Intake Review</span>
@@ -1510,6 +1630,18 @@ const TABLE_LABELS = {
   personal_items:'Internal',
   calendar_events:'Calendar',
 };
+const CORE_TRACKERS = [
+  { table:'project_work_tasks', label:'Project Tasks', tab:'project', key:'project' },
+  { table:'work_tasks', label:'CAD Dev', tab:'work', key:'work' },
+  { table:'training_tasks', label:'Training', tab:'training', key:'training' },
+  { table:'personnel_issues', label:'Capabilities', tab:'personnel', key:'personnel' },
+  { table:'personal_items', label:'Follow-up', tab:'personal_husband', key:'personal' },
+];
+const CORE_TABLE_TO_TAB = {
+  work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
+  personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal_husband',
+  calendar_events:'calendar',
+};
 const sortState = {
   work:{col:'id',order:'asc'},
   project:{col:'id',order:'asc'},
@@ -2195,6 +2327,214 @@ if (searchInput && searchResults) {
 }
 
 /* ── Dashboard ─────────────────────────────── */
+function coreSetText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function coreStatusTone(value) {
+  const v = String(value || '').toLowerCase();
+  if (['high','critical','overdue','closed'].includes(v)) return 'red';
+  if (['complete','done','resolved'].includes(v)) return 'green';
+  if (['review','needs review'].includes(v)) return 'purple';
+  if (['on hold','medium','due soon'].includes(v)) return 'amber';
+  if (['in progress','new'].includes(v)) return 'blue';
+  if (['calendar','meeting'].includes(v)) return 'teal';
+  return 'gray';
+}
+
+function coreTag(text, tone) {
+  const span = document.createElement('span');
+  span.className = 'core-tag ' + (tone || coreStatusTone(text));
+  span.textContent = text || '—';
+  return span;
+}
+
+function coreDueValue(row) {
+  return row?.due_at || row?.due_date || row?.follow_up_date || row?.start_at || '';
+}
+
+function coreDateSortValue(value) {
+  if (!value) return Number.MAX_SAFE_INTEGER;
+  const parsed = new Date(String(value).includes('T') ? value : String(value).replace(' ', 'T'));
+  return Number.isNaN(parsed.getTime()) ? Number.MAX_SAFE_INTEGER : parsed.getTime();
+}
+
+function dashboardRowTitle(row) {
+  return row?.title || row?.project_name || row?.task_description || row?.person_name || row?.issue_description || '(untitled)';
+}
+
+function openCoreRecord(tableName, recordId) {
+  const tab = CORE_TABLE_TO_TAB[tableName] || '';
+  if (!tab || !recordId) return;
+  document.querySelector('.tab-btn[data-tab="' + tab + '"]')?.click();
+  setTimeout(() => editRecord(tab, recordId), 180);
+}
+
+function renderCoreLoop(data, totals) {
+  const root = document.getElementById('core-loop');
+  if (!root) return;
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const greetingEl = document.getElementById('core-greeting');
+  if (greetingEl) {
+    const user = greetingEl.dataset.user || '';
+    greetingEl.textContent = greeting + (user ? ', ' + user : '');
+  }
+  coreSetText('core-date-line', now.toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' }) + ' · live view across TaskTrack');
+  coreSetText('core-open-count', totals.totalActive);
+  coreSetText('core-review-count', totals.intakeReview);
+  coreSetText('core-overdue-count', totals.totalOverdue);
+  renderCoreTrackerCards(data.stats || {});
+  renderCoreReviewQueue(data.intake);
+  renderCoreDueSoon(data.stats || {});
+  renderCoreRecentActivity(data.recent_activity || []);
+}
+
+function renderCoreTrackerCards(stats) {
+  const host = document.getElementById('core-tracker-cards');
+  if (!host) return;
+  host.replaceChildren();
+  CORE_TRACKERS.forEach(spec => {
+    const bucket = stats[spec.table] || {};
+    const active = bucket.active || 0;
+    const total = bucket.total || 0;
+    const byStatus = bucket.by_status || {};
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'core-tracker-card';
+    card.addEventListener('click', () => document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click());
+
+    const head = document.createElement('div');
+    head.className = 'core-tracker-head';
+    const left = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'core-tracker-title';
+    title.textContent = spec.label;
+    const table = document.createElement('div');
+    table.className = 'core-tracker-table';
+    table.textContent = spec.table;
+    left.appendChild(title); left.appendChild(table);
+    const right = document.createElement('div');
+    right.style.textAlign = 'right';
+    const count = document.createElement('div');
+    count.className = 'core-tracker-count';
+    count.textContent = active;
+    const caption = document.createElement('div');
+    caption.className = 'core-tracker-caption';
+    caption.textContent = 'open';
+    right.appendChild(count); right.appendChild(caption);
+    head.appendChild(left); head.appendChild(right);
+    card.appendChild(head);
+
+    const bar = document.createElement('div');
+    bar.className = 'core-mini-bar';
+    const statusEntries = Object.entries(byStatus).filter(([, n]) => Number(n) > 0);
+    if (!statusEntries.length || !total) {
+      const empty = document.createElement('span'); empty.className = 'core-mini-seg'; empty.style.width = '100%'; empty.style.background = '#e0e0e0'; bar.appendChild(empty);
+    } else {
+      statusEntries.forEach(([status, n]) => {
+        const seg = document.createElement('span');
+        seg.className = 'core-mini-seg';
+        seg.title = status + ': ' + n;
+        seg.style.width = Math.max(4, (Number(n) / total) * 100) + '%';
+        seg.style.background = ({red:'#da1e28', green:'#24a148', purple:'#8a3ffc', amber:'#f1c21b', blue:'#0f62fe', teal:'#007d79'})[coreStatusTone(status)] || '#c6c6c6';
+        bar.appendChild(seg);
+      });
+    }
+    card.appendChild(bar);
+
+    const foot = document.createElement('div');
+    foot.className = 'core-tracker-foot';
+    const totalEl = document.createElement('span');
+    totalEl.textContent = total + ' total';
+    const dueEl = document.createElement('span');
+    const due = bucket.due_soon || 0;
+    const overdue = bucket.overdue || 0;
+    dueEl.textContent = overdue ? overdue + ' overdue' : due ? due + ' due soon' : 'clear';
+    if (overdue) dueEl.style.color = 'var(--danger)';
+    else if (due) dueEl.style.color = 'var(--warn)';
+    foot.appendChild(totalEl); foot.appendChild(dueEl);
+    card.appendChild(foot);
+    host.appendChild(card);
+  });
+}
+
+function renderCoreReviewQueue(intake) {
+  const host = document.getElementById('core-review-queue');
+  if (!host) return;
+  const rows = Array.isArray(intake?.rows) ? intake.rows.slice(0, 8) : [];
+  host.replaceChildren();
+  if (!rows.length) { host.innerHTML = '<div class="core-empty">No web, paper, or OCR requests need review.</div>'; return; }
+  rows.forEach(row => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'core-row core-row-accent';
+    item.addEventListener('click', () => openIntakeReviewRow(row));
+    const main = document.createElement('span'); main.className = 'core-row-main';
+    const title = document.createElement('span'); title.className = 'core-row-title'; title.textContent = row.title || '(untitled request)';
+    const meta = document.createElement('span'); meta.className = 'core-row-meta';
+    meta.appendChild(document.createTextNode((row.label || row.table || 'Intake') + (row.source ? ' · ' + row.source : '')));
+    if (row.project_number) meta.appendChild(coreTag(row.project_number, 'blue'));
+    main.appendChild(title); main.appendChild(meta);
+    const side = document.createElement('span'); side.className = 'core-row-side';
+    side.appendChild(coreTag(row.priority || 'Review', row.priority ? coreStatusTone(row.priority) : 'amber'));
+    side.appendChild(coreTag(row.status || 'New', coreStatusTone(row.status || 'New')));
+    item.appendChild(main); item.appendChild(side); host.appendChild(item);
+  });
+}
+
+function renderCoreDueSoon(stats) {
+  const host = document.getElementById('core-due-soon');
+  if (!host) return;
+  const items = [];
+  CORE_TRACKERS.forEach(spec => {
+    const bucket = stats[spec.table] || {};
+    (bucket.overdue_items || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:'Overdue'}));
+    (bucket.due_soon_items || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:'Due soon'}));
+  });
+  items.sort((a, b) => coreDateSortValue(coreDueValue(a)) - coreDateSortValue(coreDueValue(b)));
+  host.replaceChildren();
+  if (!items.length) { host.innerHTML = '<div class="core-empty">No due items in the next 14 days.</div>'; return; }
+  items.slice(0, 8).forEach(row => {
+    const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
+    item.addEventListener('click', () => openCoreRecord(row._table, row.id));
+    const main = document.createElement('span'); main.className = 'core-row-main';
+    const title = document.createElement('span'); title.className = 'core-row-title'; title.textContent = dashboardRowTitle(row);
+    const meta = document.createElement('span'); meta.className = 'core-row-meta'; meta.textContent = row._label;
+    if (row.project_number) meta.appendChild(coreTag(row.project_number, 'blue'));
+    main.appendChild(title); main.appendChild(meta);
+    const side = document.createElement('span'); side.className = 'core-row-side';
+    side.appendChild(coreTag(row._state, row._state === 'Overdue' ? 'red' : 'amber'));
+    const due = document.createElement('span'); due.className = 'core-date'; due.textContent = formatDateTime(coreDueValue(row));
+    side.appendChild(due);
+    item.appendChild(main); item.appendChild(side); host.appendChild(item);
+  });
+}
+
+function renderCoreRecentActivity(rows) {
+  const host = document.getElementById('core-recent-activity');
+  if (!host) return;
+  const visible = Array.isArray(rows) ? rows.slice(0, 9) : [];
+  host.replaceChildren();
+  if (!visible.length) { host.innerHTML = '<div class="core-empty">No activity yet.</div>'; return; }
+  visible.forEach(row => {
+    const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
+    item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
+    const main = document.createElement('span'); main.className = 'core-row-main';
+    const title = document.createElement('span'); title.className = 'core-row-title';
+    title.textContent = (row.user_name || 'TaskTrack') + ' ' + (row.action || 'updated') + ' ' + (TABLE_LABELS[row.table_name] || row.table_name || 'record');
+    const meta = document.createElement('span'); meta.className = 'core-row-meta';
+    meta.textContent = '#' + (row.record_id || '—') + (row.field_name ? ' · ' + row.field_name : '');
+    main.appendChild(title); main.appendChild(meta);
+    const side = document.createElement('span'); side.className = 'core-row-side';
+    const when = document.createElement('span'); when.className = 'core-date'; when.textContent = formatTimeAgo(row.created_at);
+    side.appendChild(when);
+    item.appendChild(main); item.appendChild(side); host.appendChild(item);
+  });
+}
+
 async function loadDashboard() {
   const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
@@ -2217,6 +2557,8 @@ async function loadDashboard() {
     card.innerHTML = '<div class="stat-label">'+st.l+'</div><div class="stat-value '+st.c+'">'+st.v+'</div><div class="stat-sub">'+st.sub+'</div>';
     statsEl.appendChild(card);
   });
+
+  renderCoreLoop(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
 
   // Overdue list
   const overdueEl = document.getElementById('dash-overdue');

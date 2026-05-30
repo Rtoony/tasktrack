@@ -14,6 +14,7 @@ contract the dashboard depends on:
 """
 import csv
 import io
+from datetime import date, timedelta
 
 from app.db import get_session
 from app.models import PersonnelIssue
@@ -115,8 +116,14 @@ def test_update_missing_returns_404(auth_client):
 # ── Dashboard ─────────────────────────────────────────────────────────────
 
 def test_dashboard_returns_per_table_stats(auth_client):
+    due_soon = (date.today() + timedelta(days=3)).isoformat()
     _make_work_task(auth_client, title="A", status="Not Started")
-    _make_work_task(auth_client, title="B", status="In Progress")
+    soon_id = _make_work_task(
+        auth_client,
+        title="B",
+        status="In Progress",
+        due_date=due_soon,
+    )
     submitted = auth_client.post("/api/v1/intake/submit", json={
         "type": "project_work",
         "fields": {
@@ -134,9 +141,11 @@ def test_dashboard_returns_per_table_stats(auth_client):
     assert "stats" in data
     assert "work_tasks" in data["stats"]
     stats = data["stats"]["work_tasks"]
-    for key in ("total", "active", "by_status", "by_priority"):
+    for key in ("total", "active", "by_status", "by_priority", "due_soon", "due_soon_items"):
         assert key in stats, f"dashboard missing key: {key}"
     assert stats["total"] >= 2
+    assert stats["due_soon"] == 1
+    assert stats["due_soon_items"][0]["id"] == soon_id
     assert data["intake"]["summary"]["needs_review_count"] == 1
     assert data["intake"]["rows"][0]["title"] == "Dashboard intake request"
     assert data["intake"]["rows"][0]["source"] == "web-form"
