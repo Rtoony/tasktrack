@@ -25,15 +25,16 @@ def _create_ocr_item(client):
 
 
 def test_intake_source_report_defaults_include_web_forms(auth_client):
-    r = auth_client.post("/intake/project-request", data={
-        "title": "Default report web form item",
-        "project_number": "2301.04",
-        "project_name": "Condo Castle",
-        "engineer": "PM",
-        "task_description": "Review this web form in the intake report.",
+    r = auth_client.post("/api/v1/intake/submit", json={
+        "type": "project_work",
+        "fields": {
+            "summary": "Default report web form item",
+            "project": "2301.04",
+            "details": "Review this web form in the intake report.",
+        },
         "priority": "High",
     })
-    assert r.status_code == 200
+    assert r.status_code == 201
 
     report = auth_client.get("/api/v1/reports/intake")
     assert report.status_code == 200
@@ -41,8 +42,9 @@ def test_intake_source_report_defaults_include_web_forms(auth_client):
     assert "web-form" in body["filters"]["sources"]
     assert body["summary"]["by_source"]["web-form"] == 1
     row = next(row for row in body["rows"] if row["title"] == "Default report web form item")
-    assert row["detail"] == "Review this web form in the intake report."
-    assert row["requester"] == "PM"
+    assert row["table"] == "inbox_items"
+    assert "Review this web form in the intake report." in row["detail"]
+    assert row["requester"] == "Tester"
 
 
 def test_intake_source_report_json_and_review_filter(auth_client, temp_app):
@@ -112,20 +114,21 @@ def test_report_center_and_admin_link_to_intake_report(auth_client, admin_client
 
 
 def test_intake_source_report_includes_reviewable_internal_followups(auth_client):
-    r = auth_client.post("/intake/general-follow-up", data={
-        "title": "Default report follow-up form",
-        "category": "Office",
-        "body": "Review this internal follow-up request.",
+    r = auth_client.post("/api/v1/intake/submit", json={
+        "type": "general",
+        "fields": {
+            "summary": "Default report follow-up form",
+            "details": "Review this internal follow-up request.",
+        },
         "priority": "Medium",
     })
-    assert r.status_code == 200
+    assert r.status_code == 201
 
     report = auth_client.get("/api/v1/reports/intake?needs_review=1")
     assert report.status_code == 200
     body = report.get_json()
-    assert body["summary"]["by_table"]["personal_items"] == 1
+    assert body["summary"]["by_table"]["inbox_items"] == 1
     row = next(row for row in body["rows"] if row["title"] == "Default report follow-up form")
-    assert row["category"] == "Office"
-    assert row["detail"] == "Review this internal follow-up request."
+    assert "Review this internal follow-up request." in row["detail"]
     assert row["needs_review"] is True
-    assert row["record_url"].startswith("/?tab=personal_house&record=")
+    assert row["record_url"].startswith("/?tab=triage&record=")

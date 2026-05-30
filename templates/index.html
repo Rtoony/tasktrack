@@ -935,7 +935,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-work-overdue" onchange="loadTable('work')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/intake/cad-development" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/intake/request?type=cad" target="_blank" rel="noopener">Submit Form</a>
       <a class="btn btn-sm btn-export" href="/api/v1/work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('work')">+ Add CAD Task</button>
     </div>
@@ -978,8 +978,8 @@
         <button type="button" class="view-toggle-btn active" data-view="table" onclick="setProjectView('table')">Table</button>
         <button type="button" class="view-toggle-btn" data-view="kanban" onclick="setProjectView('kanban')">Kanban</button>
       </span>
-      <a class="btn btn-sm btn-export" href="/intake/project-request" target="_blank" rel="noopener">Request Form</a>
-      <a class="btn btn-sm btn-export" href="/intake/project-work" target="_blank" rel="noopener">Weekly Batch</a>
+      <a class="btn btn-sm btn-export" href="/intake/request?type=project_work" target="_blank" rel="noopener">Request Form</a>
+      <a class="btn btn-sm btn-export" href="/intake/request?type=project_work" target="_blank" rel="noopener">Weekly Batch</a>
       <a class="btn btn-sm btn-export" href="/api/v1/project_work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('project')">+ Add Project Task</button>
     </div>
@@ -1026,7 +1026,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-training-overdue" onchange="loadTable('training')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/intake/training" target="_blank" rel="noopener">Submit Form</a>
+      <a class="btn btn-sm btn-export" href="/intake/request?type=training" target="_blank" rel="noopener">Submit Form</a>
       <a class="btn btn-sm btn-export" href="/api/v1/training_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('training')">+ Add Training</button>
     </div>

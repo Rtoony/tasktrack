@@ -53,7 +53,7 @@ INTAKE_REPORT_TABLES = {
         "title": "title",
         "due": "due_date",
         "project": "",
-        "needs_review": "",
+        "needs_review": "status",
         "tab": "triage",
     },
 }
@@ -150,7 +150,11 @@ def _row_payload(table: str, cfg: dict, row) -> dict:
         "source_ref": source_ref,
         "detail": detail[:500],
         "category": category,
-        "needs_review": bool(getattr(row, review_col, 0)) if review_col else False,
+        "needs_review": (
+            (getattr(row, "status", "") not in {"Done", "Archived"})
+            if table == "inbox_items"
+            else bool(getattr(row, review_col, 0)) if review_col else False
+        ),
         "created_at": created_text,
         "record_url": f"/?tab={tab}&record={getattr(row, 'id', '')}",
     }

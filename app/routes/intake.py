@@ -10,14 +10,17 @@ Per-route rate limits run off INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP
 (default 60/hr per IP). Limits apply only on POST submissions; GETs
 stay browseable.
 """
-import secrets
-from datetime import date, datetime
+import json
+from datetime import date
 from functools import wraps
+
+from sqlalchemy import or_, select
 
 from flask import (
     Blueprint,
     abort,
     jsonify,
+    redirect,
     render_template,
     request,
     session,
@@ -26,14 +29,16 @@ from flask import (
 from .. import limiter
 from .. import profile as _profile
 from ..auth import login_required
-from ..config import ALLOWED_TABLES, SIMPLE_SUBMISSION_CONFIGS
+from ..csrf import get_csrf_token
 from ..db import get_session
+from ..models import InboxItem, Project
+from ..services.audit import log_activity
 from ..services.ocr_forms import (
     PRINTABLE_REQUEST_FORMS,
     parse_printable_form_ocr,
     printable_form_record_payload,
 )
-from ..services.tickets import build_weekly_submission_rows, create_direct_record
+from ..services.tickets import create_direct_record
 
 bp = Blueprint("intake", __name__)
 
@@ -50,6 +55,228 @@ def intake_auth_required(f):
     def decorated(*args, **kwargs):
         return f(*args, **kwargs)
     return decorated
+
+
+_TYPE_META = {
+    "general": {
+        "label": "General request",
+        "promote": None,
+        "route": "Routed to the right team",
+        "required": ("summary", "details"),
+    },
+    "project_work": {
+        "label": "Project work",
+        "promote": "project_work_tasks",
+        "route": "Project work queue",
+        "required": ("project", "summary"),
+    },
+    "cad": {
+        "label": "CAD / Drafting",
+        "promote": "work_tasks",
+        "route": "CAD / Drafting team",
+        "required": ("summary",),
+    },
+    "training": {
+        "label": "Training",
+        "promote": "training_tasks",
+        "route": "Training coordinator",
+        "required": ("topic", "goals"),
+    },
+    "suggestion": {
+        "label": "Suggestion / Idea",
+        "promote": "personal_items",
+        "route": "Suggestion box",
+        "required": ("title", "body"),
+    },
+    "problem": {
+        "label": "Report a problem",
+        "promote": "personnel_issues",
+        "route": "Reviewed confidentially",
+        "required": ("details",),
+    },
+}
+_VALID_PRIORITIES = {"Low", "Medium", "High"}
+_VALID_SEVERITIES = {"Low", "Medium", "High", "Critical"}
+
+
+def _clean_fields(raw_fields) -> dict:
+    if not isinstance(raw_fields, dict):
+        return {}
+    cleaned = {}
+    for key, value in raw_fields.items():
+        if isinstance(value, str):
+            cleaned[str(key)] = value.strip()
+        elif value is not None:
+            cleaned[str(key)] = value
+    return cleaned
+
+
+def _validate_iso_date(raw: str) -> str:
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise ValueError("desired_by must be YYYY-MM-DD")
+    return value
+
+
+def _request_title(rtype: str, fields: dict) -> str:
+    if rtype == "problem":
+        details = str(fields.get("details") or "").strip()
+        return (details.splitlines()[0] if details else "Problem report")[:160]
+    return str(
+        fields.get("summary")
+        or fields.get("title")
+        or fields.get("topic")
+        or fields.get("details")
+        or "Request"
+    ).strip()[:160]
+
+
+def _title_and_body(
+    rtype: str, fields: dict, priority: str, severity: str, desired_by: str
+) -> tuple[str, str]:
+    meta = _TYPE_META[rtype]
+    title = _request_title(rtype, fields)
+    lines = [f"Request type: {meta['label']}"]
+    for key in (
+        "project",
+        "phase",
+        "skill",
+        "software",
+        "who",
+        "trainees",
+        "category",
+        "goals",
+        "details",
+        "body",
+        "involved",
+    ):
+        value = fields.get(key)
+        if value:
+            lines.append(f"{key}: {value}")
+    if rtype == "problem" and severity:
+        lines.append(f"severity: {severity}")
+    elif priority:
+        lines.append(f"priority: {priority}")
+    if desired_by:
+        lines.append(f"needed_by: {desired_by}")
+    meta_block = {
+        "type": rtype,
+        "suggested_target": meta.get("promote") or "triage",
+        "fields": fields,
+    }
+    lines.append("INTAKE_META: " + json.dumps(meta_block, sort_keys=True))
+    return title, "\n".join(lines)
+
+
+def _redirect_to_request(rtype: str):
+    return redirect(f"/intake/request?type={rtype}", code=302)
+
+
+@bp.route("/intake/request")
+@login_required
+def br_intake_request():
+    user_name = session.get("user_name", "")
+    initials = (
+        "".join(part[0] for part in user_name.split()[:2]).upper()
+        if user_name else ""
+    )
+    return render_template(
+        "br_intake_form.html",
+        submit_url="/api/v1/intake/submit",
+        project_search_url="/api/v1/projects/search",
+        attach_url_base="/api/v1/attachments/inbox_items/",
+        csrf_token=get_csrf_token(),
+        user_name=user_name,
+        user_initials=initials,
+    )
+
+
+@bp.route("/api/v1/intake/submit", methods=["POST"])
+@login_required
+@limiter.limit(_intake_post_limit, methods=["POST"])
+def br_intake_submit():
+    data = request.get_json(silent=True) or {}
+    rtype = (data.get("type") or "general").strip()
+    if rtype not in _TYPE_META:
+        return jsonify({"error": "unknown request type"}), 400
+
+    fields = _clean_fields(data.get("fields") or {})
+    missing = [
+        key for key in _TYPE_META[rtype]["required"]
+        if not str(fields.get(key) or "").strip()
+    ]
+    if missing:
+        return jsonify({"error": "missing required fields", "fields": missing}), 400
+
+    priority = (data.get("priority") or "Medium").strip()
+    if priority not in _VALID_PRIORITIES:
+        priority = "Medium"
+    severity = (data.get("severity") or "Medium").strip()
+    if severity not in _VALID_SEVERITIES:
+        severity = "Medium"
+    try:
+        desired_by = _validate_iso_date(data.get("desired_by") or "")
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    title, body = _title_and_body(rtype, fields, priority, severity, desired_by)
+    item_priority = severity if rtype == "problem" else priority
+    sess = get_session()
+    item = InboxItem(
+        title=title,
+        body=body,
+        source="web-form",
+        source_ref="",
+        priority=item_priority,
+        status="New",
+        due_date=desired_by,
+        created_by_user_id=session.get("user_id"),
+        created_by_name=session.get("user_name") or "web-form",
+    )
+    sess.add(item)
+    sess.flush()
+    ref = f"INT-{item.id}"
+    item.source_ref = ref
+    log_activity(
+        sess, "inbox_items", item.id, "submitted",
+        new=f"web-form: {title[:80]}",
+    )
+    sess.commit()
+    return jsonify({"ref": ref, "inbox_id": item.id}), 201
+
+
+@bp.route("/api/v1/projects/search", methods=["GET"])
+@login_required
+def projects_search():
+    q = (request.args.get("q") or "").strip()
+    if not q:
+        return jsonify([])
+    pattern = f"%{q}%"
+    sess = get_session()
+    stmt = (
+        select(Project)
+        .where(Project.active == 1)
+        .where(or_(
+            Project.project_number.ilike(pattern),
+            Project.name.ilike(pattern),
+            Project.client.ilike(pattern),
+        ))
+        .order_by(Project.project_number.asc())
+        .limit(10)
+    )
+    rows = sess.scalars(stmt).all()
+    return jsonify([
+        {
+            "project_number": row.project_number,
+            "name": row.name or "",
+            "client": row.client or "",
+        }
+        for row in rows
+    ])
 
 
 @bp.route("/intake")
@@ -69,47 +296,47 @@ def submit_hub():
             "copy": "Submit one project-specific task, deliverable, review item, or agency/client follow-up in a clean request form.",
             "queue": "Routes to Project Tasks",
             "next_step": "Managers review scope, priority, billing phase, and due timing from the Project Tasks queue.",
-            "href": "/intake/project-request",
-            "auth_required": False,
+            "href": "/intake/request?type=project_work",
+            "auth_required": True,
         },
         {
             "title": "Weekly Project Work Submission",
             "copy": "Use this on Friday to submit next week’s project tasks in one batch.",
             "queue": "Creates Project Work tasks",
             "next_step": "A scheduler or manager reviews the batch and follows up from the Project Tasks queue.",
-            "href": "/intake/project-work",
-            "auth_required": False,
+            "href": "/intake/request?type=project_work",
+            "auth_required": True,
         },
         {
             "title": "CAD Request Submission",
             "copy": "Submit CAD changes, fixes, or manager follow-up requests without opening the dashboard.",
             "queue": "Routes to CAD Dev",
             "next_step": "Managers triage priority, assign follow-up, and track status in the dashboard.",
-            "href": "/intake/cad-development",
-            "auth_required": False,
+            "href": "/intake/request?type=cad",
+            "auth_required": True,
         },
         {
             "title": "Training Request Submission",
             "copy": "Submit coaching and training needs as planned work items.",
             "queue": "Routes to Training",
             "next_step": "The request becomes planned coaching or training work with a skill area and goals.",
-            "href": "/intake/training",
-            "auth_required": False,
+            "href": "/intake/request?type=training",
+            "auth_required": True,
         },
         {
             "title": "General Follow-Up",
             "copy": "Submit office follow-ups, meeting action items, equipment notes, or management questions that need a tracked next step.",
             "queue": "Routes to Internal Follow-Up",
             "next_step": "The item lands in the internal queue for review, assignment, or conversion into a larger task.",
-            "href": "/intake/general-follow-up",
-            "auth_required": False,
+            "href": "/intake/request?type=general",
+            "auth_required": True,
         },
         {
             "title": "Incident Report",
             "copy": "Sign-in required. Log a CAD process gap, capability shortfall, or work-related incident — 0, 1, or many people identified.",
             "queue": "Routes to Capabilities",
             "next_step": "Authenticated reports are reviewed as growth or process items before follow-up is assigned.",
-            "href": "/intake/incident",
+            "href": "/intake/request?type=problem",
             "auth_required": True,
         },
     ]
@@ -212,167 +439,36 @@ def create_ocr_intake():
 
 @bp.route("/intake/project-work", methods=["GET", "POST"])
 @intake_auth_required
-@limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_project_work():
-    rows = build_weekly_submission_rows(request.form if request.method == "POST" else None)
-    submitter_name = (request.form.get("submitter_name") or "").strip() if request.method == "POST" else ""
-    week_of = (request.form.get("week_of") or "").strip() if request.method == "POST" else date.today().isoformat()
-    error = None
-    success = None
-
-    if request.method == "POST":
-        if not submitter_name:
-            error = "Your Name is required."
-        elif not week_of:
-            error = "Week Of is required."
-        else:
-            db = get_session()
-            created_count = 0
-            batch_id = f"weekly-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(2)}"
-
-            for idx, row in enumerate(rows, start=1):
-                if not any(row.values()):
-                    continue
-
-                payload = {
-                    "project_name": row["project_name"],
-                    "title": row["title"],
-                    "project_number": row["project_number"],
-                    "billing_phase": row["billing_phase"],
-                    "engineer": row["engineer"],
-                    "task_description": row["task_description"],
-                    "due_at": row["due_at"],
-                    "notes": (
-                        f"Submitted via Weekly Work Submission\n"
-                        f"Submitted by: {submitter_name}\n"
-                        f"Week of: {week_of}\n"
-                        f"Batch: {batch_id}"
-                    ),
-                }
-                payload.update({
-                    "created_by_user_id": session.get("user_id"),
-                    "created_by_name": session.get("user_name") or "Weekly Work Submission",
-                    "status": ALLOWED_TABLES["project_work_tasks"]["status_flow"][0],
-                    "priority": "Medium",
-                })
-
-                _, row_error = create_direct_record(
-                    db,
-                    "project_work_tasks",
-                    payload,
-                    "Weekly Work Submission",
-                    action="submitted",
-                    action_detail=f"{submitter_name} | {week_of}",
-                )
-                if row_error:
-                    error = f"Project Task {idx}: {row_error}"
-                    break
-                created_count += 1
-
-            if error:
-                db.rollback()
-            elif created_count == 0:
-                error = "Fill out at least one project task before submitting."
-            else:
-                db.commit()
-                success = f"Submitted {created_count} project task{'s' if created_count != 1 else ''} for the week of {week_of}."
-                rows = build_weekly_submission_rows(None)
-                submitter_name = ""
-                week_of = date.today().isoformat()
-
-    return render_template(
-        "weekly_submit.html",
-        rows=rows,
-        submitter_name=submitter_name,
-        week_of=week_of,
-        error=error,
-        success=success,
-    )
-
-
-def _render_simple_submission(config_key):
-    config = SIMPLE_SUBMISSION_CONFIGS[config_key]
-    values = {
-        field["name"]: (request.form.get(field["name"]) or "").strip()
-        for field in config["fields"]
-    } if request.method == "POST" else {}
-    error = None
-    success = None
-
-    if request.method == "POST":
-        payload = {}
-        for field in config["fields"]:
-            value = (request.form.get(field["name"]) or "").strip()
-            payload[field["name"]] = value
-
-        payload.update({
-            "created_by_user_id": session.get("user_id"),
-            "created_by_name": session.get("user_name") or config["source_name"],
-            "status": ALLOWED_TABLES[config["table"]]["status_flow"][0],
-        })
-
-        table_fields = ALLOWED_TABLES[config["table"]]["fields"]
-        if "source" in table_fields and not payload.get("source"):
-            payload["source"] = config.get("source", "web-form")
-        if "needs_review" in table_fields and config.get("needs_review", True):
-            payload["needs_review"] = 1
-        if "priority" in table_fields and not payload.get("priority"):
-            payload["priority"] = "Medium"
-        if config["table"] == "personnel_issues" and not payload.get("severity"):
-            payload["severity"] = "Medium"
-
-        db = get_session()
-        _, error = create_direct_record(
-            db,
-            config["table"],
-            payload,
-            config["source_name"],
-            action="submitted",
-            action_detail=payload.get("submitted_by") or payload.get("requested_by") or payload.get("observed_by") or config["source_name"],
-        )
-        if error:
-            db.rollback()
-        else:
-            db.commit()
-            success = f"{config['success_noun'].capitalize()} submitted successfully."
-            values = {}
-
-    return render_template(
-        "simple_submit.html",
-        config=config,
-        values=values,
-        error=error,
-        success=success,
-        form_url=request.url,
-    )
+    return _redirect_to_request("project_work")
 
 
 @bp.route("/intake/project-request", methods=["GET", "POST"])
 @intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_project_request():
-    return _render_simple_submission("project-request")
+    return _redirect_to_request("project_work")
 
 
 @bp.route("/intake/general-follow-up", methods=["GET", "POST"])
 @intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_general_followup():
-    return _render_simple_submission("general-follow-up")
+    return _redirect_to_request("general")
 
 
 @bp.route("/intake/cad-development", methods=["GET", "POST"])
 @intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_cad_development():
-    return _render_simple_submission("cad-development")
+    return _redirect_to_request("cad")
 
 
 @bp.route("/intake/training", methods=["GET", "POST"])
 @intake_auth_required
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_training():
-    return _render_simple_submission("training")
+    return _redirect_to_request("training")
 
 
 # Capability submissions have been REMOVED from the intake surface
@@ -384,7 +480,4 @@ def submit_training():
 @login_required  # Phase-5.5: auth-gated successor to the retired capability form.
 @limiter.limit(_intake_post_limit, methods=["POST"])
 def submit_incident():
-    """Auth-required incident report. The form accepts a comma-separated
-    list in `person_name`; the service-layer enrich_with_fks resolves
-    matching Employees and writes person_ids."""
-    return _render_simple_submission("incident")
+    return _redirect_to_request("problem")

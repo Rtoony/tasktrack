@@ -88,7 +88,7 @@ def test_printable_intake_packet_renders_for_paper_and_remarkable(client):
     assert "TT-CAD-ISSUE-REQUEST" in html
     assert "TT-TRAINING-IMPROVEMENT-REQUEST" in html
     assert "TARGET_TABLE=project_work_tasks" in html
-    assert "ONLINE_FORM=/intake/project-request" in html
+    assert "ONLINE_FORM=/intake/request?type=project_work" in html
     assert "Online equivalent:" in html
     assert "/intake/review?needs_review=1" in html
     assert "/capture/ocr" in html
@@ -98,7 +98,7 @@ def test_printable_intake_packet_renders_for_paper_and_remarkable(client):
     assert single.status_code == 200
     single_html = single.get_data(as_text=True)
     assert "TT-CAD-ISSUE-REQUEST" in single_html
-    assert "ONLINE_FORM=/intake/cad-development" in single_html
+    assert "ONLINE_FORM=/intake/request?type=cad" in single_html
     assert "TT-PROJECT-WORK-REQUEST" not in single_html
     assert 'class="page remarkable"' in single_html
 

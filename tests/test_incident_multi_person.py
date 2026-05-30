@@ -13,7 +13,7 @@ import json
 from sqlalchemy import select
 
 from app.db import get_session
-from app.models import Employee, PersonnelIssue
+from app.models import Employee, InboxItem, PersonnelIssue
 from app.services.tickets import _resolve_person_ids
 
 # ── Zero-person incidents ─────────────────────────────────────────────────
@@ -210,43 +210,38 @@ def test_intake_incident_requires_login(client):
     assert r.status_code in (302, 401)
 
 
-def test_intake_incident_renders_for_logged_in_user(auth_client):
-    r = auth_client.get("/intake/incident")
-    assert r.status_code == 200
-    body = r.data.decode("utf-8")
-    # The new form-specific copy must be present.
-    assert "Incident Report" in body
-    assert "People Involved" in body
-    assert "Estimated Time Lost" in body
+def test_intake_incident_redirects_for_logged_in_user(auth_client):
+    r = auth_client.get("/intake/incident", follow_redirects=False)
+    assert r.status_code == 302
+    assert "/intake/request?type=problem" in r.headers["Location"]
 
 
-def test_intake_incident_submission_creates_record(auth_client, temp_app):
-    with temp_app.app_context():
-        sess = get_session()
-        sess.add(Employee(display_name="Form Submitter Subject"))
-        sess.commit()
-
-    r = auth_client.post("/intake/incident", data={
-        "issue_description": "Submitted via the new intake form",
-        "person_name": "Form Submitter Subject",
+def test_problem_submit_creates_reviewable_inbox_item(auth_client, temp_app):
+    r = auth_client.post("/api/v1/intake/submit", json={
+        "type": "problem",
+        "fields": {
+            "details": "Submitted via the unified intake form",
+            "involved": "Form Submitter Subject",
+            "skill": "Workflow",
+        },
         "severity": "High",
-        "estimated_time_loss_minutes": "45",
-    }, follow_redirects=False)
-    # Simple-submission renders the same template on success.
-    assert r.status_code == 200
+    })
+    assert r.status_code == 201
+    inbox_id = r.get_json()["inbox_id"]
 
     with temp_app.app_context():
         sess = get_session()
-        rec = sess.scalar(
-            select(PersonnelIssue)
-            .where(PersonnelIssue.issue_description
-                   == "Submitted via the new intake form")
-        )
+        rec = sess.get(InboxItem, inbox_id)
         assert rec is not None
-        assert rec.severity == "High"
-        assert rec.estimated_time_loss_minutes == 45
-        # Multi-person enrichment ran against the auth_required form.
-        assert json.loads(rec.person_ids) != []
+        assert rec.title == "Submitted via the unified intake form"
+        assert rec.source == "web-form"
+        assert rec.priority == "High"
+        assert rec.status == "New"
+        assert "personnel_issues" in rec.body
+        assert sess.scalar(
+            select(PersonnelIssue)
+            .where(PersonnelIssue.issue_description == "Submitted via the unified intake form")
+        ) is None
 
 
 # ── Submission hub ──────────────────────────────────────────────────────
@@ -264,5 +259,6 @@ def test_hub_lists_incident_form(auth_client):
     assert "Routes to CAD Dev" in html
     assert "What happens after submission" in html
     assert "built-in method copy" not in html
+    assert "/intake/request?type=problem" in html
     # The sign-in marker should be visible on the auth-gated card.
     assert "sign-in" in html.lower()
