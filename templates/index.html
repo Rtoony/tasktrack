@@ -2536,9 +2536,11 @@ function renderMatrix() {
     const tr = document.createElement('tr');
     tr.dataset.empId = emp.id;
     const tdName = document.createElement('td');
-    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap; z-index:1;';
+    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap; z-index:1; cursor:pointer;';
     const strong = document.createElement('div'); strong.style.fontWeight = '500'; strong.textContent = emp.display_name;
     const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)'; sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '') + (emp.competency_tracked ? '' : ' · excluded from ratings');
+    tdName.title = 'Open employee scorecard';
+    tdName.addEventListener('click', () => openEmployeeScorecard(emp.id));
     tdName.appendChild(strong); tdName.appendChild(sub); tr.appendChild(tdName);
 
     let sum = 0, count = 0;
@@ -2546,7 +2548,7 @@ function renderMatrix() {
       const td = document.createElement('td');
       const detail = compCellDetail(emp.id, cat.id);
       const val = compCellValue(detail);
-      const selected = compSelected && compSelected.empId === emp.id && compSelected.catId === cat.id;
+      const selected = compScorecardEmpId === emp.id;
       td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
                         (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);') +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
@@ -2560,8 +2562,8 @@ function renderMatrix() {
       } else {
         td.textContent = '—';
       }
-      td.title = 'Click for competency evidence';
-      td.addEventListener('click', () => openCompetencyCell(emp.id, cat.id));
+      td.title = 'Open employee scorecard';
+      td.addEventListener('click', () => openEmployeeScorecard(emp.id));
       tr.appendChild(td);
     });
     const tdAvg = document.createElement('td');
@@ -2584,8 +2586,11 @@ function renderScorecardSelect() {
 function openEmployeeScorecard(rawEmpId) {
   const empId = Number(rawEmpId || 0);
   compScorecardEmpId = empId || null;
+  compSelected = null;
   renderScorecardSelect();
+  renderMatrix();
   renderEmployeeScorecard();
+  renderCompetencyDetail();
 }
 
 function scorecardMarkerSummary(marker) {
@@ -2663,8 +2668,11 @@ function advanceScorecardEmployee() {
   const idx = emps.findIndex(e => e.id === compScorecardEmpId);
   if (idx < 0 || idx + 1 >= emps.length) { toast('Reached end of visible employees'); return; }
   compScorecardEmpId = emps[idx + 1].id;
+  compSelected = null;
   renderScorecardSelect();
+  renderMatrix();
   renderEmployeeScorecard();
+  renderCompetencyDetail();
 }
 
 function openCompetencyCell(empId, catId) {
