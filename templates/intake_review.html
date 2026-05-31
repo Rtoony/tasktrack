@@ -7,10 +7,10 @@
 <title>Intake Review - {{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:7px; }
+  :root { --bg:#f4f4f4; --surface:#ffffff; --surface-2:#e0e0e0; --border:#c6c6c6; --text:#161616; --text-muted:#525252; --text-dim:#8d8d8d; --accent:#0f62fe; --ok:#24a148; --warn:#f1c21b; --danger:#da1e28; --radius:0; }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(56,189,248,0.15), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
-  header { background:rgba(24,33,43,0.92); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; }
   .head-inner { max-width:1220px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
   .brand { font-weight:600; font-family:'IBM Plex Mono',monospace; color:var(--text-muted); }
   .brand span { color:var(--accent); }
@@ -19,25 +19,25 @@
   main { max-width:1220px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
   h1 { font-size:1.65rem; margin-bottom:0.25rem; }
   .sub { color:var(--text-muted); max-width:860px; margin-bottom:1rem; }
-  .card,.stat { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); box-shadow:0 18px 38px rgba(0,0,0,0.16); }
+  .card,.stat { background:var(--surface); border:1px solid var(--border); box-shadow:none; }
   .card { padding:1rem; margin-bottom:1rem; }
   .filters { display:grid; grid-template-columns:1.4fr 0.55fr 0.55fr 0.65fr auto; gap:0.65rem; align-items:end; }
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
-  input,select { width:100%; padding:0.45rem 0.52rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  input,select { width:100%; padding:0.45rem 0.52rem; background:var(--surface); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
   .actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:center; }
   .quick-presets { display:flex; gap:0.45rem; flex-wrap:wrap; align-items:center; margin-top:0.75rem; padding-top:0.75rem; border-top:1px solid var(--border); }
   .quick-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-right:0.15rem; }
-  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.44rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
-  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
-  .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(56,189,248,0.35); }
-  .btn.danger { background:transparent; color:var(--danger); border:1px solid rgba(248,113,113,0.4); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#fff; border:1px solid var(--accent); border-radius:var(--radius); padding:0.44rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface); color:var(--text-muted); border:1px solid var(--border); }
+  .btn.ghost { background:transparent; color:var(--accent); border:1px solid rgba(15,98,254,0.35); }
+  .btn.danger { background:transparent; color:var(--danger); border:1px solid rgba(218,30,40,0.4); }
   .btn:disabled { opacity:0.55; cursor:not-allowed; }
   .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
   .stat { padding:0.78rem; }
   .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
   .stat-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
   .queue { display:grid; gap:0.65rem; }
-  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.8rem; align-items:center; padding:0.82rem 0.9rem; border:1px solid var(--border); background:rgba(17,22,29,0.5); border-radius:var(--radius); }
+  .row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0.8rem; align-items:center; padding:0.82rem 0.9rem; border:1px solid var(--border); background:#fafafa; border-radius:var(--radius); }
   .row-title { font-weight:700; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .row-detail { color:var(--text-muted); font-size:0.78rem; margin-top:0.35rem; max-width:54rem; white-space:pre-wrap; }
   .row-meta { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.35rem; color:var(--text-muted); font-size:0.75rem; }
@@ -126,6 +126,7 @@
 <script>
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const TABLE_TAB = { work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage' };
+const CONFIRM_TABLES = new Set(['work_tasks', 'project_work_tasks', 'training_tasks', 'personal_items']);
 const CATEGORY_TAB = { 'Follow-up':'personal_husband', 'Meetings':'personal_father', 'Office':'personal_house', 'Assets':'personal_cars' };
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
@@ -240,13 +241,18 @@ function renderRows(rows) {
     open.href = rowRecordUrl(row);
     open.textContent = 'Open Record';
     actions.appendChild(open);
-    if (row.needs_review) {
+    if (row.needs_review && CONFIRM_TABLES.has(row.table)) {
       const done = document.createElement('button');
       done.className = 'btn';
       done.type = 'button';
       done.textContent = 'Mark reviewed';
       done.addEventListener('click', () => markReviewed(row, done));
       actions.appendChild(done);
+    } else if (row.needs_review && row.table === 'inbox_items') {
+      const note = document.createElement('span');
+      note.className = 'pill review';
+      note.textContent = 'triage required';
+      actions.appendChild(note);
     }
     div.appendChild(left);
     div.appendChild(actions);
