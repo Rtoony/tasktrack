@@ -316,6 +316,9 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'initProjectCommand' in html
     assert 'openProjectWorkspaceById' in html
     assert 'openProjectWorkspaceSmart' in html
+    assert 'Open project workspace' in html
+    assert 'Open project report' in html
+    assert 'project-link-cell' in html
     assert 'focusProjectOnMapSmart' in html
     assert 'openProjectReportSmart' in html
     assert 'openFocusedMapReport' in html
