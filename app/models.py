@@ -588,10 +588,11 @@ class SkillCategory(Base):
 
 
 class EmployeeSkillScore(Base):
-    """One row per (employee, category): the assertion that the employee
-    has reached `score` proficiency. Upsert-only; the polymorphic
-    activity_log keyed by (`employee_skill_scores`, score.id) carries
-    per-cell history."""
+    """Cached competency rollup for one (employee, category) cell.
+
+    Detailed evidence lives in employee_skill_subscores. This table stays as
+    the fast matrix read path and backward-compatible endpoint contract.
+    """
     __tablename__ = "employee_skill_scores"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -601,11 +602,39 @@ class EmployeeSkillScore(Base):
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
     updated_by_user_id: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.0"))
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    last_observed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    rollup_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
 
     __table_args__ = (
         Index("idx_emp_skill_employee", "employee_id"),
         Index("idx_emp_skill_category", "category_id"),
         Index("idx_emp_skill_unique", "employee_id", "category_id", unique=True),
+    )
+
+
+class EmployeeSkillSubscore(Base):
+    """Append-only evidence behind competency score rollups."""
+    __tablename__ = "employee_skill_subscores"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    category_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    dimension_slug: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    weight: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"))
+    observed_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    source_kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'manual'"))
+    source_id: Mapped[int | None] = mapped_column(Integer)
+    notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_skill_subscore_dim", "employee_id", "category_id", "dimension_slug"),
+        Index("idx_skill_subscore_observed", "employee_id", "category_id", "observed_at"),
+        Index("idx_skill_subscore_source", "source_kind", "source_id"),
     )
 
 
@@ -645,6 +674,6 @@ __all__ = [
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
     "Employee", "Project", "ProjectOverlay", "ReportPreset",
-    "SkillCategory", "EmployeeSkillScore",
+    "SkillCategory", "EmployeeSkillScore", "EmployeeSkillSubscore",
     "to_dict",
 ]

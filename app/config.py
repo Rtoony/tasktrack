@@ -401,6 +401,32 @@ SKILL_CATEGORY_DEFAULTS = [
 ]
 
 
+# Dimension templates for the 1-5 competency rollup. Confidence handles
+# evidence volume/recency separately, so these dimensions stay focused on
+# capability quality rather than frequency. Category-specific entries can
+# override weights; missing categories use "default".
+SKILL_DIMENSION_DEFAULTS = {
+    "default": [
+        {"slug": "accuracy", "name": "Accuracy", "weight": 1.3},
+        {"slug": "autonomy", "name": "Autonomy", "weight": 1.0},
+        {"slug": "complexity", "name": "Complexity", "weight": 1.1},
+        {"slug": "standards", "name": "Standards Follow-through", "weight": 0.9},
+    ],
+    "civil-design": [
+        {"slug": "accuracy", "name": "Accuracy", "weight": 1.5},
+        {"slug": "autonomy", "name": "Autonomy", "weight": 1.0},
+        {"slug": "complexity", "name": "Complexity", "weight": 1.2},
+        {"slug": "standards", "name": "Standards Follow-through", "weight": 0.8},
+    ],
+    "cad-standards": [
+        {"slug": "accuracy", "name": "Accuracy", "weight": 1.2},
+        {"slug": "autonomy", "name": "Autonomy", "weight": 0.9},
+        {"slug": "complexity", "name": "Complexity", "weight": 0.8},
+        {"slug": "standards", "name": "Standards Follow-through", "weight": 1.5},
+    ],
+}
+
+
 # ── Cross-tracker bridges (Phase 3) ────────────────────────────────────────
 #
 # Declarative routes that carry data when promoting a source record into a

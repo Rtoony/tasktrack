@@ -16,8 +16,17 @@ from sqlalchemy import select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import Employee, EmployeeSkillScore, SkillCategory, to_dict
-from ..services.competency import CompetencyError, seed_default_categories, upsert_score
+from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, to_dict
+from ..services.competency import (
+    CompetencyError,
+    add_subscore,
+    confidence_band,
+    detail_for_cell,
+    dimensions_for_category,
+    recompute_all,
+    seed_default_categories,
+    upsert_score,
+)
 
 bp = Blueprint("competency", __name__)
 
@@ -149,15 +158,34 @@ def skill_matrix():
         "active": e.active,
     } for e in sess.scalars(emp_stmt).all()]
 
-    scores_by_emp: dict[str, dict[str, float]] = {}
-    for s in sess.scalars(select(EmployeeSkillScore)).all():
-        scores_by_emp.setdefault(str(s.employee_id), {})[str(s.category_id)] = s.score
+    detail = request.args.get("detail") in ("1", "true", "yes")
+    scores_by_emp: dict[str, dict[str, float | dict]] = {}
+    score_rows = sess.scalars(select(EmployeeSkillScore)).all()
+    for s in score_rows:
+        if not detail:
+            scores_by_emp.setdefault(str(s.employee_id), {})[str(s.category_id)] = s.score
+            continue
+        cell = detail_for_cell(sess, s.employee_id, s.category_id) or {
+            "score": s.score,
+            "confidence": s.confidence,
+            "confidence_band": confidence_band(s.confidence),
+            "sample_size": s.sample_size,
+            "last_observed_at": s.last_observed_at.isoformat(sep=" ") if s.last_observed_at else "",
+            "dimensions": [],
+        }
+        scores_by_emp.setdefault(str(s.employee_id), {})[str(s.category_id)] = cell
 
-    return jsonify({
+    payload = {
         "employees": employees,
         "categories": categories,
         "scores": scores_by_emp,
-    })
+    }
+    if detail:
+        payload["dimensions"] = {
+            str(c["id"]): [d.__dict__ for d in dimensions_for_category(sess.get(SkillCategory, c["id"]))]
+            for c in categories
+        }
+    return jsonify(payload)
 
 
 # ── Scores ────────────────────────────────────────────────────────────────
@@ -208,3 +236,89 @@ def list_scores_for_employee(employee_id):
         .where(EmployeeSkillScore.employee_id == employee_id)
     ).all()
     return jsonify([to_dict(r) for r in rows])
+
+
+# ── Subscore evidence ─────────────────────────────────────────────────────
+
+
+def _validate_emp_cat(sess, employee_id: int, category_id: int):
+    if sess.get(Employee, employee_id) is None:
+        return jsonify({"error": "employee not found", "request_id": _rid()}), 404
+    if sess.get(SkillCategory, category_id) is None:
+        return jsonify({"error": "category not found", "request_id": _rid()}), 404
+    return None
+
+
+@bp.route("/api/v1/skills/dimensions/<int:category_id>", methods=["GET"])
+@admin_required
+def list_dimensions(category_id):
+    sess = get_session()
+    category = sess.get(SkillCategory, category_id)
+    if category is None:
+        return jsonify({"error": "category not found", "request_id": _rid()}), 404
+    return jsonify([d.__dict__ for d in dimensions_for_category(category)])
+
+
+@bp.route("/api/v1/skills/subscores", methods=["POST"])
+@admin_required
+def create_subscore():
+    data = request.get_json(silent=True) or {}
+    try:
+        employee_id = int(data.get("employee_id"))
+        category_id = int(data.get("category_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "employee_id + category_id (int) required",
+                        "request_id": _rid()}), 400
+    if "score" not in data:
+        return jsonify({"error": "score is required", "request_id": _rid()}), 400
+    sess = get_session()
+    validation = _validate_emp_cat(sess, employee_id, category_id)
+    if validation is not None:
+        return validation
+    try:
+        evidence, cached = add_subscore(
+            sess,
+            employee_id=employee_id,
+            category_id=category_id,
+            dimension_slug=(data.get("dimension_slug") or "").strip(),
+            raw_score=data.get("score"),
+            weight=data.get("weight"),
+            observed_at=data.get("observed_at"),
+            source_kind=(data.get("source_kind") or "manual").strip(),
+            source_id=data.get("source_id"),
+            notes=(data.get("notes") or "").strip(),
+        )
+    except CompetencyError as e:
+        return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
+    sess.commit()
+    return jsonify({"subscore": to_dict(evidence), "rollup": to_dict(cached)}), 201
+
+
+@bp.route("/api/v1/skills/subscores/<int:employee_id>/<int:category_id>", methods=["GET"])
+@admin_required
+def list_subscores(employee_id, category_id):
+    sess = get_session()
+    validation = _validate_emp_cat(sess, employee_id, category_id)
+    if validation is not None:
+        return validation
+    rows = sess.scalars(
+        select(EmployeeSkillSubscore)
+        .where(
+            EmployeeSkillSubscore.employee_id == employee_id,
+            EmployeeSkillSubscore.category_id == category_id,
+        )
+        .order_by(EmployeeSkillSubscore.observed_at.desc(), EmployeeSkillSubscore.id.desc())
+    ).all()
+    return jsonify({
+        "rollup": detail_for_cell(sess, employee_id, category_id),
+        "rows": [to_dict(r) for r in rows],
+    })
+
+
+@bp.route("/api/v1/skills/recompute", methods=["POST"])
+@admin_required
+def recompute_scores():
+    sess = get_session()
+    count = recompute_all(sess)
+    sess.commit()
+    return jsonify({"updated": count})

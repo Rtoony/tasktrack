@@ -1203,7 +1203,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Competency</h2>
-        <div class="section-subtitle">Per-employee skill scores. Click a cell to update. Score band drives cell color: 1–3 amber, 4–6 cyan, 7–10 green. Manage the roster on the <a href="/admin/people" style="color:var(--accent)">Employees admin page</a>.</div>
+        <div class="section-subtitle">Per-employee competency rollups on a 1–5 scale. Click a cell to review evidence, confidence, and add observations. Management views should use the rounded score only; this power view shows confidence and sample size.</div>
       </div>
       <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
@@ -1221,6 +1221,7 @@
         <div class="empty-title">No employees yet</div>
         <p class="empty-copy">Add people on <a href="/admin/people" style="color:var(--accent)">/admin/people</a> first.</p>
       </div>
+      <div id="comp-detail" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-wrap" style="display:none; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);">
         <table id="comp-matrix" style="border-collapse:collapse; width:100%; font-size:0.78rem;">
           <thead id="comp-thead"></thead>
@@ -1612,7 +1613,7 @@
         <h3>Capture feedback</h3>
         <div class="drawer-eyebrow">Saved to feedback_items for review and Codex context.</div>
       </div>
-      <button class="modal-close" onclick="closeFeedbackModal()" aria-label="Close feedback modal">&times;</button>
+      <button class="modal-close" onclick="closeFeedbackModal({confirmDraft:true})" aria-label="Close feedback modal">&times;</button>
     </div>
     <div class="modal-body">
       <p class="feedback-intro">Use this while testing: describe the problem or desired tweak, optionally attach a screenshot, and TaskTrack will keep the current page, tab, viewport, and browser context with the record.</p>
@@ -1623,12 +1624,12 @@
         <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
       </div>
       <div class="field"><label>Card / component (optional)</label><input id="feedback-component" type="text" placeholder="Example: sidebar, project card, triage row"></div>
-      <div class="field"><label>Screenshot (optional)</label><input id="feedback-file" type="file" accept="image/png,image/jpeg,image/jpg,application/pdf"></div>
+      <div class="field"><label>Screenshots / files (optional)</label><input id="feedback-file" type="file" multiple accept="image/png,image/jpeg,image/jpg,application/pdf"><div class="fk-hint" id="feedback-file-hint" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;">Attach, paste, or drop screenshots here.</div></div>
       <div class="field"><label>Captured context</label><pre class="feedback-context" id="feedback-context-preview">{}</pre></div>
     </div>
     <div class="modal-footer">
       <span class="feedback-status" id="feedback-status"></span>
-      <button class="btn btn-cancel" type="button" onclick="closeFeedbackModal()">Cancel</button>
+      <button class="btn btn-cancel" type="button" onclick="closeFeedbackModal({force:true})">Cancel</button>
       <button class="btn btn-primary" type="button" onclick="submitFeedback()">Save Feedback</button>
     </div>
   </div>
@@ -2262,28 +2263,64 @@ function openFeedbackModal(componentLabel='') {
   document.getElementById('feedback-priority').value = 'Medium';
   document.getElementById('feedback-component').value = componentLabel || '';
   document.getElementById('feedback-file').value = '';
+  const fileHint = document.getElementById('feedback-file-hint');
+  if (fileHint) fileHint.textContent = 'Attach, paste, or drop screenshots here.';
   document.getElementById('feedback-status').textContent = '';
   document.getElementById('feedback-context-preview').textContent = JSON.stringify(context, null, 2);
   document.getElementById('feedback-overlay').classList.add('open');
   setTimeout(() => document.getElementById('feedback-title')?.focus(), 30);
 }
 
-function closeFeedbackModal() {
-  document.getElementById('feedback-overlay').classList.remove('open');
+function feedbackHasDraft() {
+  return !!(
+    document.getElementById('feedback-title')?.value.trim() ||
+    document.getElementById('feedback-body')?.value.trim() ||
+    document.getElementById('feedback-component')?.value.trim() ||
+    document.getElementById('feedback-file')?.files?.length
+  );
+}
+
+function closeFeedbackModal(options={}) {
+  const overlay = document.getElementById('feedback-overlay');
+  if (!overlay) return;
+  if (!options.force && feedbackHasDraft()) {
+    if (options.confirmDraft) {
+      if (!window.confirm('Discard this unsaved feedback draft?')) return;
+    } else {
+      document.getElementById('feedback-status').textContent = 'Use Save Feedback or Cancel before closing.';
+      return;
+    }
+  }
+  overlay.classList.remove('open');
+}
+
+function setFeedbackFiles(files) {
+  const input = document.getElementById('feedback-file');
+  if (!input || !files || !files.length) return;
+  const dt = new DataTransfer();
+  Array.from(input.files || []).forEach(file => dt.items.add(file));
+  Array.from(files).forEach(file => {
+    if (/^image\//.test(file.type || '') || file.type === 'application/pdf') dt.items.add(file);
+  });
+  input.files = dt.files;
+  const hint = document.getElementById('feedback-file-hint');
+  if (hint) hint.textContent = input.files.length + ' file' + (input.files.length === 1 ? '' : 's') + ' attached.';
 }
 
 async function uploadFeedbackAttachment(recordId) {
   const input = document.getElementById('feedback-file');
-  if (!input.files || !input.files[0]) return;
-  const fd = new FormData();
-  fd.append('file', input.files[0]);
-  const res = await fetch('/api/v1/attachments/feedback_items/' + recordId, {
-    method: 'POST',
-    headers: { 'X-CSRF-Token': CSRF_TOKEN },
-    body: fd,
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Screenshot upload failed');
+  if (!input.files || !input.files.length) return;
+  for (const file of Array.from(input.files)) {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/v1/attachments/feedback_items/' + recordId, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Attachment upload failed');
+  }
 }
 
 async function submitFeedback() {
@@ -2323,6 +2360,18 @@ function initFeedbackWidget() {
   const overlay = document.getElementById('feedback-overlay');
   if (!overlay) return;
   overlay.addEventListener('click', e => { if (e.target === e.currentTarget) closeFeedbackModal(); });
+  overlay.addEventListener('paste', e => {
+    const files = Array.from(e.clipboardData?.files || []);
+    if (files.length) {
+      e.preventDefault();
+      setFeedbackFiles(files);
+    }
+  });
+  overlay.addEventListener('dragover', e => { e.preventDefault(); });
+  overlay.addEventListener('drop', e => {
+    e.preventDefault();
+    setFeedbackFiles(e.dataTransfer?.files || []);
+  });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && overlay.classList.contains('open')) closeFeedbackModal();
   });
@@ -2369,19 +2418,35 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
 
-/* ── Competency matrix (Phase 1) ───────────────────────────────────────
-   Single-fetch /api/v1/skills/matrix returns
-     { employees, categories, scores: {emp_id: {cat_id: number}} }
-   Renders a 2D table; clicking a cell turns it into a number input
-   that POSTs to /api/v1/skills/scores. Empty cells show as a dim "—".
-   Score-band color: 1-3 amber, 4-6 cyan, 7-10 green. */
-let compState = { employees: [], categories: [], scores: {} };
+/* ── Competency matrix (dual-layer 1-5 rollup) ─────────────────────
+   /api/v1/skills/matrix?detail=1 returns cached 1-5 score cells plus
+   confidence/sample metadata and dimension rollups for the power view. */
+let compState = { employees: [], categories: [], scores: {}, dimensions: {} };
+let compSelected = null;
 
 function scoreBandColor(s) {
   if (s == null || isNaN(s)) return '';
-  if (s >= 7) return 'rgba(52,211,153,0.18)';
-  if (s >= 4) return 'rgba(34,211,238,0.16)';
-  return 'rgba(251,191,36,0.18)';
+  if (s >= 4) return '#defbe6';
+  if (s >= 3) return '#d0e2ff';
+  if (s >= 2) return '#fcf4d6';
+  return '#fff1f1';
+}
+function confidenceLabel(band) {
+  const b = String(band || 'low').toLowerCase();
+  if (b === 'high') return 'H';
+  if (b === 'medium') return 'M';
+  return 'L';
+}
+function compCellValue(cell) {
+  if (cell == null) return null;
+  if (typeof cell === 'object') return cell.score;
+  return cell;
+}
+function compCellDetail(empId, catId) {
+  const cell = compState.scores[String(empId)]?.[String(catId)];
+  if (cell && typeof cell === 'object') return cell;
+  if (cell != null) return { score: cell, confidence: 0, confidence_band: 'low', sample_size: 0, dimensions: [] };
+  return null;
 }
 
 async function loadCompetency() {
@@ -2389,13 +2454,14 @@ async function loadCompetency() {
   const empty = document.getElementById('comp-empty');
   const wrap = document.getElementById('comp-wrap');
   loading.style.display = 'block'; empty.style.display = 'none'; wrap.style.display = 'none';
-  const data = await api('GET', '/api/v1/skills/matrix');
+  const data = await api('GET', '/api/v1/skills/matrix?detail=1');
   if (!data) return;  // 401 already redirected
   compState = data;
   loading.style.display = 'none';
   if (!compState.employees.length) { empty.style.display = 'block'; return; }
   wrap.style.display = 'block';
   renderMatrix();
+  renderCompetencyDetail();
 }
 
 function renderMatrix() {
@@ -2411,50 +2477,52 @@ function renderMatrix() {
     (!nameFilter || e.display_name.toLowerCase().includes(nameFilter))
   );
 
-  // Header
   const trh = document.createElement('tr');
   const th0 = document.createElement('th');
-  th0.style.cssText = 'text-align:left; padding:0.5rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); min-width:200px;';
+  th0.style.cssText = 'text-align:left; padding:0.5rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); min-width:200px; z-index:2;';
   th0.textContent = 'Employee';
   trh.appendChild(th0);
   compState.categories.forEach(c => {
     const th = document.createElement('th');
-    th.style.cssText = 'text-align:center; padding:0.5rem 0.4rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--text-muted); min-width:78px;';
+    th.style.cssText = 'text-align:center; padding:0.5rem 0.4rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--text-muted); min-width:92px;';
     th.title = c.description || '';
     th.textContent = c.name;
     trh.appendChild(th);
   });
   const thAvg = document.createElement('th');
-  thAvg.style.cssText = 'text-align:center; padding:0.5rem 0.5rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--accent);';
+  thAvg.style.cssText = 'text-align:center; padding:0.5rem 0.5rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--accent); min-width:70px;';
   thAvg.textContent = 'Avg';
   trh.appendChild(thAvg);
   thead.appendChild(trh);
 
-  // Body
   visibleEmps.forEach(emp => {
     const tr = document.createElement('tr');
     tr.dataset.empId = emp.id;
     const tdName = document.createElement('td');
-    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap;';
-    const strong = document.createElement('div'); strong.style.fontWeight = '500';
-    strong.textContent = emp.display_name;
-    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)';
-    sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '');
-    tdName.appendChild(strong); tdName.appendChild(sub);
-    tr.appendChild(tdName);
+    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap; z-index:1;';
+    const strong = document.createElement('div'); strong.style.fontWeight = '500'; strong.textContent = emp.display_name;
+    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)'; sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '');
+    tdName.appendChild(strong); tdName.appendChild(sub); tr.appendChild(tdName);
 
     let sum = 0, count = 0;
-    const empScores = compState.scores[String(emp.id)] || {};
     compState.categories.forEach(cat => {
       const td = document.createElement('td');
-      const val = empScores[String(cat.id)];
-      td.style.cssText = 'text-align:center; padding:0.3rem 0.4rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
-                        (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);');
-      td.textContent = (val != null) ? Number(val).toFixed(1) : '—';
-      td.title = 'Click to edit';
-      td.addEventListener('click', () => editCell(td, emp.id, cat.id, val));
+      const detail = compCellDetail(emp.id, cat.id);
+      const val = compCellValue(detail);
+      const selected = compSelected && compSelected.empId === emp.id && compSelected.catId === cat.id;
+      td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
+                        (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);') +
+                        (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
+      if (val != null) {
+        td.innerHTML = '<div style="font-weight:700;font-family:IBM Plex Mono,monospace">' + Number(val).toFixed(1) + '</div>' +
+          '<div style="font-size:0.62rem;color:var(--text-muted)">' + confidenceLabel(detail.confidence_band) + ' · n=' + (detail.sample_size || 0) + '</div>';
+        sum += Number(val); count += 1;
+      } else {
+        td.textContent = '—';
+      }
+      td.title = 'Click for competency evidence';
+      td.addEventListener('click', () => openCompetencyCell(emp.id, cat.id));
       tr.appendChild(td);
-      if (val != null) { sum += Number(val); count += 1; }
     });
     const tdAvg = document.createElement('td');
     tdAvg.style.cssText = 'text-align:center; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--accent);';
@@ -2464,38 +2532,57 @@ function renderMatrix() {
   });
 }
 
-function editCell(td, empId, catId, currentVal) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:flex; align-items:center; gap:4px; justify-content:center;';
-  const input = document.createElement('input');
-  input.type = 'number'; input.min = '1'; input.max = '10'; input.step = '0.5';
-  input.value = (currentVal != null) ? currentVal : '';
-  input.style.cssText = 'width:48px; padding:2px 4px; background:var(--surface-2); color:var(--text); border:1px solid var(--accent); border-radius:3px; font-family:inherit; font-size:0.78rem; text-align:center;';
-  wrap.appendChild(input);
-  td.replaceChildren(wrap);
-  input.focus(); input.select();
+function openCompetencyCell(empId, catId) {
+  compSelected = { empId, catId };
+  renderMatrix();
+  renderCompetencyDetail();
+}
 
-  let done = false;
-  const cancel = () => { if (done) return; done = true; renderMatrix(); };
-  const commit = async () => {
-    if (done) return; done = true;
-    const raw = input.value.trim();
-    if (raw === '') { renderMatrix(); return; }
-    const r = await api('POST', '/api/v1/skills/scores', {
-      employee_id: empId, category_id: catId, score: raw,
-    });
-    if (r && r.error) { toast(r.error); renderMatrix(); return; }
-    if (r && r.score != null) {
-      compState.scores[String(empId)] = compState.scores[String(empId)] || {};
-      compState.scores[String(empId)][String(catId)] = r.score;
-    }
-    renderMatrix();
+function renderCompetencyDetail() {
+  const host = document.getElementById('comp-detail');
+  if (!host) return;
+  if (!compSelected) { host.style.display = 'none'; host.replaceChildren(); return; }
+  const emp = compState.employees.find(e => e.id === compSelected.empId);
+  const cat = compState.categories.find(c => c.id === compSelected.catId);
+  if (!emp || !cat) { host.style.display = 'none'; return; }
+  const detail = compCellDetail(emp.id, cat.id) || { score:null, confidence_band:'low', sample_size:0, dimensions: compState.dimensions?.[String(cat.id)] || [] };
+  const dims = detail.dimensions?.length ? detail.dimensions : (compState.dimensions?.[String(cat.id)] || []);
+  host.style.display = 'block';
+  const dimOptions = dims.map(d => '<option value="' + esc(d.slug) + '">' + esc(d.name || d.slug) + '</option>').join('');
+  const dimRows = dims.map(d => '<tr><td>' + esc(d.name || d.slug) + '</td><td>' + (d.score == null ? '—' : Number(d.score).toFixed(1)) + '</td><td>' + (d.n || 0) + '</td><td>' + esc(d.last_observed_at || '') + '</td></tr>').join('');
+  host.innerHTML =
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem">' +
+      '<div><div class="workspace-kicker">Competency evidence</div><div class="workspace-title">' + esc(emp.display_name) + ' · ' + esc(cat.name) + '</div>' +
+      '<div class="workspace-sub">Visible score: <strong>' + (detail.score == null ? '—' : Number(detail.score).toFixed(1)) + '</strong> · confidence ' + esc(detail.confidence_band || 'low') + ' · sample size ' + (detail.sample_size || 0) + '</div></div>' +
+      '<button class="btn btn-ghost" type="button" onclick="compSelected=null;renderMatrix();renderCompetencyDetail();">Close</button>' +
+    '</div>' +
+    '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:520px;width:100%;font-size:0.76rem"><thead><tr><th>Dimension</th><th>Score</th><th>n</th><th>Last observed</th></tr></thead><tbody>' + (dimRows || '<tr><td colspan="4">No evidence yet.</td></tr>') + '</tbody></table></div>' +
+    '<div class="field-row">' +
+      '<div class="field"><label>Dimension</label><select id="comp-dimension">' + dimOptions + '</select></div>' +
+      '<div class="field"><label>Score 1-5</label><input id="comp-score" type="number" min="1" max="5" step="0.5" value="3"></div>' +
+      '<div class="field"><label>Notes</label><input id="comp-notes" type="text" placeholder="Evidence or context"></div>' +
+    '</div>' +
+    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(false)">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(true)">Force visible score</button></div>';
+}
+
+async function saveCompetencyObservation(force) {
+  if (!compSelected) return;
+  const score = document.getElementById('comp-score')?.value;
+  const notes = document.getElementById('comp-notes')?.value || '';
+  const dimension = force ? 'manual' : (document.getElementById('comp-dimension')?.value || 'accuracy');
+  const path = force ? '/api/v1/skills/scores' : '/api/v1/skills/subscores';
+  const payload = {
+    employee_id: compSelected.empId,
+    category_id: compSelected.catId,
+    score,
+    notes,
   };
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-  });
-  input.addEventListener('blur', commit);
+  if (!force) payload.dimension_slug = dimension;
+  const res = await api('POST', path, payload);
+  if (!res || res.error) { toast(res?.error || 'Competency save failed'); return; }
+  toast(force ? 'Visible competency score saved' : 'Competency observation added');
+  await loadCompetency();
+  renderCompetencyDetail();
 }
 
 // Live filter input — debounced re-render without re-fetching.
@@ -4906,7 +4993,7 @@ const FORMS = {
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
     {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
     {key:'software',label:'Software / Tools',type:'text',placeholder:'autocad, civil3d, bluebeam'},
-    {key:'requested_by',label:'Requested By',type:'text',placeholder:'Who asked for this CAD change?'},
+    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked'},
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
@@ -4920,7 +5007,7 @@ const FORMS = {
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,placeholder:'Pick or type project #'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
-    {key:'engineer',label:'Engineer',type:'text'},
+    {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
@@ -4931,8 +5018,8 @@ const FORMS = {
   ],
   training:[
     {key:'title',label:'Title',type:'text',required:true},
-    {key:'trainees',label:'Staff Members',type:'text',placeholder:'Comma-separated names'},
-    {key:'requested_by',label:'Requested By',type:'text',placeholder:'Who requested this training task?'},
+    {key:'trainees',label:'Staff Members',type:'employee-multi-name-select',idsKey:'trainee_ids',placeholder:'Pick one or more employees'},
+    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this'},
     {key:'skill_area',label:'Skill Area',type:'text',placeholder:'Modeling, detailing, standards, markup workflow, etc.'},
     {key:'training_goals',label:'Training Goals',type:'textarea'},
     {key:'additional_context',label:'Additional Context',type:'textarea'},
@@ -4947,7 +5034,7 @@ const FORMS = {
     {key:'issue_description',label:'Incident Summary',type:'textarea',required:true,placeholder:'What happened? Brief factual summary.'},
     {key:'person_name',label:'People Involved (comma-separated, optional)',type:'text',placeholder:'Alice Smith, Bob Jones \u2014 or leave blank for 0-person incidents'},
     {key:'person_ids',label:'People (registry FK \u00b7 multi-select)',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional. Pick one or more employees. The People text field above is also parsed for matching names \u2014 either path works.'},
-    {key:'observed_by',label:'Reported By',type:'text',placeholder:'Who submitted or observed this issue?'},
+    {key:'observed_by',label:'Reported By',type:'employee-name-select',placeholder:'Pick the reporter'},
     {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
     {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
@@ -5116,6 +5203,34 @@ function renderField(f,value) {
     wrap.appendChild(list);
     wrap.appendChild(hint);
     return wrap;
+  } else if (f.type==='employee-name-select') {
+    input=document.createElement('select'); input.id='f-'+f.key;
+    const empty=document.createElement('option'); empty.value=''; empty.textContent=f.placeholder || '— choose employee —';
+    input.appendChild(empty);
+    loadFkOptions('/api/v1/employees').then(rows => {
+      rows.forEach(r => {
+        const opt=document.createElement('option');
+        opt.value=r.display_name || '';
+        opt.textContent=[r.display_name, r.title || r.role].filter(Boolean).join(' · ');
+        if (String(value).trim().toLowerCase()===String(opt.value).trim().toLowerCase()) opt.selected=true;
+        input.appendChild(opt);
+      });
+    });
+  } else if (f.type==='employee-multi-name-select') {
+    input=document.createElement('select'); input.id='f-'+f.key;
+    input.multiple=true; input.size=6;
+    input.style.cssText='min-height:7rem; padding:0.35rem 0.55rem;';
+    const selectedNames = String(value || '').split(/[,;]/).map(s => s.trim().toLowerCase()).filter(Boolean);
+    loadFkOptions('/api/v1/employees').then(rows => {
+      rows.forEach(r => {
+        const opt=document.createElement('option');
+        opt.value=r.display_name || '';
+        opt.dataset.id=r.id;
+        opt.textContent=[r.display_name, r.title || r.role].filter(Boolean).join(' · ');
+        if (selectedNames.includes(String(r.display_name || '').trim().toLowerCase())) opt.selected=true;
+        input.appendChild(opt);
+      });
+    });
   } else if (f.type==='fk-select') {
     /* Dual-column FK. value is the id (int). Renders as <select> with an
        empty option + rows from f.endpoint. Hint label notes which text
@@ -5373,8 +5488,14 @@ function getFormData(table) {
       if(!el) return;
       if (f.type === 'fk-multi-select') {
         // <select multiple>: serialise selected ids back as a JSON array.
-        const ids = Array.from(el.selectedOptions).map(o => o.value).filter(Boolean);
+        const opts = Array.from(el.selectedOptions);
+        const ids = opts.map(o => o.value).filter(Boolean);
         data[f.key] = JSON.stringify(ids);
+        if (f.syncTextKey) data[f.syncTextKey] = opts.map(o => o.textContent.split(' · ')[0].trim()).filter(Boolean).join(', ');
+      } else if (f.type === 'employee-multi-name-select') {
+        const opts = Array.from(el.selectedOptions);
+        data[f.key] = opts.map(o => o.value).filter(Boolean).join(', ');
+        if (f.idsKey) data[f.idsKey] = JSON.stringify(opts.map(o => o.dataset.id).filter(Boolean));
       } else {
         data[f.key] = f.type === 'project-picker' ? normalizeProjectNumberCandidate(el.value) : el.value;
         if (f.type === 'project-picker') {

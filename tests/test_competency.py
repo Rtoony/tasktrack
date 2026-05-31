@@ -1,11 +1,11 @@
-"""Tests for app/routes/competency.py — categories + matrix + score upserts.
+"""Tests for app/routes/competency.py — categories + competency rollups.
 
-Every endpoint is admin-only. Verifies seed-on-first-call, score clamping,
-upsert idempotency, and activity_log writes."""
+Every endpoint is admin-only. Verifies seed-on-first-call, 1-5 score validation,
+evidence rows, cached rollups, detail payloads, and activity_log writes."""
 from sqlalchemy import select
 
 from app.db import get_session
-from app.models import ActivityLog, Employee, EmployeeSkillScore, SkillCategory
+from app.models import ActivityLog, Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory
 
 # ── Auth gating ───────────────────────────────────────────────────────────
 
@@ -154,10 +154,10 @@ def _seed_pair(temp_app):
 def test_upsert_score_insert(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     r = admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 7.5,
+        "employee_id": emp_id, "category_id": cat_id, "score": 3.5,
     })
     assert r.status_code == 200
-    assert r.get_json()["score"] == 7.5
+    assert r.get_json()["score"] == 3.5
 
     with temp_app.app_context():
         sess = get_session()
@@ -170,13 +170,13 @@ def test_upsert_score_insert(admin_client, temp_app):
 def test_upsert_score_update(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 5.0,
+        "employee_id": emp_id, "category_id": cat_id, "score": 2.5,
     })
     r = admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 8.0,
+        "employee_id": emp_id, "category_id": cat_id, "score": 4.0,
     })
     assert r.status_code == 200
-    assert r.get_json()["score"] == 8.0
+    assert r.get_json()["score"] == 4.0
 
     with temp_app.app_context():
         sess = get_session()
@@ -185,16 +185,16 @@ def test_upsert_score_update(admin_client, temp_app):
         ).all()
         # Still one row — upsert, not insert-twice.
         assert len(rows) == 1
-        assert rows[0].score == 8.0
+        assert rows[0].score == 4.0
 
 
 def test_upsert_writes_activity_log(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 6,
+        "employee_id": emp_id, "category_id": cat_id, "score": 3,
     })
     admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 7.5,
+        "employee_id": emp_id, "category_id": cat_id, "score": 3.5,
     })
     with temp_app.app_context():
         sess = get_session()
@@ -206,15 +206,15 @@ def test_upsert_writes_activity_log(admin_client, temp_app):
     assert "score_updated" in actions
 
 
-def test_upsert_clamps_too_high(admin_client, temp_app):
+def test_upsert_rejects_too_high(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     r = admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 11,
+        "employee_id": emp_id, "category_id": cat_id, "score": 6,
     })
     assert r.status_code == 400
 
 
-def test_upsert_clamps_too_low(admin_client, temp_app):
+def test_upsert_rejects_too_low(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     r = admin_client.post("/api/v1/skills/scores", json={
         "employee_id": emp_id, "category_id": cat_id, "score": 0,
@@ -259,15 +259,100 @@ def test_upsert_404_missing_category(admin_client, temp_app):
 def test_list_scores_for_employee(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/scores", json={
-        "employee_id": emp_id, "category_id": cat_id, "score": 6.5,
+        "employee_id": emp_id, "category_id": cat_id, "score": 3.5,
     })
     r = admin_client.get(f"/api/v1/skills/scores/{emp_id}")
     assert r.status_code == 200
     rows = r.get_json()
     assert len(rows) == 1
-    assert rows[0]["score"] == 6.5
+    assert rows[0]["score"] == 3.5
 
 
 def test_list_scores_404_missing_employee(admin_client):
     r = admin_client.get("/api/v1/skills/scores/99999")
     assert r.status_code == 404
+
+
+# ── Subscore evidence + detail payload ────────────────────────────────────
+
+
+def test_upsert_score_creates_manual_subscore(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    r = admin_client.post("/api/v1/skills/scores", json={
+        "employee_id": emp_id, "category_id": cat_id, "score": 4.0,
+        "notes": "forced value",
+    })
+    assert r.status_code == 200
+    with temp_app.app_context():
+        sess = get_session()
+        evidence = sess.scalars(select(EmployeeSkillSubscore)).all()
+        assert len(evidence) == 1
+        assert evidence[0].dimension_slug == "manual"
+        assert evidence[0].source_kind == "manual_override"
+        score = sess.scalar(select(EmployeeSkillScore))
+        assert score.score == 4.0
+        assert score.sample_size == 1
+        assert score.confidence >= 0.3
+
+
+def test_create_subscore_appends_and_rolls_up(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    r1 = admin_client.post("/api/v1/skills/subscores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "dimension_slug": "accuracy", "score": 4.0,
+    })
+    r2 = admin_client.post("/api/v1/skills/subscores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "dimension_slug": "autonomy", "score": 3.0,
+    })
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+    with temp_app.app_context():
+        sess = get_session()
+        rows = sess.scalars(select(EmployeeSkillSubscore)).all()
+        assert len(rows) == 2
+        rollup = sess.scalar(select(EmployeeSkillScore))
+        assert 3.0 <= rollup.score <= 4.0
+        assert rollup.sample_size == 2
+        assert rollup.rollup_version == 2
+
+
+def test_matrix_detail_shape(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    admin_client.post("/api/v1/skills/subscores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "dimension_slug": "accuracy", "score": 4.0,
+    })
+    r = admin_client.get("/api/v1/skills/matrix?detail=1")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert set(body.keys()) == {"employees", "categories", "scores", "dimensions"}
+    cell = body["scores"][str(emp_id)][str(cat_id)]
+    assert cell["score"] == 4.0
+    assert cell["confidence_band"] in {"low", "medium", "high"}
+    assert cell["sample_size"] == 1
+    assert cell["dimensions"][0]["slug"] == "accuracy"
+
+
+def test_list_subscores_history(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    admin_client.post("/api/v1/skills/subscores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "dimension_slug": "accuracy", "score": 4.0,
+    })
+    r = admin_client.get(f"/api/v1/skills/subscores/{emp_id}/{cat_id}")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert len(body["rows"]) == 1
+    assert body["rollup"]["score"] == 4.0
+
+
+def test_recompute_scores(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    admin_client.post("/api/v1/skills/subscores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "dimension_slug": "accuracy", "score": 4.0,
+    })
+    r = admin_client.post("/api/v1/skills/recompute", json={})
+    assert r.status_code == 200
+    assert r.get_json()["updated"] == 1
