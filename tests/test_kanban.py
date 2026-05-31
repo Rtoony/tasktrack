@@ -52,6 +52,16 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert '<span class="tab-divider-label">Work</span>' in html
     assert '<span class="tab-divider-label">Context</span>' in html
     assert '<span class="tab-divider-label">Flow</span>' in html
+    assert '<span class="tab-divider-label">Output</span>' in html
+    assert 'class="side-link" href="/intake"' in html
+    assert 'class="side-link" href="/reports"' in html
+    assert 'class="side-link" href="/weekly"' in html
+    header_at = html.index('<header class="header">')
+    shell_at = html.index('class="app-shell')
+    header_html = html[header_at:shell_at]
+    assert 'Submission Forms' not in header_html
+    assert 'href="/reports"' not in header_html
+    assert 'href="/weekly"' not in header_html
     side_nav_at = html.index('class="side-nav"')
     assert side_nav_at < html.index('<main class="container">')
     assert html.find('data-tab="dashboard"', side_nav_at) > side_nav_at

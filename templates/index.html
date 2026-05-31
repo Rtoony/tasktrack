@@ -153,6 +153,8 @@
   .tab-btn.active { border-left-color:var(--accent); background:var(--accent-light); color:var(--text); }
   .tab-count { margin-left:auto; background:var(--bg); color:var(--text-muted); font-size:0.65rem; font-weight:600; padding:1px 5px; border-radius:10px; }
   .tab-btn.active .tab-count { background:var(--surface); color:var(--accent); }
+  .side-link { width:100%; min-height:36px; border-left:3px solid transparent; padding:0.48rem 1rem; display:flex; align-items:center; color:var(--text-muted); font-size:0.84rem; font-weight:500; text-decoration:none; white-space:nowrap; transition:background 0.15s,color 0.15s,border-color 0.15s; }
+  .side-link:hover { background:var(--bg); border-left-color:var(--border); color:var(--text); }
   .tab-divider { display:block; padding:1rem 1rem 0.35rem; }
   .tab-divider::before { display:none; }
   .tab-divider-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.08em; }
@@ -553,8 +555,9 @@
     .app-shell { flex-direction:column; min-height:0; }
     .side-nav { width:100%; flex-basis:auto; height:auto; max-height:none; position:sticky; top:0; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto; }
     .side-nav-list { flex-direction:row; align-items:center; padding:0; }
-    .tab-btn { width:auto; min-height:44px; border-left:none; border-bottom:3px solid transparent; padding:0 0.85rem; font-size:0.78rem; }
+    .tab-btn,.side-link { width:auto; min-height:44px; border-left:none; border-bottom:3px solid transparent; padding:0 0.85rem; font-size:0.78rem; }
     .tab-btn.active { border-left-color:transparent; border-bottom-color:var(--accent); }
+    .side-link:hover { border-left-color:transparent; border-bottom-color:var(--border); }
     .tab-divider { display:none; }
     .side-nav-footer { display:none; }
     .container { padding:1rem; }
@@ -595,10 +598,6 @@
       {% if standalone_tab %}
       <a href="/" class="btn-admin-link">Full Tracker</a>
       <a href="/admin" class="btn-admin-link">Admin Home</a>
-      {% else %}
-      <a href="/intake" class="btn-admin-link" target="_blank" rel="noopener">Submission Forms</a>
-      <a href="/reports" class="btn-admin-link" title="Report center and management packets">Reports</a>
-      <a href="/weekly" class="btn-admin-link" title="Week in Review — read-only digest for check-in meetings">&#128202; Weekly</a>
       {% endif %}
       {% if not standalone_tab %}
       <span class="health-pill" id="health-pill" title="Loading…">
@@ -606,7 +605,6 @@
       </span>
       {% endif %}
       <span class="user-name">{{ user_name }}</span>
-      {% if user_role == 'admin' %}<a href="/admin" class="btn-admin-link">Admin</a>{% endif %}
       <a href="/logout" class="btn-logout">Sign out</a>
     </div>
   </div>
@@ -634,6 +632,14 @@
       <button class="tab-btn" data-tab="personal_father">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
       <button class="tab-btn" data-tab="personal_house">Office <span class="tab-count" id="count-personal_house">0</span></button>
       <button class="tab-btn" data-tab="personal_cars">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
+      <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Output</span></span>
+      <a class="side-link" href="/intake" target="_blank" rel="noopener">Submission Forms</a>
+      <a class="side-link" href="/reports">Reports</a>
+      <a class="side-link" href="/weekly">Weekly Review</a>
+      {% if user_role == 'admin' %}
+      <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Admin</span></span>
+      <a class="side-link" href="/admin">Admin Home</a>
+      {% endif %}
     </nav>
     <div class="side-nav-footer">TaskTrack / ops console</div>
   </aside>
