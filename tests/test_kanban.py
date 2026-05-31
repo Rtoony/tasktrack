@@ -48,7 +48,11 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     html = r.data.decode("utf-8")
     assert 'class="app-shell' in html
     assert 'class="side-nav"' in html
+    assert 'id="shell-context">/ Dashboard</span>' in html
     assert 'class="tabs side-nav-list"' in html
+    assert 'data-tab="work" data-shell-title="CAD Development"' in html
+    assert 'function updateShellContext(title)' in html
+    assert 'updateShellContext(tabTitleForButton(btn));' in html
     assert '<span class="tab-divider-label">Work</span>' in html
     assert '<span class="tab-divider-label">Context</span>' in html
     assert '<span class="tab-divider-label">Flow</span>' in html

@@ -585,7 +585,7 @@
 <header class="header">
   <div class="header-inner">
     <div class="header-left">
-      <div class="logo"><span>//</span> {{ brand_name }}{% if standalone_title %}<span class="context-badge">{{ standalone_title }}</span>{% endif %}</div>
+      <div class="logo"><span>//</span> {{ brand_name }} <span class="context-badge" id="shell-context">/ {% if standalone_title %}{{ standalone_title }}{% else %}Dashboard{% endif %}</span></div>
     </div>
     <div class="user-bar">
       {% if not standalone_tab %}
@@ -615,23 +615,23 @@
   <aside class="side-nav" aria-label="TaskTrack navigation">
     <nav class="tabs side-nav-list">
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
-      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-      <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
-      <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
-      <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
-      <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
-      <button class="tab-btn" data-tab="personnel">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
+      <button class="tab-btn active" data-tab="dashboard" data-shell-title="Dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="triage" data-shell-title="Triage">Triage <span class="tab-count" id="count-triage">0</span></button>
+      <button class="tab-btn" data-tab="project" data-shell-title="Project Tasks">Project Tasks <span class="tab-count" id="count-project">0</span></button>
+      <button class="tab-btn" data-tab="work" data-shell-title="CAD Development">CAD Dev <span class="tab-count" id="count-work">0</span></button>
+      <button class="tab-btn" data-tab="training" data-shell-title="Training">Training <span class="tab-count" id="count-training">0</span></button>
+      <button class="tab-btn" data-tab="personnel" data-shell-title="Capabilities">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Context</span></span>
-      <button class="tab-btn" data-tab="map">Project Map</button>
-      <button class="tab-btn" data-tab="calendar">Calendar <span class="tab-count" id="count-calendar">0</span></button>
+      <button class="tab-btn" data-tab="map" data-shell-title="Project Map">Project Map</button>
+      <button class="tab-btn" data-tab="calendar" data-shell-title="Calendar">Calendar <span class="tab-count" id="count-calendar">0</span></button>
       {% if user_role == 'admin' %}
-      <button class="tab-btn" data-tab="competency">Competency</button>
+      <button class="tab-btn" data-tab="competency" data-shell-title="Competency">Competency</button>
       {% endif %}
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Flow</span></span>
-      <button class="tab-btn" data-tab="personal_husband">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
-      <button class="tab-btn" data-tab="personal_father">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
-      <button class="tab-btn" data-tab="personal_house">Office <span class="tab-count" id="count-personal_house">0</span></button>
-      <button class="tab-btn" data-tab="personal_cars">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
+      <button class="tab-btn" data-tab="personal_husband" data-shell-title="Follow-up">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
+      <button class="tab-btn" data-tab="personal_father" data-shell-title="Meetings">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
+      <button class="tab-btn" data-tab="personal_house" data-shell-title="Office">Office <span class="tab-count" id="count-personal_house">0</span></button>
+      <button class="tab-btn" data-tab="personal_cars" data-shell-title="Assets">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Output</span></span>
       <a class="side-link" href="/intake" target="_blank" rel="noopener">Submission Forms</a>
       <a class="side-link" href="/reports">Reports</a>
@@ -1767,6 +1767,7 @@ let tableCache = {
   triage:[], calendar:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
 };
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
+const SHELL_BRAND = {{ brand_name|tojson }};
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
@@ -1800,6 +1801,18 @@ function tabButtonFor(tabName) {
   return Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.dataset.tab === tabName) || null;
 }
 
+function tabTitleForButton(btn) {
+  if (!btn) return '';
+  return (btn.dataset.shellTitle || btn.firstChild?.textContent || btn.textContent || '').trim();
+}
+
+function updateShellContext(title) {
+  if (!title) return;
+  const context = document.getElementById('shell-context');
+  if (context) context.textContent = '/ ' + title;
+  if (!STANDALONE_TAB) document.title = title + ' - ' + SHELL_BRAND;
+}
+
 function activateTab(tabName) {
   const btn = tabButtonFor(tabName);
   const section = document.getElementById('sec-' + tabName);
@@ -1807,6 +1820,7 @@ function activateTab(tabName) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   currentTab = tabName;
+  updateShellContext(tabTitleForButton(btn));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   section.classList.add('active');
   if (currentTab === 'dashboard') loadDashboard();
