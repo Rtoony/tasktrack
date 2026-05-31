@@ -1213,6 +1213,10 @@
         <option value="engineer">Engineer</option>
         <option value="drafter">Drafter</option>
       </select>
+      <label class="filter-select" title="Usually off. Use this to audit who has been excluded from competency ratings." style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+        <input type="checkbox" id="comp-include-untracked" onchange="loadCompetency()" style="margin:0">
+        <span style="font-size:0.78rem">Show excluded</span>
+      </label>
     </div>
 
     <div id="comp-host">
@@ -2454,7 +2458,8 @@ async function loadCompetency() {
   const empty = document.getElementById('comp-empty');
   const wrap = document.getElementById('comp-wrap');
   loading.style.display = 'block'; empty.style.display = 'none'; wrap.style.display = 'none';
-  const data = await api('GET', '/api/v1/skills/matrix?detail=1');
+  const includeExcluded = document.getElementById('comp-include-untracked')?.checked ? '&include_untracked_emp=1' : '';
+  const data = await api('GET', '/api/v1/skills/matrix?detail=1' + includeExcluded);
   if (!data) return;  // 401 already redirected
   compState = data;
   loading.style.display = 'none';
@@ -2501,7 +2506,7 @@ function renderMatrix() {
     const tdName = document.createElement('td');
     tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap; z-index:1;';
     const strong = document.createElement('div'); strong.style.fontWeight = '500'; strong.textContent = emp.display_name;
-    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)'; sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '');
+    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)'; sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '') + (emp.competency_tracked ? '' : ' · excluded from ratings');
     tdName.appendChild(strong); tdName.appendChild(sub); tr.appendChild(tdName);
 
     let sum = 0, count = 0;
@@ -2562,25 +2567,27 @@ function renderCompetencyDetail() {
       '<div class="field"><label>Score 1-5</label><input id="comp-score" type="number" min="1" max="5" step="0.5" value="3"></div>' +
       '<div class="field"><label>Notes</label><input id="comp-notes" type="text" placeholder="Evidence or context"></div>' +
     '</div>' +
-    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(false)">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(true)">Force visible score</button></div>';
+    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(\'observation\')">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary\')">Save preliminary rating</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'baseline\')">Mark official baseline</button></div>';
 }
 
-async function saveCompetencyObservation(force) {
+async function saveCompetencyObservation(mode) {
   if (!compSelected) return;
   const score = document.getElementById('comp-score')?.value;
   const notes = document.getElementById('comp-notes')?.value || '';
-  const dimension = force ? 'manual' : (document.getElementById('comp-dimension')?.value || 'accuracy');
-  const path = force ? '/api/v1/skills/scores' : '/api/v1/skills/subscores';
+  const isObservation = mode === 'observation';
+  const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || 'accuracy') : 'manual';
+  const path = isObservation ? '/api/v1/skills/subscores' : '/api/v1/skills/scores';
   const payload = {
     employee_id: compSelected.empId,
     category_id: compSelected.catId,
     score,
     notes,
   };
-  if (!force) payload.dimension_slug = dimension;
+  if (isObservation) payload.dimension_slug = dimension;
+  else payload.source_kind = mode === 'baseline' ? 'official_baseline' : 'preliminary_rating';
   const res = await api('POST', path, payload);
   if (!res || res.error) { toast(res?.error || 'Competency save failed'); return; }
-  toast(force ? 'Visible competency score saved' : 'Competency observation added');
+  toast(mode === 'baseline' ? 'Official baseline saved' : (mode === 'preliminary' ? 'Preliminary rating saved' : 'Competency observation added'));
   await loadCompetency();
   renderCompetencyDetail();
 }

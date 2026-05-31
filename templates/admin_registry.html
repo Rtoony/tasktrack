@@ -99,7 +99,7 @@
     <h2>Roster</h2>
     <table>
       <thead><tr>
-        <th>Name</th><th>Title</th><th>Email</th><th>Status</th><th></th>
+        <th>Name</th><th>Title</th><th>Email</th><th>Status</th><th>Competency</th><th></th>
       </tr></thead>
       <tbody>
       {% for r in rows %}
@@ -108,7 +108,13 @@
           <td>{{ r.title }}</td>
           <td>{{ r.email }}</td>
           <td><span class="pill {{ 'ok' if r.active else 'off' }}">{{ 'active' if r.active else 'inactive' }}</span></td>
+          <td><span class="pill {{ 'ok' if r.competency_tracked else 'off' }}">{{ 'rated' if r.competency_tracked else 'not rated' }}</span></td>
           <td>
+            {% if r.competency_tracked %}
+            <button class="btn btn-sm btn-danger" onclick="setCompetencyTracked({{ r.id }}, false)">Exclude from competency</button>
+            {% else %}
+            <button class="btn btn-sm" onclick="setCompetencyTracked({{ r.id }}, true)">Include in competency</button>
+            {% endif %}
             {% if r.active %}
             <button class="btn btn-sm btn-danger" onclick="deactivate('employees', {{ r.id }})">Deactivate</button>
             {% else %}
@@ -244,6 +250,13 @@ async function addProject() {
   const r = await api('POST', '/api/v1/projects', payload);
   if (r && r.error) return toast(r.error);
   toast('Added ' + payload.project_number);
+  location.reload();
+}
+
+async function setCompetencyTracked(id, tracked) {
+  const r = await api('PATCH', '/api/v1/employees/' + id, { competency_tracked: tracked });
+  if (r && r.error) return toast(r.error);
+  toast(tracked ? 'Included in competency' : 'Excluded from competency');
   location.reload();
 }
 

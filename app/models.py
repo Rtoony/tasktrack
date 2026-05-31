@@ -424,12 +424,14 @@ class Employee(Base):
     role: Mapped[str] = mapped_column(Text, server_default=text("''"))
     title: Mapped[str] = mapped_column(Text, server_default=text("''"))
     active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    competency_tracked: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
     __table_args__ = (
         Index("idx_employees_active", "active"),
+        Index("idx_employees_competency_tracked", "competency_tracked"),
         Index("idx_employees_display_name", "display_name"),
     )
 

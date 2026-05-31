@@ -139,6 +139,7 @@ def skill_matrix():
     if sess.scalar(select(SkillCategory).limit(1)) is None:
         seed_default_categories(sess)
     include_inactive_emp = request.args.get("include_inactive_emp") in ("1", "true", "yes")
+    include_untracked_emp = request.args.get("include_untracked_emp") in ("1", "true", "yes")
 
     cat_stmt = (
         select(SkillCategory)
@@ -150,12 +151,15 @@ def skill_matrix():
     emp_stmt = select(Employee).order_by(Employee.display_name.asc())
     if not include_inactive_emp:
         emp_stmt = emp_stmt.where(Employee.active == 1)
+    if not include_untracked_emp:
+        emp_stmt = emp_stmt.where(Employee.competency_tracked == 1)
     employees = [{
         "id": e.id,
         "display_name": e.display_name,
         "title": e.title,
         "role": e.role,
         "active": e.active,
+        "competency_tracked": e.competency_tracked,
     } for e in sess.scalars(emp_stmt).all()]
 
     detail = request.args.get("detail") in ("1", "true", "yes")
@@ -217,6 +221,7 @@ def upsert_score_route():
         row = upsert_score(
             sess, employee_id, category_id, data["score"],
             notes=(data.get("notes") or "").strip(),
+            source_kind=(data.get("source_kind") or "manual_override").strip(),
         )
     except CompetencyError as e:
         return jsonify({"error": str(e), "request_id": _rid()}), e.status_code

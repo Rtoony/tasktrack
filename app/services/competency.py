@@ -293,7 +293,7 @@ def add_subscore(
     return row, cached
 
 
-def upsert_score(sess: Session, employee_id: int, category_id: int, raw_score, notes: str = "") -> EmployeeSkillScore:
+def upsert_score(sess: Session, employee_id: int, category_id: int, raw_score, notes: str = "", source_kind: str = "manual_override") -> EmployeeSkillScore:
     """Backward-compatible manual score entry.
 
     The old endpoint directly overwrote the cached score. It now records a
@@ -307,7 +307,7 @@ def upsert_score(sess: Session, employee_id: int, category_id: int, raw_score, n
         dimension_slug="manual",
         raw_score=raw_score,
         weight=1.0,
-        source_kind="manual_override",
+        source_kind=source_kind or "manual_override",
         notes=notes,
     )
     if row is None:

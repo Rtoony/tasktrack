@@ -151,6 +151,26 @@ def _seed_pair(temp_app):
         return emp.id, cat.id
 
 
+def test_matrix_hides_untracked_employees_by_default(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Employee(display_name="Rated Person", active=1, competency_tracked=1))
+        sess.add(Employee(display_name="Excluded Person", active=1, competency_tracked=0))
+        sess.commit()
+
+    r = admin_client.get("/api/v1/skills/matrix")
+    assert r.status_code == 200
+    names = {e["display_name"] for e in r.get_json()["employees"]}
+    assert "Rated Person" in names
+    assert "Excluded Person" not in names
+
+    r2 = admin_client.get("/api/v1/skills/matrix?include_untracked_emp=1")
+    assert r2.status_code == 200
+    names2 = {e["display_name"] for e in r2.get_json()["employees"]}
+    assert "Rated Person" in names2
+    assert "Excluded Person" in names2
+
+
 def test_upsert_score_insert(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     r = admin_client.post("/api/v1/skills/scores", json={
@@ -293,6 +313,34 @@ def test_upsert_score_creates_manual_subscore(admin_client, temp_app):
         assert score.score == 4.0
         assert score.sample_size == 1
         assert score.confidence >= 0.3
+
+
+def test_upsert_score_accepts_rating_phase_source(admin_client, temp_app):
+    emp_id, cat_id = _seed_pair(temp_app)
+    r = admin_client.post("/api/v1/skills/scores", json={
+        "employee_id": emp_id, "category_id": cat_id, "score": 3.5,
+        "source_kind": "preliminary_rating",
+        "notes": "initial pass",
+    })
+    assert r.status_code == 200
+    r2 = admin_client.post("/api/v1/skills/scores", json={
+        "employee_id": emp_id, "category_id": cat_id, "score": 4.0,
+        "source_kind": "official_baseline",
+        "notes": "approved baseline",
+    })
+    assert r2.status_code == 200
+
+    with temp_app.app_context():
+        sess = get_session()
+        sources = [
+            row.source_kind
+            for row in sess.scalars(
+                select(EmployeeSkillSubscore)
+                .where(EmployeeSkillSubscore.employee_id == emp_id)
+                .order_by(EmployeeSkillSubscore.id.asc())
+            ).all()
+        ]
+        assert sources == ["preliminary_rating", "official_baseline"]
 
 
 def test_create_subscore_appends_and_rolls_up(admin_client, temp_app):

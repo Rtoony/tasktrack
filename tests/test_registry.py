@@ -35,12 +35,14 @@ def test_create_employee(admin_client, temp_app):
     assert body["display_name"] == "Jane Engineer"
     assert body["title"] == "Senior Drafter"
     assert body["active"] == 1
+    assert body["competency_tracked"] == 1
     assert body["id"] > 0
 
     with temp_app.app_context():
         sess = get_session()
         emp = sess.get(Employee, body["id"])
         assert emp is not None and emp.email == "jane@example.com"
+        assert emp.competency_tracked == 1
 
 
 def test_create_employee_rejects_blank(admin_client):
@@ -76,6 +78,26 @@ def test_patch_employee(admin_client, temp_app):
     r = admin_client.patch(f"/api/v1/employees/{emp_id}", json={"title": "New title"})
     assert r.status_code == 200
     assert r.get_json()["title"] == "New title"
+
+
+def test_patch_employee_competency_tracking(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        emp = Employee(display_name="No Rating Needed")
+        sess.add(emp)
+        sess.commit()
+        emp_id = emp.id
+
+    r = admin_client.patch(
+        f"/api/v1/employees/{emp_id}",
+        json={"competency_tracked": False},
+    )
+    assert r.status_code == 200
+    assert r.get_json()["competency_tracked"] == 0
+
+    with temp_app.app_context():
+        sess = get_session()
+        assert sess.get(Employee, emp_id).competency_tracked == 0
 
 
 def test_deactivate_then_reactivate(admin_client, temp_app):

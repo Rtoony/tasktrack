@@ -134,6 +134,7 @@ def create_employee():
         title=(data.get("title") or "").strip(),
         notes=(data.get("notes") or "").strip(),
         active=1 if data.get("active", 1) else 0,
+        competency_tracked=1 if data.get("competency_tracked", 1) else 0,
     )
     sess.add(emp)
     sess.commit()
@@ -167,6 +168,8 @@ def update_employee(emp_id):
             setattr(emp, col, val)
     if "active" in data:
         emp.active = 1 if data["active"] else 0
+    if "competency_tracked" in data:
+        emp.competency_tracked = 1 if data["competency_tracked"] else 0
     emp.updated_at = datetime.utcnow()
     sess.commit()
     return jsonify(to_dict(emp))
