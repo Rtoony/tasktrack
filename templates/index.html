@@ -315,6 +315,20 @@
   .tracker-status-strip { display:flex; height:0.38rem; margin-top:0.5rem; background:#e0e0e0; overflow:hidden; }
   .tracker-status-seg { min-width:2px; }
 
+  .triage-queue-table .triage-queue-row td { vertical-align:top; }
+  .triage-queue-row.triage-row-needs-review td { box-shadow:inset 3px 0 0 var(--warn); }
+  .triage-queue-row.triage-row-promoted td { box-shadow:inset 3px 0 0 var(--success); }
+  .triage-title-stack { display:flex; flex-direction:column; gap:0.25rem; min-width:220px; max-width:420px; }
+  .triage-title-main { font-weight:600; color:var(--text); line-height:1.25; }
+  .triage-title-preview { color:var(--text-muted); font-size:0.74rem; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .triage-chip-row { display:flex; flex-wrap:wrap; gap:0.28rem; align-items:center; }
+  .triage-chip { display:inline-flex; align-items:center; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); padding:0.08rem 0.42rem; border-radius:999px; font-size:0.66rem; font-weight:600; white-space:nowrap; }
+  .triage-chip-source { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 35%, var(--border)); }
+  .triage-chip-type { color:var(--text); background:var(--bg); }
+  .triage-cue-needs-review { color:#92400e; border-color:rgba(146,64,14,0.35); background:#fffbeb; }
+  .triage-cue-promoted { color:#065f46; border-color:rgba(6,95,70,0.35); background:#ecfdf5; }
+  .triage-route-cell { display:flex; flex-direction:column; gap:0.24rem; color:var(--text-muted); font-size:0.74rem; min-width:120px; }
+
   .empty-state { text-align:center; padding:2.5rem 1rem; color:var(--text-light); font-size:0.85rem; }
   .empty-state strong { color:var(--text-muted); }
   .empty-title { font-size:0.92rem; font-weight:600; color:var(--text); margin-bottom:0.35rem; }
@@ -1025,14 +1039,14 @@
       <button class="btn btn-primary" onclick="openModal('triage')">+ Add Triage Item</button>
     </div>
     <div class="table-wrap">
-      <table><thead><tr>
+      <table class="triage-queue-table"><thead><tr>
         <th data-col="title" data-table="triage">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="source" data-table="triage">Source <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="source" data-table="triage">Source / Type <span class="sort-arrow">&#9650;</span></th>
         <th data-col="priority" data-table="triage">Priority <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="triage">Status <span class="sort-arrow">&#9650;</span></th>
         <th data-col="due_date" data-table="triage">Due <span class="sort-arrow">&#9650;</span></th>
         <th class="sorted" data-col="created_at" data-table="triage">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th data-col="promoted_to_table" data-table="triage">Promoted <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="promoted_to_table" data-table="triage">Route <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-triage"></tbody></table>
       <div class="empty-state" id="empty-triage" style="display:none">
@@ -3172,13 +3186,16 @@ async function loadTable(table) {
       tr.appendChild(makeStatusBadge(r.visibility));
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='triage') {
-      tr.appendChild(makeCell(r.title,'cell-title'));
-      tr.appendChild(makeCell(r.source,'cell-supporting'));
+      tr.classList.add('triage-queue-row');
+      if (triageNeedsReview(r)) tr.classList.add('triage-row-needs-review');
+      if (triageIsPromoted(r)) tr.classList.add('triage-row-promoted');
+      tr.appendChild(makeTriageTitleCell(r));
+      tr.appendChild(makeTriageSourceCell(r));
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
-      tr.appendChild(makeCell(formatPromotedTarget(r),'cell-supporting'));
+      tr.appendChild(makeTriageRouteCell(r));
       tr.appendChild(makeTriageActions(r));
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       if (r.needs_review) tr.classList.add('ai-review');
@@ -3679,6 +3696,24 @@ const TRIAGE_PROMOTE_TARGETS = [
   { table: 'personal_items',     label: 'Assets',          tab: 'personal_cars',    category: 'Assets' },
 ];
 
+const TRIAGE_SOURCE_META = {
+  'remarkable-ocr': { label:'Paper/OCR', tone:'amber' },
+  'paper-form': { label:'Paper/OCR', tone:'amber' },
+  paperless: { label:'Document', tone:'blue' },
+  telegram: { label:'Chat', tone:'teal' },
+  voice: { label:'Voice', tone:'purple' },
+  'voice-memo': { label:'Voice', tone:'purple' },
+  email: { label:'Email', tone:'blue' },
+  meeting: { label:'Meeting Notes', tone:'teal' },
+  paste: { label:'Manual', tone:'gray' },
+  manual: { label:'Manual', tone:'gray' },
+  'web-form': { label:'Web Form', tone:'blue' },
+};
+const TRIAGE_TYPE_LABELS = {
+  general:'General', project_work:'Project Work', cad:'CAD', training:'Training',
+  suggestion:'Suggestion', problem:'Problem', triage:'Triage',
+};
+
 function formatPromotedTarget(r) {
   if (!r.promoted_to_table || !r.promoted_to_id) return '—';
   // For the internal-items storage table, if the target row has
@@ -3688,6 +3723,60 @@ function formatPromotedTarget(r) {
   return label + ' #' + r.promoted_to_id;
 }
 
+function triageIsPromoted(r) { return Boolean(r?.promoted_to_id); }
+function triageNeedsReview(r) {
+  return Boolean(r?.needs_review) || (!triageIsPromoted(r) && !['Done','Archived'].includes(r?.status || ''));
+}
+function triageSourceMeta(source) {
+  const key = String(source || 'manual').toLowerCase();
+  return TRIAGE_SOURCE_META[key] || { label: source || 'Manual', tone:'gray' };
+}
+function triageTypeLabel(r) {
+  const body = String(r?.body || '');
+  const match = body.match(/"type"\s*:\s*"([^"]+)"/);
+  const type = match ? match[1] : '';
+  return TRIAGE_TYPE_LABELS[type] || (type ? type.replace(/_/g, ' ') : 'Triage');
+}
+function makeTriageChip(text, cls) {
+  const span = document.createElement('span');
+  span.className = 'triage-chip ' + (cls || '');
+  span.textContent = text;
+  return span;
+}
+function makeTriageTitleCell(r) {
+  const td = document.createElement('td');
+  const stack = document.createElement('div'); stack.className = 'triage-title-stack';
+  const title = document.createElement('div'); title.className = 'triage-title-main'; title.textContent = r.title || '(untitled request)';
+  stack.appendChild(title);
+  const preview = descriptionPreview(r.body || '');
+  if (preview) { const p = document.createElement('div'); p.className = 'triage-title-preview'; p.textContent = preview; stack.appendChild(p); }
+  const cues = document.createElement('div'); cues.className = 'triage-chip-row';
+  if (triageIsPromoted(r)) cues.appendChild(makeTriageChip('Promoted', 'triage-cue-promoted'));
+  else if (triageNeedsReview(r)) cues.appendChild(makeTriageChip('Needs review', 'triage-cue-needs-review'));
+  if (cues.children.length) stack.appendChild(cues);
+  td.appendChild(stack);
+  return td;
+}
+function makeTriageSourceCell(r) {
+  const td = document.createElement('td');
+  const wrap = document.createElement('div'); wrap.className = 'triage-chip-row';
+  const meta = triageSourceMeta(r.source);
+  wrap.appendChild(makeTriageChip(meta.label, 'triage-chip-source'));
+  wrap.appendChild(makeTriageChip(triageTypeLabel(r), 'triage-chip-type'));
+  td.appendChild(wrap);
+  return td;
+}
+function makeTriageRouteCell(r) {
+  const td = document.createElement('td');
+  const wrap = document.createElement('div'); wrap.className = 'triage-route-cell';
+  const route = document.createElement('span');
+  route.textContent = triageIsPromoted(r) ? formatPromotedTarget(r) : 'Awaiting route';
+  wrap.appendChild(route);
+  if (!triageIsPromoted(r)) wrap.appendChild(makeTriageChip('Promote next', 'triage-cue-needs-review'));
+  td.appendChild(wrap);
+  return td;
+}
+
 function makeTriageActions(r) {
   const td = document.createElement('td'); td.className='cell-actions';
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.textContent='Edit';
@@ -3695,9 +3784,9 @@ function makeTriageActions(r) {
   td.appendChild(edit);
 
   const promote = document.createElement('button');
-  const promoted = !!r.promoted_to_id;
+  const promoted = triageIsPromoted(r);
   promote.className = promoted ? 'btn btn-cancel' : 'btn btn-ghost';
-  promote.textContent = promoted ? 'Promoted' : 'Promote';
+  promote.textContent = 'Promote';
   promote.disabled = promoted;
   if (!promoted) {
     promote.addEventListener('click',()=>openTriagePromote(r));

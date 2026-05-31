@@ -42,6 +42,30 @@ def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):
     assert "CAPTURE_PREFILL_KEY" in html
 
 
+def test_dashboard_includes_operator_triage_queue_affordances(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8")
+    assert "Source / Type" in html
+    assert "Route" in html
+    assert "triage-queue-table" in html
+    assert "triage-queue-row" in html
+    assert "triage-row-needs-review" in html
+    assert "triage-row-promoted" in html
+    assert "makeTriageTitleCell" in html
+    assert "makeTriageSourceCell" in html
+    assert "makeTriageRouteCell" in html
+    assert "triageNeedsReview" in html
+    assert "TRIAGE_SOURCE_META" in html
+    assert "remarkable-ocr" in html
+    assert "paper-form" in html
+    assert "voice-memo" in html
+    assert "Awaiting route" in html
+    assert "Promote next" in html
+    assert "promote.textContent = 'Promote'" in html
+    assert "del.textContent='Delete'" in html
+
+
 def test_dashboard_uses_left_rail_shell(auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200
