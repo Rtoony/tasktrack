@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import SKILL_CATEGORY_DEFAULTS, SKILL_DIMENSION_DEFAULTS
-from ..models import EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory
+from ..models import EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
 from .audit import log_activity
 
 SCORE_MIN = 1.0
@@ -214,6 +214,46 @@ def _score_row(sess: Session, employee_id: int, category_id: int) -> EmployeeSki
     )
 
 
+def _rating_payload(row: EmployeeSkillSubscore | None, user_names: dict[int, str]) -> dict | None:
+    if row is None:
+        return None
+    user_id = row.created_by_user_id
+    return {
+        "score": row.score,
+        "source_kind": row.source_kind,
+        "source_label": (row.source_kind or "").replace("_", " "),
+        "notes": row.notes or "",
+        "created_by_user_id": user_id,
+        "created_by_name": user_names.get(user_id or -1, ""),
+        "observed_at": row.observed_at.isoformat(sep=" ") if row.observed_at else "",
+    }
+
+
+def rating_markers_for_cell(sess: Session, employee_id: int, category_id: int) -> dict:
+    rows = sess.scalars(
+        select(EmployeeSkillSubscore)
+        .where(
+            EmployeeSkillSubscore.employee_id == employee_id,
+            EmployeeSkillSubscore.category_id == category_id,
+            EmployeeSkillSubscore.source_kind.in_(("preliminary_rating", "official_baseline", "manual_override")),
+        )
+        .order_by(EmployeeSkillSubscore.observed_at.desc(), EmployeeSkillSubscore.id.desc())
+    ).all()
+    user_ids = {r.created_by_user_id for r in rows if r.created_by_user_id}
+    user_names = {}
+    if user_ids:
+        user_names = dict(sess.execute(select(User.id, User.display_name).where(User.id.in_(user_ids))).all())
+
+    latest_preliminary = next((r for r in rows if r.source_kind == "preliminary_rating"), None)
+    latest_baseline = next((r for r in rows if r.source_kind == "official_baseline"), None)
+    latest_manual = next((r for r in rows if r.source_kind == "manual_override"), None)
+    return {
+        "latest_preliminary": _rating_payload(latest_preliminary, user_names),
+        "latest_baseline": _rating_payload(latest_baseline, user_names),
+        "latest_manual": _rating_payload(latest_manual, user_names),
+    }
+
+
 def write_cached_rollup(sess: Session, employee_id: int, category_id: int) -> EmployeeSkillScore | None:
     rollup = aggregate_category(sess, employee_id, category_id)
     if rollup is None:
@@ -322,8 +362,9 @@ def detail_for_cell(sess: Session, employee_id: int, category_id: int) -> dict |
     rollup = aggregate_category(sess, employee_id, category_id)
     if row is None and rollup is None:
         return None
+    markers = rating_markers_for_cell(sess, employee_id, category_id)
     if rollup is None:
-        return {
+        payload = {
             "score": row.score,
             "confidence": row.confidence,
             "confidence_band": confidence_band(row.confidence),
@@ -331,7 +372,9 @@ def detail_for_cell(sess: Session, employee_id: int, category_id: int) -> dict |
             "last_observed_at": row.last_observed_at.isoformat(sep=" ") if row.last_observed_at else "",
             "dimensions": [],
         }
-    return {
+        payload.update(markers)
+        return payload
+    payload = {
         "score": rollup["score"],
         "confidence": rollup["confidence"],
         "confidence_band": rollup["confidence_band"],
@@ -339,6 +382,8 @@ def detail_for_cell(sess: Session, employee_id: int, category_id: int) -> dict |
         "last_observed_at": rollup["last_observed_at"].isoformat(sep=" ") if rollup["last_observed_at"] else "",
         "dimensions": rollup["dimensions"],
     }
+    payload.update(markers)
+    return payload
 
 
 def recompute_all(sess: Session) -> int:

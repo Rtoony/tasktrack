@@ -16,12 +16,13 @@ from sqlalchemy import select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, to_dict
+from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User, to_dict
 from ..services.competency import (
     CompetencyError,
     add_subscore,
     confidence_band,
     detail_for_cell,
+    rating_markers_for_cell,
     dimensions_for_category,
     recompute_all,
     seed_default_categories,
@@ -314,9 +315,20 @@ def list_subscores(employee_id, category_id):
         )
         .order_by(EmployeeSkillSubscore.observed_at.desc(), EmployeeSkillSubscore.id.desc())
     ).all()
+    markers = rating_markers_for_cell(sess, employee_id, category_id)
+    user_names = {}
+    user_ids = {r.created_by_user_id for r in rows if r.created_by_user_id}
+    if user_ids:
+        user_names = dict(sess.execute(select(User.id, User.display_name).where(User.id.in_(user_ids))).all())
+    payload_rows = []
+    for row in rows:
+        payload = to_dict(row)
+        payload["created_by_name"] = user_names.get(row.created_by_user_id or -1, "")
+        payload_rows.append(payload)
     return jsonify({
         "rollup": detail_for_cell(sess, employee_id, category_id),
-        "rows": [to_dict(r) for r in rows],
+        "rating_markers": markers,
+        "rows": payload_rows,
     })
 
 

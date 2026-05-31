@@ -344,6 +344,17 @@ def test_upsert_score_accepts_rating_phase_source(admin_client, temp_app):
         rollup = sess.scalar(select(EmployeeSkillScore).where(EmployeeSkillScore.employee_id == emp_id))
         assert rollup.score == 4.0
 
+    matrix = admin_client.get("/api/v1/skills/matrix?detail=1").get_json()
+    cell = matrix["scores"][str(emp_id)][str(cat_id)]
+    assert cell["latest_preliminary"]["score"] == 3.5
+    assert cell["latest_preliminary"]["created_by_name"] == "Admin User"
+    assert cell["latest_baseline"]["score"] == 4.0
+    assert cell["latest_baseline"]["created_by_name"] == "Admin User"
+
+    history = admin_client.get(f"/api/v1/skills/subscores/{emp_id}/{cat_id}").get_json()
+    assert history["rating_markers"]["latest_preliminary"]["created_by_name"] == "Admin User"
+    assert all(row["created_by_name"] == "Admin User" for row in history["rows"])
+
 
 def test_create_subscore_appends_and_rolls_up(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)

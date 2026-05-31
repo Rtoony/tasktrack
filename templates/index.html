@@ -2452,6 +2452,36 @@ function compCellDetail(empId, catId) {
   if (cell != null) return { score: cell, confidence: 0, confidence_band: 'low', sample_size: 0, dimensions: [] };
   return null;
 }
+function visibleCompetencyEmployees() {
+  const nameFilter = (document.getElementById('comp-filter')?.value || '').trim().toLowerCase();
+  const roleFilter = document.getElementById('comp-role-filter')?.value || '';
+  return (compState.employees || []).filter(e =>
+    (!roleFilter || e.role === roleFilter) &&
+    (!nameFilter || e.display_name.toLowerCase().includes(nameFilter))
+  );
+}
+function compRatingShortLabel(kind) {
+  if (kind === 'official_baseline') return 'baseline';
+  if (kind === 'preliminary_rating') return 'prelim';
+  if (kind === 'manual_override') return 'manual';
+  return (kind || 'rating').replace(/_/g, ' ');
+}
+function compHumanRating(detail) {
+  if (!detail || typeof detail !== 'object') return null;
+  return detail.latest_baseline || detail.latest_preliminary || detail.latest_manual || null;
+}
+function compRatingCard(marker, title) {
+  if (!marker) return '';
+  const who = marker.created_by_name || 'Unknown';
+  const score = marker.score == null ? '—' : Number(marker.score).toFixed(1);
+  const notes = marker.notes ? '<div style="margin-top:0.25rem;color:var(--text-muted)">' + esc(marker.notes) + '</div>' : '';
+  return '<div style="border:1px solid var(--border);border-radius:12px;padding:0.55rem;background:var(--surface-muted)">' +
+    '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em">' + esc(title) + '</div>' +
+    '<div style="font-weight:700;margin-top:0.2rem">' + esc(who) + ': ' + score + '</div>' +
+    '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc(marker.observed_at || '') + '</div>' +
+    notes +
+  '</div>';
+}
 
 async function loadCompetency() {
   const loading = document.getElementById('comp-loading');
@@ -2475,12 +2505,7 @@ function renderMatrix() {
   thead.replaceChildren();
   tbody.replaceChildren();
 
-  const nameFilter = (document.getElementById('comp-filter')?.value || '').trim().toLowerCase();
-  const roleFilter = document.getElementById('comp-role-filter')?.value || '';
-  const visibleEmps = compState.employees.filter(e =>
-    (!roleFilter || e.role === roleFilter) &&
-    (!nameFilter || e.display_name.toLowerCase().includes(nameFilter))
-  );
+  const visibleEmps = visibleCompetencyEmployees();
 
   const trh = document.createElement('tr');
   const th0 = document.createElement('th');
@@ -2519,8 +2544,11 @@ function renderMatrix() {
                         (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);') +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
       if (val != null) {
-        td.innerHTML = '<div style="font-weight:700;font-family:IBM Plex Mono,monospace">' + Number(val).toFixed(1) + '</div>' +
-          '<div style="font-size:0.62rem;color:var(--text-muted)">' + confidenceLabel(detail.confidence_band) + ' · n=' + (detail.sample_size || 0) + '</div>';
+        const marker = compHumanRating(detail);
+        const markerLine = marker
+          ? '<div style="font-size:0.58rem;color:var(--text-muted);white-space:nowrap">' + esc(marker.created_by_name || 'User') + ' ' + esc(compRatingShortLabel(marker.source_kind)) + ' ' + Number(marker.score).toFixed(1) + '</div>'
+          : '<div style="font-size:0.62rem;color:var(--text-muted)">' + confidenceLabel(detail.confidence_band) + ' · n=' + (detail.sample_size || 0) + '</div>';
+        td.innerHTML = '<div style="font-weight:700;font-family:IBM Plex Mono,monospace">' + Number(val).toFixed(1) + '</div>' + markerLine;
         sum += Number(val); count += 1;
       } else {
         td.textContent = '—';
@@ -2555,26 +2583,34 @@ function renderCompetencyDetail() {
   host.style.display = 'block';
   const dimOptions = dims.map(d => '<option value="' + esc(d.slug) + '">' + esc(d.name || d.slug) + '</option>').join('');
   const dimRows = dims.map(d => '<tr><td>' + esc(d.name || d.slug) + '</td><td>' + (d.score == null ? '—' : Number(d.score).toFixed(1)) + '</td><td>' + (d.n || 0) + '</td><td>' + esc(d.last_observed_at || '') + '</td></tr>').join('');
+  const ratingCards = [
+    compRatingCard(detail.latest_preliminary, 'Preliminary rating'),
+    compRatingCard(detail.latest_baseline, 'Official baseline'),
+  ].filter(Boolean).join('');
+  const currentScore = detail.score == null ? '3' : Number(detail.score).toFixed(1);
   host.innerHTML =
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem">' +
       '<div><div class="workspace-kicker">Competency evidence</div><div class="workspace-title">' + esc(emp.display_name) + ' · ' + esc(cat.name) + '</div>' +
       '<div class="workspace-sub">Visible score: <strong>' + (detail.score == null ? '—' : Number(detail.score).toFixed(1)) + '</strong> · confidence ' + esc(detail.confidence_band || 'low') + ' · sample size ' + (detail.sample_size || 0) + '</div></div>' +
       '<button class="btn btn-ghost" type="button" onclick="compSelected=null;renderMatrix();renderCompetencyDetail();">Close</button>' +
     '</div>' +
+    (ratingCards ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.55rem;margin-bottom:0.75rem">' + ratingCards + '</div>' : '') +
     '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:520px;width:100%;font-size:0.76rem"><thead><tr><th>Dimension</th><th>Score</th><th>n</th><th>Last observed</th></tr></thead><tbody>' + (dimRows || '<tr><td colspan="4">No evidence yet.</td></tr>') + '</tbody></table></div>' +
     '<div class="field-row">' +
       '<div class="field"><label>Dimension</label><select id="comp-dimension">' + dimOptions + '</select></div>' +
-      '<div class="field"><label>Score 1-5</label><input id="comp-score" type="number" min="1" max="5" step="0.5" value="3"></div>' +
+      '<div class="field"><label>Score 1-5</label><input id="comp-score" type="number" min="1" max="5" step="0.5" value="' + currentScore + '"></div>' +
       '<div class="field"><label>Notes</label><input id="comp-notes" type="text" placeholder="Evidence or context"></div>' +
     '</div>' +
-    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(\'observation\')">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary\')">Save preliminary rating</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'baseline\')">Mark official baseline</button></div>';
+    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(\'observation\')">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary\')">Save preliminary rating</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary_next\')">Save prelim + next</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'baseline\')">Mark official baseline</button></div>';
 }
 
 async function saveCompetencyObservation(mode) {
   if (!compSelected) return;
+  const advance = mode.endsWith('_next');
+  const ratingMode = mode.replace('_next', '');
   const score = document.getElementById('comp-score')?.value;
   const notes = document.getElementById('comp-notes')?.value || '';
-  const isObservation = mode === 'observation';
+  const isObservation = ratingMode === 'observation';
   const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || 'accuracy') : 'manual';
   const path = isObservation ? '/api/v1/skills/subscores' : '/api/v1/skills/scores';
   const payload = {
@@ -2584,11 +2620,28 @@ async function saveCompetencyObservation(mode) {
     notes,
   };
   if (isObservation) payload.dimension_slug = dimension;
-  else payload.source_kind = mode === 'baseline' ? 'official_baseline' : 'preliminary_rating';
+  else payload.source_kind = ratingMode === 'baseline' ? 'official_baseline' : 'preliminary_rating';
   const res = await api('POST', path, payload);
   if (!res || res.error) { toast(res?.error || 'Competency save failed'); return; }
-  toast(mode === 'baseline' ? 'Official baseline saved' : (mode === 'preliminary' ? 'Preliminary rating saved' : 'Competency observation added'));
+  toast(ratingMode === 'baseline' ? 'Official baseline saved' : (ratingMode === 'preliminary' ? 'Preliminary rating saved' : 'Competency observation added'));
   await loadCompetency();
+  if (advance) advanceCompetencySelection();
+  else renderCompetencyDetail();
+}
+
+function advanceCompetencySelection() {
+  if (!compSelected) return;
+  const emps = visibleCompetencyEmployees();
+  const cats = compState.categories || [];
+  const empIndex = emps.findIndex(e => e.id === compSelected.empId);
+  const catIndex = cats.findIndex(c => c.id === compSelected.catId);
+  if (empIndex < 0 || catIndex < 0) return;
+  let nextEmp = empIndex;
+  let nextCat = catIndex + 1;
+  if (nextCat >= cats.length) { nextCat = 0; nextEmp += 1; }
+  if (nextEmp >= emps.length) { toast('Reached end of visible competency list'); return; }
+  compSelected = { empId: emps[nextEmp].id, catId: cats[nextCat].id };
+  renderMatrix();
   renderCompetencyDetail();
 }
 
