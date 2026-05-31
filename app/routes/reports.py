@@ -13,6 +13,7 @@ from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
 from ..services.intake_reports import intake_report_csv, intake_source_report
+from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
     incident_csv_rows,
@@ -31,7 +32,7 @@ from ..services.project_reports import (
 bp = Blueprint("reports", __name__)
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
-_PRESET_SURFACES = {"portfolio", "incidents", "meetings", "management"}
+_PRESET_SURFACES = {"portfolio", "incidents", "meetings", "management", "competency"}
 _TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status", "attention_level"}
 _BOOL_FILTER_KEYS = {"include_inactive", "include_private"}
 _LIST_FILTER_KEYS = {"project_numbers"}
@@ -50,6 +51,9 @@ _MANAGEMENT_LIMIT_FILTER_KEYS = {
     "days", "meeting_limit", "project_limit", "intake_days", "intake_limit",
 }
 _MANAGEMENT_FILTER_KEYS = _MANAGEMENT_BOOL_FILTER_KEYS | _MANAGEMENT_LIMIT_FILTER_KEYS
+_COMPETENCY_TEXT_FILTER_KEYS = {"q", "role", "status"}
+_COMPETENCY_BOOL_FILTER_KEYS = {"include_untracked"}
+_COMPETENCY_FILTER_KEYS = _COMPETENCY_TEXT_FILTER_KEYS | _COMPETENCY_BOOL_FILTER_KEYS
 
 
 def _bool_arg(name: str) -> bool:
@@ -134,6 +138,8 @@ def _preset_keys(surface: str) -> set[str]:
         return _MEETING_FILTER_KEYS
     if surface == "management":
         return _MANAGEMENT_FILTER_KEYS
+    if surface == "competency":
+        return _COMPETENCY_FILTER_KEYS
     return _PORTFOLIO_FILTER_KEYS
 
 
@@ -189,6 +195,16 @@ def _clean_preset_filters(raw, *, surface: str = "portfolio") -> tuple[dict, str
             filters["intake_days"] = _int_arg_value(raw.get("intake_days"), 30, 1, 3650)
         if "intake_limit" in raw:
             filters["intake_limit"] = _int_arg_value(raw.get("intake_limit"), 12, 1, 50)
+        return filters, None
+
+    if surface == "competency":
+        for key in _COMPETENCY_TEXT_FILTER_KEYS:
+            value = str(raw.get(key) or "").strip()
+            if value:
+                filters[key] = value[:160]
+        for key in _COMPETENCY_BOOL_FILTER_KEYS:
+            if key in raw:
+                filters[key] = bool(raw.get(key))
         return filters, None
 
     for key in _TEXT_FILTER_KEYS:
@@ -250,6 +266,22 @@ def _request_incident_filters(*, only_present: bool = False) -> dict:
 
 def _incident_filters() -> dict:
     return _request_incident_filters()
+
+
+def _request_competency_filters(*, only_present: bool = False) -> dict:
+    filters: dict = {}
+    for key in _COMPETENCY_TEXT_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = (request.args.get(key) or "").strip()
+    for key in _COMPETENCY_BOOL_FILTER_KEYS:
+        if not only_present or key in request.args:
+            filters[key] = _bool_arg(key)
+    cleaned, _ = _clean_preset_filters(filters, surface="competency")
+    return cleaned
+
+
+def _competency_filters() -> dict:
+    return _request_competency_filters()
 
 
 def _request_intake_filters() -> dict:
@@ -331,7 +363,7 @@ def _visible_presets_stmt(surface: str, *, user_id: int | None, is_admin: bool):
 
 
 def _preset_surface_allowed(surface: str, *, is_admin: bool) -> bool:
-    return surface != "incidents" or is_admin
+    return surface not in {"incidents", "competency"} or is_admin
 
 
 def _load_visible_preset(sess, preset_id: int, *, surface: str, user_id: int | None,
@@ -509,8 +541,12 @@ def reports_home():
     management_presets = sess.scalars(_visible_presets_stmt(
         "management", user_id=session.get("user_id"), is_admin=is_admin,
     )).all()
+    competency_presets = []
     incident_presets = []
     if is_admin:
+        competency_presets = sess.scalars(_visible_presets_stmt(
+            "competency", user_id=session.get("user_id"), is_admin=True,
+        )).all()
         incident_presets = sess.scalars(_visible_presets_stmt(
             "incidents", user_id=session.get("user_id"), is_admin=True,
         )).all()
@@ -520,6 +556,7 @@ def reports_home():
         management_presets=[_preset_to_dict(row, include_filters=False) for row in management_presets],
         meeting_presets=[_preset_to_dict(row, include_filters=False) for row in meeting_presets],
         incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
+        competency_presets=[_preset_to_dict(row, include_filters=False) for row in competency_presets],
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )
@@ -771,6 +808,80 @@ def report_presets_delete(preset_id: int):
     sess.delete(row)
     sess.commit()
     return jsonify({"ok": True})
+
+
+def _competency_context(sess):
+    selected = None
+    filters = _competency_filters()
+    error = None
+    status = 200
+    raw_preset = (request.args.get("preset") or "").strip()
+    if raw_preset:
+        try:
+            preset_id = int(raw_preset)
+        except (TypeError, ValueError):
+            return filters, None, "preset must be an integer", 400
+        selected = sess.get(ReportPreset, preset_id)
+        if selected is None or selected.surface != "competency":
+            return filters, None, "preset not found", 404
+        if not _preset_surface_allowed("competency", is_admin=True) or (not _can_modify_preset(selected) and not selected.is_shared):
+            return filters, None, "forbidden", 403
+        try:
+            filters = json.loads(selected.filters_json or "{}")
+        except json.JSONDecodeError:
+            filters = {}
+        overrides = _request_competency_filters(only_present=True)
+        filters.update(overrides)
+    return filters, selected, error, status
+
+
+@bp.route("/api/v1/reports/competency", methods=["GET"])
+@admin_required
+def competency_report_json():
+    sess = get_session()
+    filters, selected, error, status = _competency_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    packet = competency_report(sess, filters=filters)
+    packet["selected_preset"] = _preset_to_dict(selected, include_filters=False) if selected else None
+    return jsonify(packet)
+
+
+@bp.route("/api/v1/reports/competency.csv", methods=["GET"])
+@admin_required
+def competency_report_csv_route():
+    sess = get_session()
+    filters, selected, error, status = _competency_context(sess)
+    if error:
+        return jsonify({"error": error}), status
+    packet = competency_report(sess, filters=filters)
+    return Response(
+        competency_report_csv(packet),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=competency_report_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
+@bp.route("/reports/competency", methods=["GET"])
+@admin_required
+def competency_report_page():
+    sess = get_session()
+    filters, selected, error, status = _competency_context(sess)
+    if error:
+        filters = _competency_filters()
+    packet = competency_report(sess, filters=filters)
+    packet["selected_preset"] = _preset_to_dict(selected, include_filters=False) if selected else None
+    presets = sess.scalars(_visible_presets_stmt(
+        "competency", user_id=session.get("user_id"), is_admin=True,
+    )).all()
+    return render_template(
+        "competency_report.html",
+        packet=packet,
+        presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        error=error,
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    ), status
 
 
 @bp.route("/api/v1/reports/intake", methods=["GET"])

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Competency Report - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#8a3ffc; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at 20% 0, rgba(138,63,252,0.16), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
+  header { background:rgba(24,33,43,0.94); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
+  .head-inner { max-width:1240px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1240px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.55rem; font-weight:700; margin-bottom:0.22rem; }
+  .sub { color:var(--text-muted); font-size:0.86rem; margin-bottom:1rem; max-width:920px; }
+  .filter-card,.summary-card,.section,.employee-card { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); }
+  .filter-card { padding:1rem; margin-bottom:1rem; }
+  .preset-row { display:grid; grid-template-columns:2fr auto auto auto auto; gap:0.6rem; align-items:end; margin-bottom:0.8rem; padding-bottom:0.8rem; border-bottom:1px solid var(--border); }
+  .filters { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input,select { width:100%; padding:0.38rem 0.48rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font:inherit; }
+  .checkline { display:flex; align-items:center; gap:0.4rem; color:var(--text-muted); font-size:0.78rem; padding-top:1.2rem; }
+  .checkline input { width:auto; }
+  .actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; flex-wrap:wrap; }
+  .btn { background:var(--accent); border:none; color:#f8f5ff; padding:0.4rem 0.75rem; border-radius:var(--radius); cursor:pointer; font-weight:700; text-decoration:none; font-size:0.78rem; display:inline-flex; align-items:center; justify-content:center; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .summary-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .summary-card { padding:0.75rem; }
+  .summary-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .summary-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  .summary-value.warn { color:var(--warn); } .summary-value.danger { color:var(--danger); }
+  .section { padding:1rem; margin-bottom:1rem; }
+  .section h2 { font-size:1rem; margin-bottom:0.6rem; }
+  table { border-collapse:collapse; width:100%; }
+  th,td { border-bottom:1px solid var(--border); padding:0.48rem 0.5rem; text-align:left; vertical-align:top; }
+  th { color:var(--text-muted); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; }
+  .employee-card { padding:1rem; margin-bottom:1rem; break-inside:avoid; }
+  .emp-head { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; border-bottom:1px solid var(--border); padding-bottom:0.75rem; margin-bottom:0.75rem; }
+  .emp-name { font-size:1.05rem; font-weight:700; }
+  .meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.12rem; }
+  .chips { display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end; }
+  .chip { border:1px solid var(--border); background:rgba(17,22,29,0.55); border-radius:999px; padding:0.14rem 0.5rem; color:var(--text-muted); font-size:0.69rem; }
+  .chip.warn { color:var(--warn); border-color:rgba(251,191,36,0.45); } .chip.danger { color:var(--danger); border-color:rgba(248,113,113,0.45); } .chip.ok { color:var(--ok); border-color:rgba(52,211,153,0.45); }
+  .score { font-family:'IBM Plex Mono', monospace; font-weight:700; }
+  .dim { color:var(--text-muted); font-size:0.72rem; }
+  .print-only { display:none; }
+  .inline-note { color:var(--text-muted); font-size:0.76rem; margin-top:0.35rem; }
+  .empty { color:var(--text-dim); font-style:italic; padding:0.4rem 0; }
+  @media (max-width: 1000px) { .filters,.summary-grid,.preset-row { grid-template-columns:repeat(2,1fr); } .emp-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
+  @media print {
+    @page { size: letter; margin: 0.45in; }
+    body { background:#fff; color:#111827; font-size:8.8pt; }
+    header,.filter-card,.btn { display:none !important; }
+    main { max-width:none; padding:0; }
+    .print-only { display:block !important; }
+    .summary-card,.section,.employee-card { border-color:#d1d5db; background:#fff; }
+    .summary-grid { grid-template-columns:repeat(6,1fr); gap:0.08in; }
+    th,td { border-color:#e5e7eb; }
+    .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Competency Report</span></div>
+    <nav class="nav">
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
+      <a href="/?tab=competency">Competency</a>
+      <a href="/admin">Admin</a>
+      <a href="/logout">Sign out</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <section class="print-only" style="border-bottom:1px solid #111827;margin-bottom:0.12in;padding-bottom:0.08in">
+    <strong>TaskTrack Competency Report</strong><br>
+    Generated {{ packet.generated_at[:16] }} / {{ packet.summary.employee_count }} employee{{ '' if packet.summary.employee_count == 1 else 's' }} / {{ packet.summary.category_count }} categories
+  </section>
+
+  <h1>Competency Report</h1>
+  <p class="sub">Admin-only rollout report for preliminary ratings, official baselines, missing review coverage, and low-score training/delegation signals.</p>
+
+  <form class="filter-card" method="get" action="/reports/competency" id="competency-filter-form">
+    {% if error %}<div style="color:var(--danger);margin-bottom:0.75rem">{{ error }}</div>{% endif %}
+    <div class="preset-row">
+      <div>
+        <label for="competency-preset">Saved Preset</label>
+        <select id="competency-preset" name="preset" onchange="applyCompetencyPreset(this.value)">
+          <option value="">Custom filters</option>
+          {% for preset in presets %}
+          <option value="{{ preset.id }}" {% if packet.selected_preset and packet.selected_preset.id == preset.id %}selected{% endif %}>{{ preset.name }}{% if preset.is_shared %} (shared){% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if packet.selected_preset %}<div class="inline-note">Loaded preset: {{ packet.selected_preset.name }}</div>{% endif %}
+      </div>
+      <label class="checkline"><input type="checkbox" id="competency-preset-share" {% if packet.selected_preset and packet.selected_preset.is_shared %}checked{% endif %}> Share preset</label>
+      <button class="btn secondary" type="button" onclick="saveCompetencyPreset()">Save New</button>
+      <button class="btn secondary" type="button" onclick="updateCompetencyPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Update Loaded</button>
+      <button class="btn secondary" type="button" onclick="deleteCompetencyPreset()" {% if not packet.selected_preset %}disabled{% endif %}>Delete</button>
+    </div>
+    <div class="filters">
+      <div><label for="q">Search</label><input id="q" name="q" value="{{ packet.filters.q }}" placeholder="name, title, role"></div>
+      <div><label for="role">Role</label><select id="role" name="role"><option value="" {% if not packet.filters.role %}selected{% endif %}>Any</option>{% for value in ['executive','manager','engineer','drafter'] %}<option value="{{ value }}" {% if packet.filters.role == value %}selected{% endif %}>{{ value|title }}</option>{% endfor %}</select></div>
+      <div><label for="status">Status</label><select id="status" name="status"><option value="" {% if not packet.filters.status %}selected{% endif %}>Any</option>{% for value,label in [('needs_preliminary','Needs preliminary'),('needs_baseline','Needs baseline'),('low_scores','Low scores'),('complete','Complete')] %}<option value="{{ value }}" {% if packet.filters.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+      <label class="checkline"><input type="checkbox" name="include_untracked" value="1" {% if packet.filters.include_untracked %}checked{% endif %}> Include excluded</label>
+      <div class="actions"><a class="btn secondary" href="/reports/competency">Reset</a><button class="btn" type="submit">Build Report</button></div>
+    </div>
+    <div class="actions" style="margin-top:0.75rem">
+      <a class="btn secondary" href="/api/v1/reports/competency?{{ request.query_string.decode('utf-8') }}">JSON</a>
+      <a class="btn secondary" href="/api/v1/reports/competency.csv?{{ request.query_string.decode('utf-8') }}">CSV</a>
+      <a class="btn secondary" href="/?tab=competency">Open Scorecard</a>
+    </div>
+  </form>
+
+  <section class="summary-grid">
+    <div class="summary-card"><div class="summary-label">Employees</div><div class="summary-value">{{ packet.summary.employee_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Categories</div><div class="summary-value">{{ packet.summary.category_count }}</div></div>
+    <div class="summary-card"><div class="summary-label">Scored Cells</div><div class="summary-value">{{ packet.summary.scored_cells }}</div></div>
+    <div class="summary-card"><div class="summary-label">Missing Prelim</div><div class="summary-value warn">{{ packet.summary.missing_preliminary_cells }}</div></div>
+    <div class="summary-card"><div class="summary-label">Missing Baseline</div><div class="summary-value warn">{{ packet.summary.missing_baseline_cells }}</div></div>
+    <div class="summary-card"><div class="summary-label">Low Scores</div><div class="summary-value danger">{{ packet.summary.low_score_cells }}</div></div>
+  </section>
+
+  <section class="section">
+    <h2>Category Coverage</h2>
+    <div style="overflow-x:auto"><table><thead><tr><th>Category</th><th>Avg</th><th>Scored</th><th>Prelim</th><th>Baseline</th><th>Low</th></tr></thead><tbody>
+      {% for row in packet.category_summary %}
+      <tr><td>{{ row.name }}</td><td class="score">{{ '%.1f'|format(row.average_score) if row.average_score is not none else '—' }}</td><td>{{ row.score_count }}</td><td>{{ row.preliminary_count }}</td><td>{{ row.baseline_count }}</td><td>{{ row.low_score_count }}</td></tr>
+      {% endfor %}
+    </tbody></table></div>
+  </section>
+
+  {% if not packet.employees %}<div class="section empty">No employees match these filters.</div>{% endif %}
+  {% for emp in packet.employees %}
+  <section class="employee-card">
+    <div class="emp-head">
+      <div>
+        <div class="emp-name">{{ emp.display_name }}</div>
+        <div class="meta">{{ emp.title or 'No title' }}{% if emp.role %} / {{ emp.role }}{% endif %}{% if not emp.competency_tracked %} / excluded from ratings{% endif %}</div>
+      </div>
+      <div class="chips">
+        <span class="chip {{ 'ok' if emp.average_score and emp.average_score >= 3 else 'danger' if emp.average_score else '' }}">Avg {{ '%.1f'|format(emp.average_score) if emp.average_score is not none else '—' }}</span>
+        <span class="chip">Prelim {{ emp.preliminary_count }}/{{ packet.summary.category_count }}</span>
+        <span class="chip {{ 'ok' if emp.missing_baseline_count == 0 else 'warn' }}">Baseline {{ emp.baseline_count }}/{{ packet.summary.category_count }}</span>
+        {% if emp.low_scores %}<span class="chip danger">{{ emp.low_scores|length }} low</span>{% endif %}
+      </div>
+    </div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Category</th><th>Visible</th><th>Preliminary</th><th>Baseline</th><th>Status</th></tr></thead><tbody>
+      {% for cell in emp.cells %}
+      <tr>
+        <td>{{ cell.category }}</td>
+        <td><span class="score">{{ '%.1f'|format(cell.score) if cell.score is not none else '—' }}</span><div class="dim">{{ cell.confidence_band }} / n={{ cell.sample_size }}</div></td>
+        <td>{% if cell.preliminary %}<span class="score">{{ '%.1f'|format(cell.preliminary.score) }}</span><div class="dim">{{ cell.preliminary.created_by_name or 'Unknown' }}{% if cell.preliminary.notes %} / {{ cell.preliminary.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
+        <td>{% if cell.baseline %}<span class="score">{{ '%.1f'|format(cell.baseline.score) }}</span><div class="dim">{{ cell.baseline.created_by_name or 'Unknown' }}{% if cell.baseline.notes %} / {{ cell.baseline.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
+        <td><span class="chip {{ 'ok' if cell.status == 'complete' else 'danger' if 'low_score' in cell.status else 'warn' }}">{{ cell.status|replace(',', ', ')|replace('_', ' ') }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody></table></div>
+  </section>
+  {% endfor %}
+</main>
+<script>
+function filtersFromForm() {
+  const form = document.getElementById('competency-filter-form');
+  return {
+    q: form.q.value,
+    role: form.role.value,
+    status: form.status.value,
+    include_untracked: form.include_untracked.checked,
+  };
+}
+function selectedPresetName() {
+  const sel = document.getElementById('competency-preset');
+  return sel.selectedOptions[0]?.textContent?.replace(' (shared)', '') || '';
+}
+function presetPayload(name) {
+  return { name, surface: 'competency', is_shared: document.getElementById('competency-preset-share').checked, filters: filtersFromForm() };
+}
+function applyCompetencyPreset(id) { window.location = id ? `/reports/competency?preset=${encodeURIComponent(id)}` : '/reports/competency'; }
+async function saveCompetencyPreset() {
+  const name = prompt('Preset name for these competency filters:');
+  if (!name) return;
+  const res = await fetch('/api/v1/reports/presets', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(presetPayload(name))});
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || 'Failed to save preset'); return; }
+  window.location = `/reports/competency?preset=${encodeURIComponent(body.id)}`;
+}
+async function updateCompetencyPreset() {
+  const id = document.getElementById('competency-preset').value;
+  if (!id) return;
+  const name = prompt('Update preset name:', selectedPresetName());
+  if (!name) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(presetPayload(name))});
+  const body = await res.json();
+  if (!res.ok) { alert(body.error || 'Failed to update preset'); return; }
+  window.location = `/reports/competency?preset=${encodeURIComponent(body.id)}`;
+}
+async function deleteCompetencyPreset() {
+  const id = document.getElementById('competency-preset').value;
+  if (!id || !confirm('Delete this competency report preset?')) return;
+  const res = await fetch(`/api/v1/reports/presets/${encodeURIComponent(id)}`, {method:'DELETE'});
+  if (!res.ok) { alert('Failed to delete preset'); return; }
+  window.location = '/reports/competency';
+}
+</script>
+</body>
+</html>

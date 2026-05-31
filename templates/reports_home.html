@@ -154,6 +154,34 @@
     <div>
       {% if user_role == 'admin' %}
       <section class="card">
+        <h2>Competency Reports</h2>
+        <p>Admin-only rollout reports for preliminary ratings, official baselines, missing coverage, low-score training signals, JSON, and CSV.</p>
+        <div class="actions">
+          <a class="btn" href="/reports/competency">Build Report</a>
+          <a class="btn secondary" href="/reports/competency?status=needs_preliminary">Needs Preliminary</a>
+          <a class="btn secondary" href="/reports/competency?status=needs_baseline">Needs Baseline</a>
+          <a class="btn secondary" href="/reports/competency?status=low_scores">Low Scores</a>
+          <a class="btn ghost" href="/api/v1/reports/competency.csv">CSV</a>
+        </div>
+        <div class="quick-row">
+          <div><div class="quick-title">Saved Competency Presets</div><div class="quick-meta">Admin-only reusable rating review packets.</div></div>
+          <a class="btn ghost" href="/reports/competency">Manage</a>
+        </div>
+        <div class="preset-list" style="margin-top:0.7rem">
+          {% if competency_presets %}
+            {% for preset in competency_presets %}
+            <div class="preset-item">
+              <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Competency report{% if preset.is_shared %} / shared{% endif %}</div></div>
+              <a class="btn secondary" href="/reports/competency?preset={{ preset.id }}">Open</a>
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="empty">No saved competency presets yet.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <section class="card">
         <h2>Incident Reports</h2>
         <p>Admin-only capability and incident reporting with full narratives, filters, printable output, JSON, and CSV.</p>
         <div class="actions">
