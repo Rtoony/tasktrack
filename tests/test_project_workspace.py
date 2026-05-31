@@ -327,6 +327,9 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'openProjectReportSmart' in html
     assert 'openFocusedMapReport' in html
     assert 'id="map-focus-card"' in html
+    assert 'id="map-show-dormant"' in html
+    assert 'Show dormant' in html
+    assert "document.getElementById('map-show-dormant')?.checked ? '' : 'active'" in html
     assert 'Convex hull of project_sites' in html
     assert 'openMeetingPacketForEvent' in html
     assert 'startupRouteState' in html

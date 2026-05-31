@@ -336,6 +336,7 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert "coreDueQueueRows(stats, 'overdue_items', 'Overdue', 'red')" in html
     assert "coreDueQueueRows(stats, 'due_soon_items', 'Due soon', 'amber')" in html
     assert 'class="modal-overlay record-overlay"' in html
+    assert '.modal-overlay { display:none; position:fixed; inset:0; background:rgba(22,22,22,0.42); backdrop-filter:blur(2px); z-index:1200;' in html
     assert 'class="modal record-drawer"' in html
     assert 'id="modal-meta"' in html
     assert "renderModalHeader" in html

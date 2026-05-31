@@ -361,7 +361,7 @@
   .badge-shared { background:#ede9fe; color:#6d28d9; }
 
   /* ── Modal / record drawer ────────────────── */
-  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(22,22,22,0.42); backdrop-filter:blur(2px); z-index:200; align-items:center; justify-content:center; }
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(22,22,22,0.42); backdrop-filter:blur(2px); z-index:1200; align-items:center; justify-content:center; }
   .modal-overlay.open { display:flex; }
   .modal { background:var(--surface); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); width:100%; max-width:560px; max-height:90vh; overflow-y:auto; animation:modalIn 0.15s ease-out; }
   @keyframes modalIn { from{opacity:0;transform:translateY(8px) scale(0.98)} to{opacity:1;transform:translateY(0) scale(1)} }
@@ -571,7 +571,7 @@
   .confirm-body strong { color:var(--text); }
 
   /* ── Toast ────────────────────────────────── */
-  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--text); color:#fff; padding:0.55rem 1.1rem; border-radius:var(--radius); font-size:0.8rem; opacity:0; transition:opacity 0.2s; z-index:300; pointer-events:none; }
+  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--text); color:#fff; padding:0.55rem 1.1rem; border-radius:var(--radius); font-size:0.8rem; opacity:0; transition:opacity 0.2s; z-index:1300; pointer-events:none; }
   .toast.show { opacity:1; }
 
   /* ── Responsive ──────────────────────────── */
@@ -1078,11 +1078,10 @@
         <h2 class="section-title">Projects Map</h2>
         <div class="section-subtitle">Pins sourced from the firm's Project Locator KMZ; metadata from the Master Project List. Use a pin to open Workspace, launch a report, focus the map, or copy the project number. Edit source metadata on the <a href="/admin/projects" style="color:var(--accent)">Projects admin page</a>.</div>
       </div>
-      <select class="filter-select" id="map-status-filter" onchange="reloadMap()">
-        <option value="active" selected>Active</option>
-        <option value="dormant">Dormant</option>
-        <option value="">Status: any</option>
-      </select>
+      <label class="filter-select" title="Off: active projects only. On: include dormant projects from the KMZ/master list." style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+        <input type="checkbox" id="map-show-dormant" onchange="reloadMap(true)" style="margin:0">
+        <span style="font-size:0.78rem">Show dormant</span>
+      </label>
       <select class="filter-select" id="map-component-filter" onchange="reloadMap()">
         <option value="">Type: any</option>
       </select>
@@ -2080,9 +2079,10 @@ function initShellHistory() {
 
 function collectFeedbackFilters() {
   const out = {};
-  document.querySelectorAll('[id^="filter-"], .filter-select, #global-search, #project-command-number, #map-project-number-filter').forEach(el => {
+  document.querySelectorAll('[id^="filter-"], .filter-select, #global-search, #project-command-number, #map-project-number-filter, #map-show-dormant, #map-show-areas').forEach(el => {
     if (!el.id) return;
-    if (['INPUT','SELECT'].includes(el.tagName)) out[el.id] = truncateFeedbackValue(el.value || '', 220);
+    if (el.tagName === 'INPUT' && el.type === 'checkbox') out[el.id] = el.checked ? 'checked' : 'unchecked';
+    else if (['INPUT','SELECT'].includes(el.tagName)) out[el.id] = truncateFeedbackValue(el.value || '', 220);
   });
   return out;
 }
@@ -2502,7 +2502,7 @@ const PIN_COLOR = {
   pink:   '#ec4899',
 };
 
-function mapStatusFilterValue()    { return document.getElementById('map-status-filter')?.value || ''; }
+function mapStatusFilterValue()    { return document.getElementById('map-show-dormant')?.checked ? '' : 'active'; }
 function mapComponentFilterValue() { return document.getElementById('map-component-filter')?.value || ''; }
 function mapPinColorFilterValue()  { return document.getElementById('map-pin-color-filter')?.value || ''; }
 function mapClientFilterValue()    { return document.getElementById('map-client-filter')?.value.trim() || ''; }
