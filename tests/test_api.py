@@ -117,12 +117,25 @@ def test_update_missing_returns_404(auth_client):
 
 def test_dashboard_returns_per_table_stats(auth_client):
     due_soon = (date.today() + timedelta(days=3)).isoformat()
+    overdue_date = (date.today() - timedelta(days=2)).isoformat()
     _make_work_task(auth_client, title="A", status="Not Started")
     soon_id = _make_work_task(
         auth_client,
         title="B",
         status="In Progress",
         due_date=due_soon,
+    )
+    overdue_id = _make_work_task(
+        auth_client,
+        title="Late dashboard item",
+        status="In Progress",
+        due_date=overdue_date,
+    )
+    _make_work_task(
+        auth_client,
+        title="Completed late item",
+        status="Complete",
+        due_date=overdue_date,
     )
     submitted = auth_client.post("/api/v1/intake/submit", json={
         "type": "project_work",
@@ -148,11 +161,13 @@ def test_dashboard_returns_per_table_stats(auth_client):
     assert "stats" in data
     assert "work_tasks" in data["stats"]
     stats = data["stats"]["work_tasks"]
-    for key in ("total", "active", "by_status", "by_priority", "due_soon", "due_soon_items"):
+    for key in ("total", "active", "by_status", "by_priority", "due_soon", "due_soon_items", "overdue", "overdue_items"):
         assert key in stats, f"dashboard missing key: {key}"
-    assert stats["total"] >= 2
+    assert stats["total"] >= 4
     assert stats["due_soon"] == 1
     assert stats["due_soon_items"][0]["id"] == soon_id
+    assert {row["id"] for row in stats["overdue_items"]} == {overdue_id}
+    assert overdue_id not in {row["id"] for row in stats["due_soon_items"]}
     assert "by_category" in stats
     internal_stats = data["stats"]["personal_items"]
     assert internal_stats["by_category"]["Meetings"]["active"] == 1
@@ -160,6 +175,9 @@ def test_dashboard_returns_per_table_stats(auth_client):
     assert data["intake"]["summary"]["needs_review_count"] == 1
     assert data["intake"]["rows"][0]["title"] == "Dashboard intake request"
     assert data["intake"]["rows"][0]["source"] == "web-form"
+    work_activity = next(row for row in data["recent_activity"] if row["table_name"] == "work_tasks" and row["record_id"] == overdue_id)
+    assert work_activity["label"] == "CAD Dev Task"
+    assert work_activity["record_title"] == "Late dashboard item"
 
 
 # ── Search ────────────────────────────────────────────────────────────────

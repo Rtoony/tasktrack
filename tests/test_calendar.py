@@ -330,7 +330,11 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'id="core-loop"' in html
     assert 'id="core-tracker-cards"' in html
     assert 'id="core-review-queue"' in html
+    assert 'id="core-overdue"' in html
     assert 'id="core-due-soon"' in html
+    assert "function renderCoreOverdue(stats)" in html
+    assert "coreDueQueueRows(stats, 'overdue_items', 'Overdue', 'red')" in html
+    assert "coreDueQueueRows(stats, 'due_soon_items', 'Due soon', 'amber')" in html
     assert 'class="modal-overlay record-overlay"' in html
     assert 'class="modal record-drawer"' in html
     assert 'id="modal-meta"' in html

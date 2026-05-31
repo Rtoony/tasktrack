@@ -236,7 +236,7 @@
   .core-mini-bar { display:flex; height:0.42rem; background:#e0e0e0; margin-top:0.9rem; overflow:hidden; }
   .core-mini-seg { min-width:2px; height:100%; }
   .core-tracker-foot { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-top:0.55rem; font-size:0.72rem; color:var(--text-muted); }
-  .core-work-grid { display:grid; grid-template-columns:2fr 1fr; gap:0.75rem; }
+  .core-work-grid { display:grid; grid-template-columns:1.25fr 1fr 1fr; gap:0.75rem; }
   .core-panel { background:var(--surface); border:1px solid var(--border); min-width:0; }
   .core-panel-head { min-height:2.75rem; display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.65rem 0.85rem; border-bottom:1px solid var(--border); }
   .core-panel-title { display:flex; align-items:center; gap:0.5rem; font-size:0.88rem; font-weight:600; }
@@ -715,6 +715,13 @@
             <span class="core-panel-hint">Confirm or route captures</span>
           </div>
           <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
+        </section>
+        <section class="core-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag red">Late</span><span>Overdue</span></div>
+            <span class="core-panel-hint">clear first</span>
+          </div>
+          <div class="core-list" id="core-overdue"><div class="core-empty">No overdue items.</div></div>
         </section>
         <section class="core-panel">
           <div class="core-panel-head">
@@ -2558,6 +2565,7 @@ function renderCoreLoop(data, totals) {
   coreSetText('core-overdue-count', totals.totalOverdue);
   renderCoreTrackerCards(data.stats || {});
   renderCoreReviewQueue(data.intake);
+  renderCoreOverdue(data.stats || {});
   renderCoreDueSoon(data.stats || {});
   renderCoreRecentActivity(data.recent_activity || []);
 }
@@ -2656,19 +2664,22 @@ function renderCoreReviewQueue(intake) {
   });
 }
 
-function renderCoreDueSoon(stats) {
-  const host = document.getElementById('core-due-soon');
-  if (!host) return;
+function coreDueQueueRows(stats, key, state, tone) {
   const items = [];
   CORE_TRACKERS.forEach(spec => {
     const bucket = stats[spec.table] || {};
-    (bucket.overdue_items || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:'Overdue'}));
-    (bucket.due_soon_items || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:'Due soon'}));
+    (bucket[key] || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:state, _tone:tone}));
   });
   items.sort((a, b) => coreDateSortValue(coreDueValue(a)) - coreDateSortValue(coreDueValue(b)));
+  return items;
+}
+
+function renderCoreDueQueue(hostId, rows, emptyText) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
   host.replaceChildren();
-  if (!items.length) { host.innerHTML = '<div class="core-empty">No due items in the next 14 days.</div>'; return; }
-  items.slice(0, 8).forEach(row => {
+  if (!rows.length) { host.innerHTML = '<div class="core-empty">' + emptyText + '</div>'; return; }
+  rows.slice(0, 8).forEach(row => {
     const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
     item.addEventListener('click', () => openCoreRecord(row._table, row.id));
     const main = document.createElement('span'); main.className = 'core-row-main';
@@ -2677,11 +2688,19 @@ function renderCoreDueSoon(stats) {
     if (row.project_number) meta.appendChild(coreTag(row.project_number, 'blue'));
     main.appendChild(title); main.appendChild(meta);
     const side = document.createElement('span'); side.className = 'core-row-side';
-    side.appendChild(coreTag(row._state, row._state === 'Overdue' ? 'red' : 'amber'));
+    side.appendChild(coreTag(row._state, row._tone));
     const due = document.createElement('span'); due.className = 'core-date'; due.textContent = formatDateTime(coreDueValue(row));
     side.appendChild(due);
     item.appendChild(main); item.appendChild(side); host.appendChild(item);
   });
+}
+
+function renderCoreOverdue(stats) {
+  renderCoreDueQueue('core-overdue', coreDueQueueRows(stats, 'overdue_items', 'Overdue', 'red'), 'No overdue items.');
+}
+
+function renderCoreDueSoon(stats) {
+  renderCoreDueQueue('core-due-soon', coreDueQueueRows(stats, 'due_soon_items', 'Due soon', 'amber'), 'No due items in the next 14 days.');
 }
 
 function renderCoreRecentActivity(rows) {
@@ -2695,9 +2714,9 @@ function renderCoreRecentActivity(rows) {
     item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
     const main = document.createElement('span'); main.className = 'core-row-main';
     const title = document.createElement('span'); title.className = 'core-row-title';
-    title.textContent = (row.user_name || 'TaskTrack') + ' ' + (row.action || 'updated') + ' ' + (TABLE_LABELS[row.table_name] || row.table_name || 'record');
+    title.textContent = (row.user_name || 'TaskTrack') + ' ' + (row.action || 'updated') + ' ' + (row.record_title || row.label || TABLE_LABELS[row.table_name] || row.table_name || 'record');
     const meta = document.createElement('span'); meta.className = 'core-row-meta';
-    meta.textContent = '#' + (row.record_id || '—') + (row.field_name ? ' · ' + row.field_name : '');
+    meta.textContent = (row.label || TABLE_LABELS[row.table_name] || row.table_name || 'Record') + ' #' + (row.record_id || '—') + (row.field_name ? ' · ' + row.field_name : '');
     main.appendChild(title); main.appendChild(meta);
     const side = document.createElement('span'); side.className = 'core-row-side';
     const when = document.createElement('span'); when.className = 'core-date'; when.textContent = formatTimeAgo(row.created_at);

@@ -104,6 +104,41 @@ def _is_due_soon_value(raw_value, *, days: int = 14) -> bool:
     return today <= due_on <= today + timedelta(days=days)
 
 
+def _dashboard_record_title(table: str, row: dict) -> str:
+    if table == "personnel_issues":
+        return (
+            row.get("title")
+            or row.get("issue_description")
+            or row.get("person_name")
+            or f"#{row.get('id', '?')}"
+        )
+    return (
+        row.get("title")
+        or row.get("project_name")
+        or row.get("name")
+        or row.get("summary")
+        or f"#{row.get('id', '?')}"
+    )
+
+
+def _dashboard_activity_dict(sess, row: ActivityLog) -> dict:
+    payload = to_dict(row) or {}
+    cfg = ALLOWED_TABLES.get(row.table_name) or {}
+    payload["label"] = cfg.get("label") or row.table_name
+    payload["record_title"] = ""
+    Model = TABLE_MODELS.get(row.table_name)
+    if Model is None:
+        return payload
+    target = sess.get(Model, row.record_id)
+    if target is None or not _record_detail_visible_to_current_user(row.table_name, target):
+        return payload
+    payload["record_title"] = _dashboard_record_title(
+        row.table_name,
+        _record_to_current_user_dict(row.table_name, target),
+    )
+    return payload
+
+
 @bp.route("/api/v1/dashboard")
 @login_required
 def dashboard_stats():
@@ -171,7 +206,7 @@ def dashboard_stats():
         }
 
     recent = [
-        to_dict(r)
+        _dashboard_activity_dict(sess, r)
         for r in sess.scalars(
             select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(50)
         ).all()
