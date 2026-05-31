@@ -119,6 +119,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.bridges import bp as bridges_bp
     from .routes.calendar import bp as calendar_bp
     from .routes.competency import bp as competency_bp
+    from .routes.feedback import bp as feedback_bp
     from .routes.health_pill import bp as health_pill_bp
     from .routes.inbox import bp as inbox_bp
     from .routes.intake import bp as intake_bp
@@ -145,6 +146,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(reports_bp)
     app.register_blueprint(competency_bp)
     app.register_blueprint(bridges_bp)
+    app.register_blueprint(feedback_bp)
     app.register_blueprint(health_pill_bp)
     app.register_blueprint(weekly_bp)
 

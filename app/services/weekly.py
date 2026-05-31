@@ -37,6 +37,8 @@ from .tickets import (
     record_visible_to_user,
 )
 
+WEEKLY_TRACKER_EXCLUDES = {"feedback_items"}
+
 # Display labels for the weekly buckets — friendlier than the raw table name.
 BUCKET_LABELS = {
     "work_tasks":         "CAD Dev",
@@ -259,6 +261,8 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
     buckets: dict[str, dict] = {}
     totals = {"created": 0, "completed": 0, "active_now": 0, "overdue_now": 0}
     for table in ALLOWED_TABLES:
+        if table in WEEKLY_TRACKER_EXCLUDES:
+            continue
         b = _bucket_for_table(
             sess, table, since_naive, user_id=user_id,
             include_sensitive=include_admin,

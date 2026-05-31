@@ -21,6 +21,7 @@ from ..config import (
 from ..models import (
     CalendarEvent,
     Employee,
+    FeedbackItem,
     InboxItem,
     PersonalItem,
     PersonnelIssue,
@@ -38,6 +39,7 @@ TABLE_MODELS = {
     "training_tasks": TrainingTask,
     "personnel_issues": PersonnelIssue,
     "inbox_items": InboxItem,
+    "feedback_items": FeedbackItem,
     "personal_items": PersonalItem,
     "calendar_events": CalendarEvent,
 }
@@ -214,6 +216,8 @@ def done_statuses_for_table(table_name):
         return {"Done", "Archived"}
     if table_name == "calendar_events":
         return {"done", "cancelled"}
+    if table_name == "feedback_items":
+        return {"Fixed", "Closed", "Won\'t Fix"}
     return {"Complete"}
 
 
@@ -375,6 +379,29 @@ def validate_record_data(table, data, creating=False):
 
     if table == "calendar_events":
         return _validate_calendar_event(data, creating)
+
+    if table == "feedback_items":
+        if creating or "title" in data:
+            title = str(data.get("title") or "").strip()
+            if not title:
+                return "'title' is required"
+            data["title"] = title
+        for key in ("feedback_type", "priority", "status", "source"):
+            if key in data:
+                data[key] = str(data.get(key) or "").strip()
+        if creating or "status" in data:
+            status = str(data.get("status") or ALLOWED_TABLES["feedback_items"]["status_flow"][0]).strip()
+            if status not in ALLOWED_TABLES["feedback_items"]["status_flow"]:
+                return f"status must be one of: {', '.join(ALLOWED_TABLES['feedback_items']['status_flow'])}"
+            data["status"] = status
+        if "context_json" in data:
+            raw_context = str(data.get("context_json") or "{}").strip() or "{}"
+            try:
+                json.loads(raw_context)
+            except json.JSONDecodeError:
+                return "context_json must be valid JSON"
+            data["context_json"] = raw_context
+        return None
 
     if table != "project_work_tasks":
         return None

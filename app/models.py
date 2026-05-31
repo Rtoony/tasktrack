@@ -256,6 +256,43 @@ class InboxItem(Base):
 
 
 
+class FeedbackItem(Base):
+    """In-app feedback captured while testing or operating TaskTrack.
+
+    Screenshots use the generic attachments table keyed by
+    (feedback_items, id). The context_json field is intentionally text so
+    future Codex sessions can inspect browser/page context without needing
+    a schema migration for every UI detail we decide to capture.
+    """
+    __tablename__ = "feedback_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    feedback_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'Bug'"))
+    priority: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'Medium'"))
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'New'"))
+    page_url: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    tab: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    component_label: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    context_json: Mapped[str] = mapped_column(Text, server_default=text("'{}'"))
+    tags: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    resolution_notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'in-app'"))
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+
+    __table_args__ = (
+        Index("idx_feedback_items_status", "status"),
+        Index("idx_feedback_items_priority", "priority"),
+        Index("idx_feedback_items_created_at", "created_at"),
+        Index("idx_feedback_items_page", "page_url"),
+    )
+
+
 class CalendarEvent(Base):
     """Internal operations calendar event.
 

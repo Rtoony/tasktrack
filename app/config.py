@@ -137,6 +137,25 @@ ALLOWED_TABLES = {
         "label": "Internal Item",
         "status_flow": ["New", "In Progress", "Done", "Archived"],
     },
+    "feedback_items": {
+        "fields": [
+            "title",
+            "body",
+            "feedback_type",
+            "priority",
+            "status",
+            "page_url",
+            "tab",
+            "component_label",
+            "context_json",
+            "tags",
+            "resolution_notes",
+            "source",
+        ],
+        "required": ["title"],
+        "label": "Feedback",
+        "status_flow": ["New", "Triaged", "Planned", "In Progress", "Fixed", "Closed", "Won't Fix"],
+    },
     "calendar_events": {
         "fields": [
             "event_type",
