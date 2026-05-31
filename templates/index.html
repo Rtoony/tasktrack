@@ -606,6 +606,75 @@
     .workspace-counts { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .workspace-overlay-grid { grid-template-columns:1fr; }
   }
+
+  /* ── Small-screen hardening pass ───────────────
+     Keeps the desktop layout intact while making Chromebook/tablet widths
+     fail gracefully: compact rail, wrapping controls, horizontal table scroll,
+     and full-width drawers on narrow screens. */
+  @media (max-width:1180px) {
+    .side-nav { width:212px; flex-basis:212px; }
+    .tab-btn,.side-link { padding-left:0.7rem; padding-right:0.7rem; font-size:0.78rem; }
+    .tab-divider { padding-left:0.7rem; padding-right:0.7rem; }
+    .container { padding:1rem 1.1rem 2.5rem; }
+    .core-work-grid { grid-template-columns:1fr; }
+    .core-list { max-height:260px; }
+    .filter-bar { align-items:flex-start; }
+    .filter-bar .section-heading { flex:1 0 100%; min-width:0; }
+    .filter-select { max-width:100%; }
+    .table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+    .table-wrap table { min-width:760px; }
+    #sec-triage .table-wrap table { min-width:1040px; }
+    #sec-map .filter-select { flex:1 1 150px; }
+    #map-host { height:calc(100vh - 280px) !important; min-height:360px !important; }
+    .modal { margin:0.75rem; max-height:calc(100vh - 1.5rem); }
+  }
+
+  @media (max-width:760px) {
+    .header-inner { align-items:stretch; }
+    .header-left { width:100%; }
+    .logo { max-width:none; width:100%; border-right:none; font-size:0.9rem; }
+    .user-bar { gap:0.5rem; }
+    .user-name { max-width:42vw; overflow:hidden; text-overflow:ellipsis; }
+    .health-pill { display:none; }
+    .side-nav { position:sticky; top:0; z-index:80; }
+    .side-nav-list { overflow-x:auto; scroll-snap-type:x proximity; }
+    .tab-btn,.side-link { flex:0 0 auto; scroll-snap-align:start; }
+    .tab-count { margin-left:0.35rem; }
+    .container { padding:0.8rem 0.75rem 5rem; }
+    .core-title { font-size:1.25rem; }
+    .core-hero-main { padding:1rem; }
+    .core-stat-strip { grid-template-columns:1fr; }
+    .core-stat-tile { border-left:none; border-top:1px solid var(--border); }
+    .core-stat-tile:first-child { border-top:none; }
+    .core-tracker-grid,.tracker-summary,.dash-grid { grid-template-columns:1fr; }
+    .project-command-controls { display:grid; grid-template-columns:1fr 1fr; width:100%; }
+    .project-command-input { grid-column:1 / -1; width:100%; }
+    .filter-bar { display:grid; grid-template-columns:1fr 1fr; gap:0.45rem; }
+    .filter-bar .section-heading { grid-column:1 / -1; }
+    .filter-bar .btn,.filter-bar .view-toggle { width:100%; justify-content:center; }
+    .filter-select { min-width:0 !important; width:100%; }
+    td,th { padding:0.45rem 0.5rem; }
+    .cell-actions { flex-wrap:wrap; }
+    .record-drawer .modal-header,.record-drawer .modal-body,.record-drawer .modal-footer { padding-left:0.85rem; padding-right:0.85rem; }
+    .drawer-title-row { flex-direction:column; align-items:flex-start; }
+    .modal-footer { justify-content:flex-start; flex-wrap:wrap; }
+    .modal-footer .btn { flex:1 1 auto; justify-content:center; }
+    .workspace-meta,.workspace-counts { grid-template-columns:1fr; }
+    .workspace-row { align-items:flex-start; flex-direction:column; }
+    #map-host { height:58vh !important; min-height:320px !important; }
+    .feedback-fab { right:0.75rem; bottom:0.75rem; padding:0.62rem 0.85rem; }
+    .toast { left:0.75rem; right:0.75rem; bottom:0.75rem; text-align:center; }
+  }
+
+  @media (max-width:520px) {
+    .project-command-controls,.filter-bar { grid-template-columns:1fr; }
+    .core-actions .btn { flex:1 1 100%; justify-content:center; }
+    .search-wrap { flex:1; min-width:0; }
+    .search-input,.search-input:focus { width:100%; max-width:none; }
+    .record-drawer { width:100vw; }
+    .att-upload,.lnk-add,.comment-add { flex-direction:column; align-items:stretch; }
+  }
+
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
