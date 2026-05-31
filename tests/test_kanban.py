@@ -18,6 +18,10 @@ def test_dashboard_includes_kanban_markup(auth_client):
     assert 'id="kanban-project"' in html
     assert 'data-view="table"' in html
     assert 'data-view="kanban"' in html
+    assert 'kanban-card-actions' in html
+    assert 'kanban-card-action' in html
+    assert 'openProjectWorkspaceSmart(r.project_id, r.project_number)' in html
+    assert 'openProjectReportSmart(r.project_id, r.project_number)' in html
 
 
 def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):

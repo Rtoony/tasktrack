@@ -81,6 +81,9 @@
   .kanban-card-tag.low      { color:#94a3b8; }
   .kanban-card-tag.overdue  { color:#f87171; border-color:rgba(248,113,113,0.5); background:rgba(248,113,113,0.08); }
   .kanban-card-pn { font-family:'IBM Plex Mono', monospace; font-size:0.7rem; color:var(--text-muted); }
+  .kanban-card-actions { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.5rem; }
+  .kanban-card-action { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:var(--radius); padding:0.16rem 0.45rem; font:inherit; font-size:0.68rem; cursor:pointer; }
+  .kanban-card-action:hover { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 50%, var(--border)); }
 
   /* Calendar agenda view — grouped by event day from the same filtered
      rows used by the table. The table remains available as a data view. */
@@ -3441,6 +3444,31 @@ function makeKanbanCard(r) {
     meta.appendChild(due);
   }
   card.appendChild(meta);
+
+  if (r.project_number || r.project_id) {
+    const actions = document.createElement('div');
+    actions.className = 'kanban-card-actions';
+    const workspace = document.createElement('button');
+    workspace.type = 'button';
+    workspace.className = 'kanban-card-action';
+    workspace.textContent = 'Workspace';
+    workspace.title = 'Open project workspace';
+    workspace.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openProjectWorkspaceSmart(r.project_id, r.project_number);
+    });
+    const report = document.createElement('button');
+    report.type = 'button';
+    report.className = 'kanban-card-action';
+    report.textContent = 'Report';
+    report.title = 'Open project report';
+    report.addEventListener('click', ev => {
+      ev.stopPropagation();
+      openProjectReportSmart(r.project_id, r.project_number);
+    });
+    actions.appendChild(workspace); actions.appendChild(report);
+    card.appendChild(actions);
+  }
   return card;
 }
 
