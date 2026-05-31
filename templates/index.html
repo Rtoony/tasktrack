@@ -1369,6 +1369,7 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_husband-overdue" onchange="loadTable('personal_husband')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_husband')">+ Add Follow-up Item</button>
     </div>
@@ -1404,6 +1405,7 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_father-overdue" onchange="loadTable('personal_father')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_father')">+ Add Meeting Item</button>
     </div>
@@ -1439,6 +1441,7 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_house-overdue" onchange="loadTable('personal_house')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_house')">+ Add Office Item</button>
     </div>
@@ -1474,6 +1477,7 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_cars-overdue" onchange="loadTable('personal_cars')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_cars')">+ Add Asset Item</button>
     </div>
@@ -1783,6 +1787,11 @@ function isOverdue(r) {
     if (d.includes('T')) return new Date(d).getTime() < Date.now();
   } catch {}
   return d.split('T')[0] < today();
+}
+
+const CLOSED_COUNT_STATUSES = new Set(['Complete','Closed','Resolved','Done','Archived','done','cancelled']);
+function isActiveCountRow(r) {
+  return !CLOSED_COUNT_STATUSES.has(String(r.status || ''));
 }
 
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -3086,7 +3095,7 @@ async function loadTable(table) {
         r.category === cat && (r.status === 'New' || r.status === 'In Progress')
       ).length;
     } else {
-      countEl.textContent = data.length;
+      countEl.textContent = data.filter(isActiveCountRow).length;
     }
   }
 

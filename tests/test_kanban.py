@@ -55,6 +55,12 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert 'updateShellContext(tabTitleForButton(btn));' in html
     assert 'position:static; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto;' in html
     assert 'width:min(360px, calc(100vw - 1.7rem));' in html
+    assert 'function isActiveCountRow(r)' in html
+    assert "data.filter(isActiveCountRow).length" in html
+    assert 'id="filter-personal_husband-overdue"' in html
+    assert 'id="filter-personal_father-overdue"' in html
+    assert 'id="filter-personal_house-overdue"' in html
+    assert 'id="filter-personal_cars-overdue"' in html
     assert '<span class="tab-divider-label">Work</span>' in html
     assert '<span class="tab-divider-label">Context</span>' in html
     assert '<span class="tab-divider-label">Flow</span>' in html
