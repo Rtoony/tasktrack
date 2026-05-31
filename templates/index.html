@@ -225,7 +225,7 @@
   .core-stat-label { margin-top:0.4rem; font-size:0.72rem; color:var(--text-muted); }
   .core-stat-note { margin-top:0.15rem; font-size:0.68rem; color:var(--text-light); }
   .core-section-label { font-size:0.68rem; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--text-light); margin:0.15rem 0 -0.25rem; }
-  .core-tracker-grid { display:grid; grid-template-columns:repeat(5, minmax(0,1fr)); gap:0.75rem; }
+  .core-tracker-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:0.75rem; }
   .core-tracker-card { text-align:left; background:var(--surface); border:1px solid var(--border); padding:0.9rem; min-height:128px; cursor:pointer; color:var(--text); font-family:inherit; transition:border-color 0.12s, background 0.12s; }
   .core-tracker-card:hover { border-color:var(--accent); background:var(--accent-light); }
   .core-tracker-head { display:flex; align-items:flex-start; justify-content:space-between; gap:0.75rem; }
@@ -1188,7 +1188,7 @@
         <button type="button" class="view-toggle-btn" data-view="kanban" onclick="setProjectView('kanban')">Kanban</button>
       </span>
       <a class="btn btn-sm btn-export" href="/intake/request?type=project_work" target="_blank" rel="noopener">Request Form</a>
-      <a class="btn btn-sm btn-export" href="/intake/request?type=project_work" target="_blank" rel="noopener">Weekly Batch</a>
+      <a class="btn btn-sm btn-export" href="/weekly" target="_blank" rel="noopener">Weekly Review</a>
       <a class="btn btn-sm btn-export" href="/api/v1/project_work_tasks/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('project')">+ Add Project Task</button>
     </div>
@@ -1370,7 +1370,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_husband-overdue" onchange="loadTable('personal_husband')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_husband')">+ Add Follow-up Item</button>
     </div>
     <div class="table-wrap">
@@ -1406,7 +1406,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_father-overdue" onchange="loadTable('personal_father')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_father')">+ Add Meeting Item</button>
     </div>
     <div class="table-wrap">
@@ -1442,7 +1442,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_house-overdue" onchange="loadTable('personal_house')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_house')">+ Add Office Item</button>
     </div>
     <div class="table-wrap">
@@ -1478,7 +1478,7 @@
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_cars-overdue" onchange="loadTable('personal_cars')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
       <button class="btn btn-primary" onclick="openModal('personal_cars')">+ Add Asset Item</button>
     </div>
     <div class="table-wrap">
@@ -1735,7 +1735,10 @@ const CORE_TRACKERS = [
   { table:'work_tasks', label:'CAD Dev', tab:'work', key:'work' },
   { table:'training_tasks', label:'Training', tab:'training', key:'training' },
   { table:'personnel_issues', label:'Capabilities', tab:'personnel', key:'personnel' },
-  { table:'personal_items', label:'Follow-up', tab:'personal_husband', key:'personal' },
+  { table:'personal_items', label:'Follow-up', tab:'personal_husband', key:'personal', category:'Follow-up' },
+  { table:'personal_items', label:'Meetings', tab:'personal_father', key:'meetings', category:'Meetings' },
+  { table:'personal_items', label:'Office', tab:'personal_house', key:'office', category:'Office' },
+  { table:'personal_items', label:'Assets', tab:'personal_cars', key:'assets', category:'Assets' },
 ];
 const CORE_TABLE_TO_TAB = {
   work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
@@ -2564,7 +2567,8 @@ function renderCoreTrackerCards(stats) {
   if (!host) return;
   host.replaceChildren();
   CORE_TRACKERS.forEach(spec => {
-    const bucket = stats[spec.table] || {};
+    const sourceBucket = stats[spec.table] || {};
+    const bucket = spec.category ? (sourceBucket.by_category || {})[spec.category] || {} : sourceBucket;
     const active = bucket.active || 0;
     const total = bucket.total || 0;
     const byStatus = bucket.by_status || {};
@@ -3316,7 +3320,14 @@ function renderCalendarAgenda(rows) {
 function makeCalendarAgendaCard(r) {
   const card = document.createElement('article');
   card.className = 'calendar-event-card ' + String(r.status || '').toLowerCase().replace(/\s+/g, '-');
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
   card.addEventListener('click', () => editRecord('calendar', r.id));
+  card.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    editRecord('calendar', r.id);
+  });
 
   const time = document.createElement('div'); time.className = 'calendar-event-time'; time.textContent = calendarTimeLabel(r);
   const main = document.createElement('div'); main.className = 'calendar-event-main';
@@ -3462,7 +3473,14 @@ function makeKanbanCard(r) {
   const card = document.createElement('div');
   card.className = 'kanban-card';
   card.dataset.id = r.id;
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
   card.addEventListener('click', () => editRecord('project', r.id));
+  card.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    editRecord('project', r.id);
+  });
 
   const title = document.createElement('div'); title.className = 'kanban-card-title';
   title.textContent = r.title || '(untitled)';
@@ -3667,7 +3685,7 @@ function makeTriageActions(r) {
   }
   td.appendChild(promote);
 
-  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.textContent='Del';
+  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.textContent='Delete';
   del.addEventListener('click',()=>confirmDelete('triage',r.id,r.title));
   td.appendChild(del);
   return td;
@@ -3750,7 +3768,7 @@ function makeActions(table, id, label, row = {}) {
   }
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.type='button'; edit.textContent='Edit';
   edit.addEventListener('click', ev => { ev.stopPropagation(); editRecord(table,id); });
-  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Del';
+  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
   del.addEventListener('click', ev => { ev.stopPropagation(); confirmDelete(table,id,label); });
   td.appendChild(edit); td.appendChild(del);
   return td;

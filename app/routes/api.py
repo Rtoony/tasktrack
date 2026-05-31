@@ -141,6 +141,23 @@ def dashboard_stats():
             p = r.get(p_field, "Medium")
             by_priority[p] = by_priority.get(p, 0) + 1
 
+        by_category = {}
+        if "category" in cfg["fields"]:
+            for r in all_rows:
+                cat = r.get("category") or "Uncategorized"
+                bucket = by_category.setdefault(cat, {
+                    "total": 0, "active": 0, "overdue": 0, "due_soon": 0, "by_status": {}
+                })
+                bucket["total"] += 1
+                status = r.get("status", "Unknown")
+                bucket["by_status"][status] = bucket["by_status"].get(status, 0) + 1
+                if r.get("status") not in done_statuses:
+                    bucket["active"] += 1
+                    if due_field and is_overdue_value(r.get(due_field)):
+                        bucket["overdue"] += 1
+                    elif due_field and _is_due_soon_value(r.get(due_field)):
+                        bucket["due_soon"] += 1
+
         stats[table] = {
             "total": len(all_rows),
             "active": len(active),
@@ -150,6 +167,7 @@ def dashboard_stats():
             "due_soon_items": due_soon[:10],
             "by_status": by_status,
             "by_priority": by_priority,
+            "by_category": by_category,
         }
 
     recent = [

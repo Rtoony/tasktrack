@@ -51,6 +51,15 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert 'id="shell-context">/ Dashboard</span>' in html
     assert 'class="tabs side-nav-list"' in html
     assert 'data-tab="work" data-shell-title="CAD Development"' in html
+    assert 'Weekly Review' in html
+    assert 'href="/weekly"' in html
+    assert 'All Internal CSV' in html
+    assert "del.textContent='Delete'" in html
+    assert "card.setAttribute('role', 'button');" in html
+    assert "event.key !== 'Enter' && event.key !== ' '" in html
+    assert "label:'Meetings', tab:'personal_father'" in html
+    assert "label:'Office', tab:'personal_house'" in html
+    assert "label:'Assets', tab:'personal_cars'" in html
     assert 'function updateShellContext(title)' in html
     assert 'updateShellContext(tabTitleForButton(btn));' in html
     assert 'position:static; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto;' in html

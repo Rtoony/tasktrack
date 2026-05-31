@@ -134,6 +134,13 @@ def test_dashboard_returns_per_table_stats(auth_client):
         "priority": "High",
     })
     assert submitted.status_code == 201
+    meeting = auth_client.post("/api/v1/personal_items", json={
+        "title": "Prepare PM huddle",
+        "category": "Meetings",
+        "status": "New",
+        "due_date": due_soon,
+    })
+    assert meeting.status_code in (200, 201)
 
     r = auth_client.get("/api/v1/dashboard")
     assert r.status_code == 200
@@ -146,6 +153,10 @@ def test_dashboard_returns_per_table_stats(auth_client):
     assert stats["total"] >= 2
     assert stats["due_soon"] == 1
     assert stats["due_soon_items"][0]["id"] == soon_id
+    assert "by_category" in stats
+    internal_stats = data["stats"]["personal_items"]
+    assert internal_stats["by_category"]["Meetings"]["active"] == 1
+    assert internal_stats["by_category"]["Meetings"]["due_soon"] == 1
     assert data["intake"]["summary"]["needs_review_count"] == 1
     assert data["intake"]["rows"][0]["title"] == "Dashboard intake request"
     assert data["intake"]["rows"][0]["source"] == "web-form"
