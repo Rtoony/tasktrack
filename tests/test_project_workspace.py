@@ -312,6 +312,10 @@ def test_dashboard_exposes_project_workspace_ui(auth_client):
     assert 'id="workspace-overlay"' in html
     assert 'id="project-command"' in html
     assert 'id="project-command-number"' in html
+    assert 'id="filter-project-number"' in html
+    assert 'applyProjectTaskFilters' in html
+    assert 'currentFilteredProjectRows' in html
+    assert 'initProjectTaskFilters' in html
     assert 'runProjectCommand' in html
     assert 'initProjectCommand' in html
     assert 'openProjectWorkspaceById' in html

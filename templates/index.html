@@ -1156,6 +1156,7 @@
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <input class="filter-select" id="filter-project-number" type="text" placeholder="Project #" inputmode="numeric" maxlength="7" oninput="loadTable('project')" style="width:105px" aria-label="Filter project tasks by project number">
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-project-overdue" onchange="loadTable('project')" style="margin-right:3px">Overdue only</label>
       <span class="view-toggle" role="tablist" aria-label="Project Tasks view">
         <button type="button" class="view-toggle-btn active" data-view="table" onclick="setProjectView('table')">Table</button>
@@ -3019,6 +3020,7 @@ async function loadTable(table) {
     filtered = filtered.filter(r => String(r.source || '').toLowerCase().includes(sourceFilter.toLowerCase()));
   }
   if (typeFilter && table === 'calendar') filtered = filtered.filter(r => r.event_type === typeFilter);
+  if (table === 'project') filtered = applyProjectTaskFilters(filtered);
   if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
 
@@ -3313,6 +3315,41 @@ let projectViewMode = 'table';
 const PROJECT_LANES = ['Not Started', 'In Progress', 'On Hold', 'Complete'];
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
 
+function projectTaskFilterProjectNumber() {
+  const input = document.getElementById('filter-project-number');
+  const pn = normalizeProjectNumberCandidate(input?.value || '').trim();
+  if (input && input.value !== pn) input.value = pn;
+  return pn.toLowerCase();
+}
+
+function applyProjectTaskFilters(rows) {
+  const project = projectTaskFilterProjectNumber();
+  if (!project) return rows || [];
+  return (rows || []).filter(r => String(r.project_number || '').toLowerCase().includes(project));
+}
+
+function currentFilteredProjectRows() {
+  let rows = (tableCache.project || []).slice();
+  const statusFilter = document.getElementById('filter-project-status')?.value || '';
+  const priorityFilter = document.getElementById('filter-project-priority')?.value || '';
+  const overdueFilter = document.getElementById('filter-project-overdue')?.checked || false;
+  if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+  if (priorityFilter) rows = rows.filter(r => r.priority === priorityFilter);
+  rows = applyProjectTaskFilters(rows);
+  if (overdueFilter) rows = rows.filter(r => isOverdue(r));
+  return rows;
+}
+
+function initProjectTaskFilters() {
+  const input = document.getElementById('filter-project-number');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    let digits = input.value.replace(/\D/g, '').slice(0, 6);
+    if (digits.length > 4) digits = digits.slice(0, 4) + '.' + digits.slice(4);
+    input.value = digits;
+  });
+}
+
 function setProjectView(mode) {
   projectViewMode = mode;
   document.querySelectorAll('#sec-project .view-toggle-btn').forEach(btn => {
@@ -3322,17 +3359,7 @@ function setProjectView(mode) {
   document.getElementById('project-kanban-view').style.display = (mode === 'kanban') ? '' : 'none';
   // Re-render so the kanban picks up current filters even if the table
   // was rendered with an older set.
-  if (mode === 'kanban') {
-    const cache = (tableCache.project || []).slice();
-    const statusFilter = document.getElementById('filter-project-status')?.value || '';
-    const priorityFilter = document.getElementById('filter-project-priority')?.value || '';
-    const overdueFilter = document.getElementById('filter-project-overdue')?.checked || false;
-    let filtered = cache;
-    if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
-    if (priorityFilter) filtered = filtered.filter(r => r.priority === priorityFilter);
-    if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
-    renderProjectKanban(filtered);
-  }
+  if (mode === 'kanban') renderProjectKanban(currentFilteredProjectRows());
 }
 
 function renderProjectKanban(rows) {
@@ -5585,6 +5612,7 @@ async function applyStartupRouteState() {
 /* ── Init ──────────────────────────────────── */
 initIntake();
 initProjectCommand();
+initProjectTaskFilters();
 if (STANDALONE_TAB) {
   activateTab(STANDALONE_TAB);
 } else {
