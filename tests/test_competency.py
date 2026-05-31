@@ -276,6 +276,39 @@ def test_upsert_404_missing_category(admin_client, temp_app):
 # ── Per-employee score list ───────────────────────────────────────────────
 
 
+def test_bulk_upsert_scores_sets_employee_scorecard(admin_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        emp = Employee(display_name="Scorecard Subject", role="engineer")
+        cat1 = SkillCategory(slug="scorecard-one", name="Scorecard One")
+        cat2 = SkillCategory(slug="scorecard-two", name="Scorecard Two")
+        sess.add_all([emp, cat1, cat2])
+        sess.commit()
+        emp_id = emp.id
+        cat1_id = cat1.id
+        cat2_id = cat2.id
+
+    r = admin_client.post("/api/v1/skills/scores/bulk", json={
+        "employee_id": emp_id,
+        "source_kind": "preliminary_rating",
+        "ratings": [
+            {"category_id": cat1_id, "score": 3.5, "notes": "first pass"},
+            {"category_id": cat2_id, "score": 4.0, "notes": "strong"},
+        ],
+    })
+    assert r.status_code == 200
+    assert r.get_json()["updated"] == 2
+
+    matrix = admin_client.get("/api/v1/skills/matrix?detail=1").get_json()
+    cell1 = matrix["scores"][str(emp_id)][str(cat1_id)]
+    cell2 = matrix["scores"][str(emp_id)][str(cat2_id)]
+    assert cell1["score"] == 3.5
+    assert cell1["latest_preliminary"]["notes"] == "first pass"
+    assert cell1["latest_preliminary"]["created_by_name"] == "Admin User"
+    assert cell2["score"] == 4.0
+    assert cell2["latest_preliminary"]["notes"] == "strong"
+
+
 def test_list_scores_for_employee(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/scores", json={

@@ -1213,6 +1213,9 @@
         <option value="engineer">Engineer</option>
         <option value="drafter">Drafter</option>
       </select>
+      <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
+        <option value="">Employee scorecard...</option>
+      </select>
       <label class="filter-select" title="Usually off. Use this to audit who has been excluded from competency ratings." style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
         <input type="checkbox" id="comp-include-untracked" onchange="loadCompetency()" style="margin:0">
         <span style="font-size:0.78rem">Show excluded</span>
@@ -1225,6 +1228,7 @@
         <div class="empty-title">No employees yet</div>
         <p class="empty-copy">Add people on <a href="/admin/people" style="color:var(--accent)">/admin/people</a> first.</p>
       </div>
+      <div id="comp-scorecard" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-detail" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-wrap" style="display:none; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);">
         <table id="comp-matrix" style="border-collapse:collapse; width:100%; font-size:0.78rem;">
@@ -2427,6 +2431,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
    confidence/sample metadata and dimension rollups for the power view. */
 let compState = { employees: [], categories: [], scores: {}, dimensions: {} };
 let compSelected = null;
+let compScorecardEmpId = null;
 
 function scoreBandColor(s) {
   if (s == null || isNaN(s)) return '';
@@ -2495,7 +2500,9 @@ async function loadCompetency() {
   loading.style.display = 'none';
   if (!compState.employees.length) { empty.style.display = 'block'; return; }
   wrap.style.display = 'block';
+  renderScorecardSelect();
   renderMatrix();
+  renderEmployeeScorecard();
   renderCompetencyDetail();
 }
 
@@ -2563,6 +2570,101 @@ function renderMatrix() {
     tr.appendChild(tdAvg);
     tbody.appendChild(tr);
   });
+}
+
+function renderScorecardSelect() {
+  const sel = document.getElementById('comp-scorecard-select');
+  if (!sel) return;
+  const current = compScorecardEmpId ? String(compScorecardEmpId) : '';
+  sel.innerHTML = '<option value="">Employee scorecard...</option>' + (compState.employees || []).map(emp =>
+    '<option value="' + emp.id + '"' + (String(emp.id) === current ? ' selected' : '') + '>' + esc(emp.display_name) + (emp.competency_tracked ? '' : ' (excluded)') + '</option>'
+  ).join('');
+}
+
+function openEmployeeScorecard(rawEmpId) {
+  const empId = Number(rawEmpId || 0);
+  compScorecardEmpId = empId || null;
+  renderScorecardSelect();
+  renderEmployeeScorecard();
+}
+
+function scorecardMarkerSummary(marker) {
+  if (!marker) return '—';
+  const who = marker.created_by_name ? ' · ' + marker.created_by_name : '';
+  const notes = marker.notes ? ' · ' + marker.notes : '';
+  return Number(marker.score).toFixed(1) + who + notes;
+}
+
+function renderEmployeeScorecard() {
+  const host = document.getElementById('comp-scorecard');
+  if (!host) return;
+  if (!compScorecardEmpId) { host.style.display = 'none'; host.replaceChildren(); return; }
+  const emp = (compState.employees || []).find(e => e.id === compScorecardEmpId);
+  if (!emp) { host.style.display = 'none'; host.replaceChildren(); return; }
+  host.style.display = 'block';
+  const rows = (compState.categories || []).map(cat => {
+    const detail = compCellDetail(emp.id, cat.id) || {};
+    const prelim = detail.latest_preliminary;
+    const baseline = detail.latest_baseline;
+    const existing = prelim?.score ?? detail.score ?? '';
+    const note = prelim?.notes || '';
+    return '<tr data-scorecard-row="1" data-cat-id="' + cat.id + '">' +
+      '<td style="min-width:180px"><strong>' + esc(cat.name) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(cat.description || '') + '</div></td>' +
+      '<td style="white-space:nowrap">' + (detail.score == null ? '—' : Number(detail.score).toFixed(1)) + '</td>' +
+      '<td style="font-size:0.72rem;color:var(--text-muted);min-width:145px">' + esc(scorecardMarkerSummary(prelim)) + '</td>' +
+      '<td style="font-size:0.72rem;color:var(--text-muted);min-width:145px">' + esc(scorecardMarkerSummary(baseline)) + '</td>' +
+      '<td><input class="scorecard-score" type="number" min="1" max="5" step="0.5" value="' + esc(existing) + '" style="width:5.5rem"></td>' +
+      '<td><input class="scorecard-note" type="text" value="' + esc(note) + '" placeholder="optional note" style="min-width:190px"></td>' +
+    '</tr>';
+  }).join('');
+  host.innerHTML =
+    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;flex-wrap:wrap">' +
+      '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
+      '<div class="workspace-sub">Set this person across every competency category. Blank score fields are skipped.</div></div>' +
+      '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
+    '</div>' +
+    '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:920px;width:100%;font-size:0.76rem"><thead><tr><th>Category</th><th>Visible</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save all preliminary</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark all official baseline</button></div>';
+}
+
+async function saveEmployeeScorecard(sourceKind, advance) {
+  if (!compScorecardEmpId) return;
+  const rows = Array.from(document.querySelectorAll('#comp-scorecard [data-scorecard-row="1"]'));
+  const ratings = [];
+  for (const row of rows) {
+    const rawScore = row.querySelector('.scorecard-score')?.value;
+    if (rawScore === '') continue;
+    const score = Number(rawScore);
+    if (!Number.isFinite(score) || score < 1 || score > 5) {
+      toast('Scores must be between 1 and 5');
+      return;
+    }
+    ratings.push({
+      category_id: Number(row.dataset.catId),
+      score: rawScore,
+      notes: row.querySelector('.scorecard-note')?.value || '',
+    });
+  }
+  if (!ratings.length) { toast('No scorecard ratings to save'); return; }
+  const res = await api('POST', '/api/v1/skills/scores/bulk', {
+    employee_id: compScorecardEmpId,
+    source_kind: sourceKind,
+    ratings,
+  });
+  if (!res || res.error) { toast(res?.error || 'Scorecard save failed'); return; }
+  toast((sourceKind === 'official_baseline' ? 'Official baseline' : 'Preliminary scorecard') + ' saved for ' + ratings.length + ' categories');
+  await loadCompetency();
+  if (advance) advanceScorecardEmployee();
+  else renderEmployeeScorecard();
+}
+
+function advanceScorecardEmployee() {
+  const emps = visibleCompetencyEmployees();
+  const idx = emps.findIndex(e => e.id === compScorecardEmpId);
+  if (idx < 0 || idx + 1 >= emps.length) { toast('Reached end of visible employees'); return; }
+  compScorecardEmpId = emps[idx + 1].id;
+  renderScorecardSelect();
+  renderEmployeeScorecard();
 }
 
 function openCompetencyCell(empId, catId) {

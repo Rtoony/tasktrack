@@ -230,6 +230,53 @@ def upsert_score_route():
     return jsonify(to_dict(row))
 
 
+@bp.route("/api/v1/skills/scores/bulk", methods=["POST"])
+@admin_required
+def bulk_upsert_scores_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        employee_id = int(data.get("employee_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "employee_id (int) required",
+                        "request_id": _rid()}), 400
+    ratings = data.get("ratings") or []
+    if not isinstance(ratings, list) or not ratings:
+        return jsonify({"error": "ratings array is required",
+                        "request_id": _rid()}), 400
+    source_kind = (data.get("source_kind") or "preliminary_rating").strip()
+    notes_default = (data.get("notes") or "").strip()
+
+    sess = get_session()
+    if sess.get(Employee, employee_id) is None:
+        return jsonify({"error": "employee not found",
+                        "request_id": _rid()}), 404
+
+    updated = []
+    try:
+        for item in ratings:
+            category_id = int(item.get("category_id"))
+            if sess.get(SkillCategory, category_id) is None:
+                return jsonify({"error": f"category {category_id} not found",
+                                "request_id": _rid()}), 404
+            row = upsert_score(
+                sess,
+                employee_id,
+                category_id,
+                item.get("score"),
+                notes=(item.get("notes") or notes_default).strip(),
+                source_kind=source_kind,
+            )
+            updated.append(to_dict(row))
+    except (TypeError, ValueError):
+        return jsonify({"error": "each rating needs category_id and score",
+                        "request_id": _rid()}), 400
+    except CompetencyError as e:
+        return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
+
+    sess.commit()
+    return jsonify({"updated": len(updated), "scores": updated})
+
+
 @bp.route("/api/v1/skills/scores/<int:employee_id>", methods=["GET"])
 @admin_required
 def list_scores_for_employee(employee_id):
