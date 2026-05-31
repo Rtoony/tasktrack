@@ -341,6 +341,8 @@ def test_upsert_score_accepts_rating_phase_source(admin_client, temp_app):
             ).all()
         ]
         assert sources == ["preliminary_rating", "official_baseline"]
+        rollup = sess.scalar(select(EmployeeSkillScore).where(EmployeeSkillScore.employee_id == emp_id))
+        assert rollup.score == 4.0
 
 
 def test_create_subscore_appends_and_rolls_up(admin_client, temp_app):
