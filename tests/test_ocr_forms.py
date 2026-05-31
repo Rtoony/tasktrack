@@ -99,6 +99,7 @@ def test_ocr_capture_page_exposes_parser(auth_client):
     assert "parseOcrForm" in html
     assert "paper-form" in html
     assert "Parsed Intake Form" in html
+    assert "personal_items:'personal_husband'" in html
 
 
 def test_dashboard_capture_accepts_paper_form_prefill(auth_client):

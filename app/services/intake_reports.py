@@ -45,7 +45,7 @@ INTAKE_REPORT_TABLES = {
         "due": "due_date",
         "project": "",
         "needs_review": "needs_review",
-        "tab": "followup",
+        "tab": "personal_husband",
     },
     "inbox_items": {
         "label": "Triage Inbox",

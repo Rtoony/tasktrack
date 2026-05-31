@@ -51,9 +51,9 @@
   .header { background:#161616; color:#fff; border-bottom:1px solid #393939; padding:0; position:sticky; top:0; z-index:100; box-shadow:var(--shadow-sm); }
   .header-inner { display:flex; align-items:center; justify-content:space-between; height:56px; min-width:0; }
   .header-left { display:flex; align-items:center; min-width:0; height:100%; }
-  .logo { display:flex; align-items:center; gap:0.45rem; height:100%; padding:0 1.1rem; border-right:1px solid #393939; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; letter-spacing:-0.02em; white-space:nowrap; }
+  .logo { display:flex; align-items:center; gap:0.45rem; height:100%; min-width:0; max-width:min(46vw, 34rem); overflow:hidden; padding:0 1.1rem; border-right:1px solid #393939; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; letter-spacing:-0.02em; white-space:nowrap; }
   .logo span { color:#78a9ff; }
-  .logo .context-badge { color:#a8a8a8; }
+  .logo .context-badge { min-width:0; overflow:hidden; text-overflow:ellipsis; color:#a8a8a8; }
   .user-bar { display:flex; align-items:center; gap:0.75rem; padding:0 1rem; min-width:0; }
   .user-name { font-size:0.8rem; color:#c6c6c6; white-space:nowrap; }
   .btn-logout,.btn-admin-link { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; }
@@ -553,7 +553,7 @@
     .logo { padding:0 0.85rem; }
     .user-bar { width:100%; justify-content:flex-start; padding:0.45rem 0.85rem; overflow-x:auto; border-top:1px solid #393939; }
     .app-shell { flex-direction:column; min-height:0; }
-    .side-nav { width:100%; flex-basis:auto; height:auto; max-height:none; position:sticky; top:0; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto; }
+    .side-nav { width:100%; flex-basis:auto; height:auto; max-height:none; position:static; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto; }
     .side-nav-list { flex-direction:row; align-items:center; padding:0; }
     .tab-btn,.side-link { width:auto; min-height:44px; border-left:none; border-bottom:3px solid transparent; padding:0 0.85rem; font-size:0.78rem; }
     .tab-btn.active { border-left-color:transparent; border-bottom-color:var(--accent); }
@@ -571,8 +571,9 @@
     .project-command { grid-template-columns:1fr; }
     .project-command-controls { justify-content:flex-start; }
     .tracker-summary { grid-template-columns:repeat(2, minmax(0,1fr)); }
-    .search-input { width:160px; }
-    .search-input:focus { width:220px; }
+    .search-input { width:160px; max-width:calc(100vw - 2rem); }
+    .search-input:focus { width:220px; max-width:calc(100vw - 2rem); }
+    .search-results { min-width:0; width:min(360px, calc(100vw - 1.7rem)); }
     .workspace-shell { grid-template-columns:1fr; }
     .workspace-counts { grid-template-columns:repeat(2, minmax(0,1fr)); }
     .workspace-overlay-grid { grid-template-columns:1fr; }
@@ -1816,11 +1817,13 @@ function updateShellContext(title) {
 function activateTab(tabName) {
   const btn = tabButtonFor(tabName);
   const section = document.getElementById('sec-' + tabName);
-  if (!btn || !section) return false;
+  if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+  if (btn) {
+    btn.classList.add('active');
+    updateShellContext(tabTitleForButton(btn));
+  }
   currentTab = tabName;
-  updateShellContext(tabTitleForButton(btn));
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   section.classList.add('active');
   if (currentTab === 'dashboard') loadDashboard();

@@ -48,6 +48,13 @@ API_BASE = f"https://api.telegram.org/bot{BOT_TOKEN}"
 POLL_TIMEOUT = 45
 REQUEST_TIMEOUT = 60
 SESSIONS: dict[int, dict] = {}
+STATUS_DEFAULTS = {
+    "work_tasks": "Not Started",
+    "project_work_tasks": "Not Started",
+    "training_tasks": "Not Started",
+    "personnel_issues": "Observed",
+    "personal_items": "New",
+}
 
 
 def tasktrack_call(method: str, path: str, json_body: dict | None = None) -> dict:
@@ -112,14 +119,13 @@ GUIDED_FLOWS = {
             {"key": "observed_by", "prompt": "Observed by? Send /skip to use your Telegram name.", "required": False},
         ],
     },
-    "suggestion_box": {
-        "label": "Suggestion Box",
+    "personal_items": {
+        "label": "General Follow-up",
         "fields": [
-            {"key": "title", "prompt": "Suggestion title?", "required": True},
-            {"key": "suggestion_type", "prompt": "Suggestion type? Examples: Training Idea, Template, Automation, Standards.", "required": False},
-            {"key": "summary", "prompt": "Suggestion summary?", "required": True},
-            {"key": "expected_value", "prompt": "Why would this help? Send /skip if you want to keep it brief.", "required": False},
-            {"key": "submitted_for", "prompt": "Who should review it? Examples: Management, CAD Team, Myself. Send /skip for Management.", "required": False},
+            {"key": "title", "prompt": "Follow-up title?", "required": True},
+            {"key": "body", "prompt": "What should be followed up on?", "required": True},
+            {"key": "priority", "prompt": "Priority? High, Medium, Low, or /skip for Medium.", "required": False},
+            {"key": "due_date", "prompt": "Due date? Use YYYY-MM-DD, `today`, `tomorrow`, or /skip.", "required": False, "parser": "date"},
         ],
     },
 }
@@ -127,7 +133,7 @@ GUIDED_FLOWS = {
 CATEGORY_BUTTONS = [
     [("Project Work", "cat:project_work_tasks"), ("CAD Development", "cat:work_tasks")],
     [("Training", "cat:training_tasks"), ("Capability Tracking", "cat:personnel_issues")],
-    [("Suggestion Box", "cat:suggestion_box")],
+    [("General Follow-up", "cat:personal_items")],
 ]
 
 
@@ -203,7 +209,7 @@ def main_menu_markup():
     return {
         "keyboard": [
             [{"text": "New Task"}, {"text": "Smart Capture"}],
-            [{"text": "Quick CAD"}, {"text": "Quick Suggestion"}],
+            [{"text": "Quick CAD"}, {"text": "Quick Follow-up"}],
             [{"text": "Help"}],
         ],
         "resize_keyboard": True,
@@ -222,7 +228,7 @@ Today's date: {today}
 
 Output ONLY a JSON object matching this schema (no prose, no code fences):
 {{
-  "category": one of ["work_tasks", "project_work_tasks", "training_tasks", "personnel_issues", "suggestion_box"],
+  "category": one of ["work_tasks", "project_work_tasks", "training_tasks", "personnel_issues", "personal_items"],
   "title": short title (under 60 chars),
   "description": fuller description (use the user's words),
   "due_date": "YYYY-MM-DD" or null,
@@ -236,7 +242,7 @@ Category cues:
 - project_work_tasks → has a project number ####.##  or names a project
 - training_tasks   → training / teach / show / how-to / onboarding
 - personnel_issues → someone's skill gap / mistake / capability concern
-- suggestion_box   → idea / proposal / "what if" / improvement
+- personal_items    → follow-up / idea / proposal / "what if" / internal reminder
 If unsure, pick the most plausible and lower confidence.
 
 User message:
@@ -347,8 +353,12 @@ def smart_payload_to_record(parsed: dict, actor_name: str) -> tuple[str, dict]:
         payload["training_goals"] = parsed.get("description") or parsed.get("title") or ""
         if parsed.get("due_date"):
             payload["due_date"] = parsed["due_date"]
-    elif cat == "suggestion_box":
-        payload["summary"] = parsed.get("description") or parsed.get("title") or ""
+    elif cat == "personal_items":
+        payload["body"] = parsed.get("description") or parsed.get("title") or ""
+        payload["category"] = "Follow-up"
+        payload["priority"] = "Medium"
+        if parsed.get("due_date"):
+            payload["due_date"] = parsed["due_date"]
         payload.pop("description", None)
     elif cat == "work_tasks":
         if parsed.get("due_date"):
@@ -411,18 +421,15 @@ def build_payload_for_quick_mode(table_name: str, text: str, actor_name: str):
             "created_by_user_id": None,
             "created_by_name": f"Telegram: {actor_name}",
         }
-    if table_name == "suggestion_box":
+    if table_name == "personal_items":
         return {
-            "title": summarize_title(text, "Quick suggestion"),
-            "suggestion_type": "Other",
-            "submitted_by": actor_name,
-            "submitted_for": "Management",
-            "summary": text.strip(),
-            "expected_value": "",
+            "title": summarize_title(text, "Quick follow-up"),
+            "category": "Follow-up",
+            "body": text.strip(),
             "priority": "Medium",
             "status": "New",
-            "review_notes": "Created from Telegram quick suggestion.",
-            "promoted_work_task_id": None,
+            "source": "telegram",
+            "source_ref": "quick-follow-up",
             "created_by_user_id": None,
             "created_by_name": f"Telegram: {actor_name}",
         }
@@ -480,16 +487,18 @@ def finalize_guided_flow(chat_id: int):
         data["requested_by"] = actor_name
     if table_name == "personnel_issues" and not data.get("observed_by"):
         data["observed_by"] = actor_name
-    if table_name == "suggestion_box":
-        data.setdefault("submitted_by", actor_name)
-        data.setdefault("submitted_for", "Management")
+    if table_name == "personal_items":
+        data.setdefault("category", "Follow-up")
+        data.setdefault("priority", "Medium")
+        data.setdefault("source", "telegram")
+        data.setdefault("source_ref", "guided-follow-up")
 
     if table_name in ("work_tasks", "project_work_tasks", "training_tasks"):
         data.setdefault("priority", "Medium")
     if table_name == "personnel_issues":
         data.setdefault("severity", "Medium")
     if "status" not in data or not data["status"]:
-        data["status"] = ALLOWED_TABLES[table_name]["status_flow"][0]
+        data["status"] = STATUS_DEFAULTS.get(table_name, "New")
     data["created_by_user_id"] = None
     data["created_by_name"] = f"Telegram: {actor_name}"
     note_lines = [f"Created from Telegram bot by {actor_name}."]
@@ -504,8 +513,8 @@ def finalize_guided_flow(chat_id: int):
         data["notes"] = ("\n".join([data["notes"]] + note_lines).strip()) if data["notes"] else note_lines[0]
     elif table_name == "personnel_issues":
         data.setdefault("resolution_notes", "")
-    elif table_name == "suggestion_box":
-        data.setdefault("review_notes", "Created from Telegram bot.")
+    elif table_name == "personal_items":
+        data["body"] = ("\n".join([data.get("body", "")] + note_lines).strip()) if data.get("body") else note_lines[0]
 
     record_id, error = create_record(table_name, data, actor_name, chat_id)
     if error:
@@ -550,7 +559,7 @@ def handle_guided_input(chat_id: int, user: dict, text: str):
 
 
 def begin_quick_mode(chat_id: int, table_name: str):
-    label = "CAD Development" if table_name == "work_tasks" else "Suggestion Box"
+    label = "CAD Development" if table_name == "work_tasks" else "General Follow-up"
     SESSIONS[chat_id] = {"mode": "quick", "table": table_name}
     send_message(
         chat_id,
@@ -569,7 +578,7 @@ def handle_quick_input(chat_id: int, user: dict, text: str):
     if error:
         send_message(chat_id, f"I couldn't save that quick capture: {error}", main_menu_markup())
     else:
-        label = "CAD Development" if session["table"] == "work_tasks" else "Suggestion Box"
+        label = "CAD Development" if session["table"] == "work_tasks" else "General Follow-up"
         send_message(chat_id, f"Saved quick entry to {label} as record #{record_id}.", main_menu_markup())
     SESSIONS.pop(chat_id, None)
     return True
@@ -610,7 +619,7 @@ def handle_text_message(message: dict):
     if text.lower() in ("/help", "help"):
         send_message(
             chat_id,
-            "Commands:\n/start or /menu\n/cancel\n\nButtons:\nNew Task: guided workflow entry\nQuick CAD: fast CAD capture\nQuick Suggestion: fast idea capture",
+            "Commands:\n/start or /menu\n/cancel\n\nButtons:\nNew Task: guided workflow entry\nQuick CAD: fast CAD capture\nQuick Follow-up: fast internal follow-up capture",
             main_menu_markup(),
         )
         return
@@ -620,8 +629,8 @@ def handle_text_message(message: dict):
     if text == "Quick CAD":
         begin_quick_mode(chat_id, "work_tasks")
         return
-    if text == "Quick Suggestion":
-        begin_quick_mode(chat_id, "suggestion_box")
+    if text == "Quick Follow-up":
+        begin_quick_mode(chat_id, "personal_items")
         return
     if text in ("Smart Capture", "/smart"):
         SESSIONS[chat_id] = {"mode": "smart_pending"}
@@ -640,7 +649,7 @@ def handle_text_message(message: dict):
     if handle_smart_input(chat_id, user, text):
         return
 
-    send_message(chat_id, "Use `New Task`, `Smart Capture`, `Quick CAD`, or `Quick Suggestion` to start.", main_menu_markup())
+    send_message(chat_id, "Use `New Task`, `Smart Capture`, `Quick CAD`, or `Quick Follow-up` to start.", main_menu_markup())
 
 
 def handle_smart_input(chat_id: int, user: dict, text: str) -> bool:
@@ -652,7 +661,7 @@ def handle_smart_input(chat_id: int, user: dict, text: str) -> bool:
     if not parsed:
         send_message(
             chat_id,
-            "I couldn't parse that. Try the menu buttons, or rephrase with a clearer category cue (CAD, project ####.##, training, suggestion).",
+            "I couldn't parse that. Try the menu buttons, or rephrase with a clearer category cue (CAD, project ####.##, training, follow-up).",
             main_menu_markup(),
         )
         SESSIONS.pop(chat_id, None)

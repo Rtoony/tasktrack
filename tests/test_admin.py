@@ -49,6 +49,25 @@ def test_admin_panel_serves_admin(admin_client):
 
 
 
+def test_admin_workflow_project_uses_standalone_shell(admin_client):
+    r = admin_client.get("/admin/workflow/project")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert 'class="app-shell app-shell-standalone"' in html
+    assert 'class="side-nav"' not in html
+    assert 'id="global-search"' not in html
+    assert 'id="health-pill"' not in html
+    assert 'Full Tracker' in html
+    assert 'const STANDALONE_TAB = "project";' in html
+    assert 'id="sec-project"' in html
+    assert 'if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;' in html
+
+
+def test_admin_workflow_redirects_regular_user(auth_client):
+    r = auth_client.get("/admin/workflow/project", follow_redirects=False)
+    assert r.status_code in (302, 403)
+
+
 
 def test_admin_api_endpoint_returns_401_for_anonymous(client):
     r = client.post("/api/v1/admin/approved-emails", json={"email": "x@y.com"})

@@ -207,7 +207,7 @@ async function createReviewItem() {
   applyParsedToForm(body.parsed);
   const created = body.created || {};
   setParseStatus(`Created ${created.table || 'item'} #${created.id || ''}.`, 'ok');
-  const tab = ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', personal_items:'followup'})[created.table] || 'triage';
+  const tab = ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', personal_items:'personal_husband'})[created.table] || 'triage';
   setTimeout(() => { window.location = '/?tab=' + encodeURIComponent(tab); }, 650);
 }
 

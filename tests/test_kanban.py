@@ -53,6 +53,8 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert 'data-tab="work" data-shell-title="CAD Development"' in html
     assert 'function updateShellContext(title)' in html
     assert 'updateShellContext(tabTitleForButton(btn));' in html
+    assert 'position:static; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto;' in html
+    assert 'width:min(360px, calc(100vw - 1.7rem));' in html
     assert '<span class="tab-divider-label">Work</span>' in html
     assert '<span class="tab-divider-label">Context</span>' in html
     assert '<span class="tab-divider-label">Flow</span>' in html

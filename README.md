@@ -12,7 +12,7 @@ The five trackers:
 - **Training** — coaching and training-related work items.
 - **Capability Tracking** — long-running observations of CAD skill
   gaps.
-- **Suggestion Box** — ideas that may become assigned work later.
+- **Internal Follow-up** — non-project follow-ups, meeting prep, office items, and operational asset reminders.
 
 ## Stack
 
