@@ -47,17 +47,21 @@
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:var(--bg); color:var(--text); line-height:1.5; min-height:100vh; }
 
-  /* ── Header ─────────────────────────────── */
-  .header { background:var(--surface); border-bottom:1px solid var(--border); padding:0 2rem; position:sticky; top:0; z-index:100; box-shadow:var(--shadow-sm); }
-  .header-inner { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:56px; }
-  .header-left { display:flex; align-items:center; gap:1.5rem; }
-  .logo { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; letter-spacing:-0.02em; }
-  .logo span { color:var(--accent); }
-  .logo .context-badge { color:var(--text-muted); }
-  .user-bar { display:flex; align-items:center; gap:0.75rem; }
-  .user-name { font-size:0.8rem; color:var(--text-muted); }
+  /* ── App shell / Header ─────────────────── */
+  .header { background:#161616; color:#fff; border-bottom:1px solid #393939; padding:0; position:sticky; top:0; z-index:100; box-shadow:var(--shadow-sm); }
+  .header-inner { display:flex; align-items:center; justify-content:space-between; height:56px; min-width:0; }
+  .header-left { display:flex; align-items:center; min-width:0; height:100%; }
+  .logo { display:flex; align-items:center; gap:0.45rem; height:100%; padding:0 1.1rem; border-right:1px solid #393939; font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:1rem; letter-spacing:-0.02em; white-space:nowrap; }
+  .logo span { color:#78a9ff; }
+  .logo .context-badge { color:#a8a8a8; }
+  .user-bar { display:flex; align-items:center; gap:0.75rem; padding:0 1rem; min-width:0; }
+  .user-name { font-size:0.8rem; color:#c6c6c6; white-space:nowrap; }
   .btn-logout,.btn-admin-link { background:none; border:1px solid var(--border); padding:0.25rem 0.6rem; font-family:inherit; font-size:0.72rem; font-weight:500; color:var(--text-muted); border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; }
   .btn-logout:hover,.btn-admin-link:hover { background:var(--bg); color:var(--text); }
+  .header .btn-logout,.header .btn-admin-link { border-color:#525252; color:#c6c6c6; white-space:nowrap; }
+  .header .btn-logout:hover,.header .btn-admin-link:hover { background:#262626; color:#fff; }
+  .app-shell { display:flex; align-items:stretch; min-height:calc(100vh - 56px); }
+  .app-shell-standalone { display:block; }
   /* Phase-4 Kanban toggle + lanes — opt-in alternative view for the
      Project Tasks tab. Renders client-side from tableCache.project,
      so no extra round trips. */
@@ -141,29 +145,28 @@
   .search-item-label { font-weight:500; }
   .search-item-meta { font-size:0.72rem; color:var(--text-muted); margin-top:2px; }
 
-  /* ── Tabs ────────────────────────────────── */
-  .tabs { display:flex; gap:0; }
-  .tab-btn { background:none; border:none; padding:0 1rem; height:56px; font-family:inherit; font-size:0.82rem; font-weight:500; color:var(--text-muted); cursor:pointer; position:relative; transition:color 0.15s; white-space:nowrap; }
-  .tab-btn:hover { color:var(--text); }
-  .tab-btn.active { color:var(--accent); }
-  .tab-btn.active::after { content:''; position:absolute; bottom:0; left:0.75rem; right:0.75rem; height:2px; background:var(--accent); border-radius:2px 2px 0 0; }
-  .tab-count { background:var(--bg); color:var(--text-muted); font-size:0.65rem; font-weight:600; padding:1px 5px; border-radius:10px; margin-left:4px; }
-  .tab-btn.active .tab-count { background:var(--accent-light); color:var(--accent); }
+  /* ── Left rail navigation ────────────────── */
+  .side-nav { width:256px; flex:0 0 256px; background:var(--surface); border-right:1px solid var(--border); position:sticky; top:56px; height:calc(100vh - 56px); overflow-y:auto; z-index:60; }
+  .side-nav-list { display:flex; flex-direction:column; gap:0; padding:0.6rem 0; }
+  .tab-btn { width:100%; min-height:36px; background:none; border:none; border-left:3px solid transparent; padding:0.48rem 1rem; display:flex; align-items:center; gap:0.35rem; justify-content:flex-start; font-family:inherit; font-size:0.84rem; font-weight:500; color:var(--text-muted); cursor:pointer; position:relative; transition:background 0.15s,color 0.15s,border-color 0.15s; white-space:nowrap; text-align:left; }
+  .tab-btn:hover { background:var(--bg); color:var(--text); }
+  .tab-btn.active { border-left-color:var(--accent); background:var(--accent-light); color:var(--text); }
+  .tab-count { margin-left:auto; background:var(--bg); color:var(--text-muted); font-size:0.65rem; font-weight:600; padding:1px 5px; border-radius:10px; }
+  .tab-btn.active .tab-count { background:var(--surface); color:var(--accent); }
+  .tab-divider { display:block; padding:1rem 1rem 0.35rem; }
+  .tab-divider::before { display:none; }
+  .tab-divider-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.08em; }
+  .side-nav-footer { border-top:1px solid var(--border); padding:0.9rem 1rem 1rem; color:var(--text-light); font-family:'IBM Plex Mono',monospace; font-size:0.68rem; }
 
   /* ── Container ───────────────────────────── */
-  .container { max-width:1400px; margin:0 auto; padding:1.25rem 2rem 3rem; }
+  .container { flex:1 1 auto; min-width:0; max-width:none; margin:0; padding:1.25rem 2rem 3rem; }
+  .app-shell-standalone .container { max-width:1400px; margin:0 auto; }
   .section { display:none; }
   .section.active { display:block; }
 
   /* Triage has more columns than any other tab; let it use the extra room
      on wide monitors without affecting the other tabs' layout. */
-  body:has(#sec-triage.active) .container,
-  body:has(#sec-triage.active) .header-inner { max-width:1700px; }
-
-  /* ── Tab dividers (Work / Internal section labels in the tab bar) ── */
-  .tab-divider { display:inline-flex; align-items:center; padding:0 0.5rem 0 0.65rem; height:56px; position:relative; }
-  .tab-divider::before { content:''; position:absolute; left:0; top:18px; bottom:18px; width:1px; background:var(--border); }
-  .tab-divider-label { font-size:0.62rem; font-weight:700; color:var(--text-light); text-transform:uppercase; letter-spacing:0.08em; padding-left:0.4rem; }
+  body:has(#sec-triage.active) .container { max-width:none; }
 
   /* ── Dashboard ───────────────────────────── */
   .dash-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem; }
@@ -543,12 +546,18 @@
 
   /* ── Responsive ──────────────────────────── */
   @media (max-width:900px) {
-    .header { padding:0 1rem; }
-    .header-inner { flex-wrap:wrap; height:auto; padding:0.4rem 0; gap:0.25rem; }
-    .header-left { width:100%; justify-content:space-between; }
-    .tabs { width:100%; overflow-x:auto; }
+    .header-inner { min-height:56px; height:auto; flex-wrap:wrap; gap:0; }
+    .header-left { min-height:56px; }
+    .logo { padding:0 0.85rem; }
+    .user-bar { width:100%; justify-content:flex-start; padding:0.45rem 0.85rem; overflow-x:auto; border-top:1px solid #393939; }
+    .app-shell { flex-direction:column; min-height:0; }
+    .side-nav { width:100%; flex-basis:auto; height:auto; max-height:none; position:sticky; top:0; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto; }
+    .side-nav-list { flex-direction:row; align-items:center; padding:0; }
+    .tab-btn { width:auto; min-height:44px; border-left:none; border-bottom:3px solid transparent; padding:0 0.85rem; font-size:0.78rem; }
+    .tab-btn.active { border-left-color:transparent; border-bottom-color:var(--accent); }
+    .tab-divider { display:none; }
+    .side-nav-footer { display:none; }
     .container { padding:1rem; }
-    .tab-btn { padding:0 0.6rem; font-size:0.78rem; }
     .field-row { flex-direction:column; gap:0; }
     td,th { padding:0.45rem 0.55rem; font-size:0.78rem; }
     .dash-cols { grid-template-columns:1fr; }
@@ -574,27 +583,6 @@
   <div class="header-inner">
     <div class="header-left">
       <div class="logo"><span>//</span> {{ brand_name }}{% if standalone_title %}<span class="context-badge">{{ standalone_title }}</span>{% endif %}</div>
-      {% if not standalone_tab %}
-      <nav class="tabs">
-        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
-        <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
-        <button class="tab-btn" data-tab="map">Map</button>
-        {% if user_role == 'admin' %}
-        <button class="tab-btn" data-tab="competency">Competency</button>
-        {% endif %}
-        <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
-        <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
-        <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
-        <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
-        <button class="tab-btn" data-tab="personnel">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
-        <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Internal</span></span>
-        <button class="tab-btn" data-tab="calendar">Calendar <span class="tab-count" id="count-calendar">0</span></button>
-        <button class="tab-btn" data-tab="personal_husband">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
-        <button class="tab-btn" data-tab="personal_father">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
-        <button class="tab-btn" data-tab="personal_house">Office <span class="tab-count" id="count-personal_house">0</span></button>
-        <button class="tab-btn" data-tab="personal_cars">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
-      </nav>
-      {% endif %}
     </div>
     <div class="user-bar">
       {% if not standalone_tab %}
@@ -624,7 +612,34 @@
   </div>
 </header>
 
-<main class="container">
+<div class="app-shell{% if standalone_tab %} app-shell-standalone{% endif %}">
+  {% if not standalone_tab %}
+  <aside class="side-nav" aria-label="TaskTrack navigation">
+    <nav class="tabs side-nav-list">
+      <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Work</span></span>
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="triage">Triage <span class="tab-count" id="count-triage">0</span></button>
+      <button class="tab-btn" data-tab="project">Project Tasks <span class="tab-count" id="count-project">0</span></button>
+      <button class="tab-btn" data-tab="work">CAD Dev <span class="tab-count" id="count-work">0</span></button>
+      <button class="tab-btn" data-tab="training">Training <span class="tab-count" id="count-training">0</span></button>
+      <button class="tab-btn" data-tab="personnel">Capabilities <span class="tab-count" id="count-personnel">0</span></button>
+      <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Context</span></span>
+      <button class="tab-btn" data-tab="map">Project Map</button>
+      <button class="tab-btn" data-tab="calendar">Calendar <span class="tab-count" id="count-calendar">0</span></button>
+      {% if user_role == 'admin' %}
+      <button class="tab-btn" data-tab="competency">Competency</button>
+      {% endif %}
+      <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Flow</span></span>
+      <button class="tab-btn" data-tab="personal_husband">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
+      <button class="tab-btn" data-tab="personal_father">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
+      <button class="tab-btn" data-tab="personal_house">Office <span class="tab-count" id="count-personal_house">0</span></button>
+      <button class="tab-btn" data-tab="personal_cars">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
+    </nav>
+    <div class="side-nav-footer">TaskTrack / ops console</div>
+  </aside>
+  {% endif %}
+
+  <main class="container">
   {% if standalone_tab and standalone_subtitle %}
   <section class="section active" style="display:block;margin-bottom:1rem">
     <div class="dash-card" style="overflow:visible">
@@ -1470,7 +1485,8 @@
       </div>
     </div>
   </section>
-</main>
+  </main>
+</div>
 
 <!-- ── CRUD Modal ────────────────────────────── -->
 <div class="modal-overlay record-overlay" id="modal-overlay">

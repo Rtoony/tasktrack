@@ -42,6 +42,21 @@ def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):
     assert "CAPTURE_PREFILL_KEY" in html
 
 
+def test_dashboard_uses_left_rail_shell(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8")
+    assert 'class="app-shell' in html
+    assert 'class="side-nav"' in html
+    assert 'class="tabs side-nav-list"' in html
+    assert '<span class="tab-divider-label">Work</span>' in html
+    assert '<span class="tab-divider-label">Context</span>' in html
+    assert '<span class="tab-divider-label">Flow</span>' in html
+    side_nav_at = html.index('class="side-nav"')
+    assert side_nav_at < html.index('<main class="container">')
+    assert html.find('data-tab="dashboard"', side_nav_at) > side_nav_at
+
+
 def test_project_endpoint_still_returns_200(auth_client):
     """Kanban reuses GET /api/v1/project_work_tasks — no new endpoint."""
     # Pre-seed one task so we exercise the rendered branch.
