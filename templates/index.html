@@ -1877,6 +1877,95 @@ async function api(method, path, body) {
   return res.json();
 }
 
+let shellHistoryInitialized = false;
+let shellHistoryApplying = false;
+
+function shellUrlForState(tabName, extra={}) {
+  const url = new URL(window.location.href);
+  const tab = tabName || currentTab || 'dashboard';
+  url.hash = '';
+  url.searchParams.delete('workspace');
+  url.searchParams.delete('map_project');
+  if (tab && tab !== 'dashboard') url.searchParams.set('tab', tab);
+  else url.searchParams.delete('tab');
+  if (extra.workspace) url.searchParams.set('workspace', String(extra.workspace));
+  if (extra.mapProject) url.searchParams.set('map_project', String(extra.mapProject));
+  return url;
+}
+
+function shellHistoryState(tabName, extra={}) {
+  return {
+    tasktrackShell: true,
+    tab: tabName || currentTab || 'dashboard',
+    workspace: extra.workspace || '',
+    mapProject: extra.mapProject || '',
+    guard: Boolean(extra.guard),
+  };
+}
+
+function pushShellHistory(tabName, extra={}) {
+  if (STANDALONE_TAB || !shellHistoryInitialized || shellHistoryApplying) return;
+  try {
+    history.pushState(shellHistoryState(tabName, extra), '', shellUrlForState(tabName, extra));
+  } catch {}
+}
+
+function replaceShellHistoryState(extra={}) {
+  if (STANDALONE_TAB || shellHistoryApplying) return;
+  try {
+    const tab = extra.tab || currentTab || 'dashboard';
+    history.replaceState(shellHistoryState(tab, extra), '', shellUrlForState(tab, extra));
+  } catch {}
+}
+
+async function applyShellHistoryState(state) {
+  if (!state || !state.tasktrackShell) return false;
+  shellHistoryApplying = true;
+  try {
+    const tab = state.tab || 'dashboard';
+    activateTab(tab, { history: false });
+    if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
+    if (state.workspace) await openProjectWorkspaceByNumber(state.workspace);
+    else if (document.getElementById('workspace-overlay')?.classList.contains('open')) closeProjectWorkspace();
+    if (state.guard) {
+      toast('Back is held inside TaskTrack. Use Sign out or a link to leave.');
+      history.pushState(shellHistoryState(currentTab), '', shellUrlForState(currentTab));
+    }
+  } finally {
+    shellHistoryApplying = false;
+  }
+  return true;
+}
+
+function handleShellPopState(event) {
+  if (STANDALONE_TAB) return;
+  if (event.state && event.state.tasktrackShell) {
+    applyShellHistoryState(event.state);
+    return;
+  }
+  toast('Back is held inside TaskTrack. Use Sign out or a link to leave.');
+  try { history.pushState(shellHistoryState(currentTab), '', shellUrlForState(currentTab)); } catch {}
+}
+
+function initShellHistory() {
+  if (STANDALONE_TAB || shellHistoryInitialized) return;
+  const state = startupRouteState();
+  const initialTab = state.tab || currentTab || 'dashboard';
+  try {
+    history.replaceState(shellHistoryState(initialTab, {
+      workspace: state.workspace,
+      mapProject: state.mapProject,
+      guard: true,
+    }), '', window.location.href);
+    history.pushState(shellHistoryState(initialTab, {
+      workspace: state.workspace,
+      mapProject: state.mapProject,
+    }), '', window.location.href);
+    window.addEventListener('popstate', handleShellPopState);
+    shellHistoryInitialized = true;
+  } catch {}
+}
+
 function feedbackContextPayload() {
   const activeSection = document.querySelector('.section.active')?.id?.replace(/^sec-/, '') || currentTab || '';
   const activeTitle = document.getElementById('shell-context')?.textContent || '';
@@ -1983,7 +2072,7 @@ function updateShellContext(title) {
   if (!STANDALONE_TAB) document.title = title + ' - ' + SHELL_BRAND;
 }
 
-function activateTab(tabName) {
+function activateTab(tabName, options={}) {
   const btn = tabButtonFor(tabName);
   const section = document.getElementById('sec-' + tabName);
   if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;
@@ -1999,6 +2088,7 @@ function activateTab(tabName) {
   if (currentTab === 'map') initOrRefreshMap();
   if (currentTab === 'competency') loadCompetency();
   if (API_MAP[currentTab]) loadTable(currentTab);
+  if (options.history !== false) pushShellHistory(currentTab);
   return true;
 }
 
@@ -2490,11 +2580,7 @@ async function reloadMapHulls() {
 function updateMapDeepLink(projectNumber) {
   const pn = String(projectNumber || '').trim();
   if (!pn) return;
-  const url = new URL(window.location.href);
-  url.searchParams.set('map_project', pn);
-  url.searchParams.delete('workspace');
-  url.hash = '';
-  history.replaceState(null, '', url);
+  replaceShellHistoryState({ tab: 'map', mapProject: pn });
 }
 
 function focusProjectOnMap(projectId, projectNumber) {
@@ -4067,11 +4153,7 @@ async function openProjectWorkspaceSmart(projectId, projectNumber) {
 function updateWorkspaceDeepLink(projectNumber) {
   const pn = String(projectNumber || '').trim();
   if (!pn) return;
-  const url = new URL(window.location.href);
-  url.searchParams.set('workspace', pn);
-  url.searchParams.delete('map_project');
-  url.hash = '';
-  history.replaceState(null, '', url);
+  replaceShellHistoryState({ tab: currentTab || 'dashboard', workspace: pn });
 }
 
 async function openProjectWorkspace(path) {
@@ -5940,7 +6022,7 @@ function applyCapturePresetRoute(state) {
 async function applyStartupRouteState() {
   const state = startupRouteState();
   if (STANDALONE_TAB) return;
-  if (state.tab && state.tab !== 'dashboard') activateTab(state.tab);
+  if (state.tab && state.tab !== 'dashboard') activateTab(state.tab, { history: false });
   consumeCapturePrefill();
   applyCapturePresetRoute(state);
   if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
@@ -5960,7 +6042,7 @@ if (STANDALONE_TAB) {
   loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
   loadTable('calendar');
   loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
-  applyStartupRouteState();
+  applyStartupRouteState().finally(initShellHistory);
 }
 </script>
 </body>
