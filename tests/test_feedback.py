@@ -48,6 +48,22 @@ def test_feedback_page_renders_management_contract(auth_client):
     assert "Codex context loop" in html
 
 
+def test_app_context_endpoint_requires_auth(client):
+    assert client.get("/api/v1/app-context").status_code in (302, 401)
+
+
+def test_app_context_endpoint_returns_build_context(auth_client):
+    res = auth_client.get("/api/v1/app-context")
+    assert res.status_code == 200
+    body = res.get_json()
+    assert body["app"] == "tasktrack"
+    assert body["brand"]
+    assert "server_time" in body
+    assert "request_id" in body
+    assert set(body["git"]) >= {"commit", "short_commit", "branch", "dirty"}
+    assert body["runtime"]["db_name"]
+
+
 def test_shell_includes_feedback_widget_and_left_nav(auth_client):
     res = auth_client.get("/")
     assert res.status_code == 200
@@ -56,6 +72,11 @@ def test_shell_includes_feedback_widget_and_left_nav(auth_client):
     assert "feedback_items" in html
     assert 'href="/feedback"' in html
     assert "Captured context" in html
+    assert "feedback_context_version: 2" in html
+    assert "recent_telemetry" in html
+    assert "collectFeedbackUiState" in html
+    assert "loadFeedbackAppContext" in html
+    assert "/api/v1/app-context" in html
 
 
 def test_feedback_api_create_and_update(auth_client, temp_app):

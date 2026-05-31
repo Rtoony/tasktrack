@@ -1866,6 +1866,118 @@ function isActiveCountRow(r) {
 }
 
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const FEEDBACK_TELEMETRY_LIMIT = 60;
+let feedbackTelemetry = [];
+let feedbackAppContext = null;
+let feedbackLastClick = null;
+
+function truncateFeedbackValue(value, max=500) {
+  const text = String(value ?? '');
+  return text.length > max ? text.slice(0, max) + '...' : text;
+}
+
+function elementSummary(el) {
+  if (!el || !el.tagName) return null;
+  const classes = String(el.className || '').split(/\s+/).filter(Boolean).slice(0, 8);
+  const dataset = {};
+  try {
+    Object.keys(el.dataset || {}).slice(0, 12).forEach(k => { dataset[k] = truncateFeedbackValue(el.dataset[k], 180); });
+  } catch {}
+  const label = el.getAttribute?.('aria-label') || el.getAttribute?.('title') || el.getAttribute?.('placeholder') || '';
+  const text = ['INPUT','TEXTAREA','SELECT'].includes(el.tagName) ? '' : truncateFeedbackValue((el.innerText || el.textContent || '').trim().replace(/\s+/g, ' '), 220);
+  return {
+    tag: el.tagName.toLowerCase(),
+    id: el.id || '',
+    classes,
+    role: el.getAttribute?.('role') || '',
+    label: truncateFeedbackValue(label, 180),
+    text,
+    href: el.getAttribute?.('href') || '',
+    dataset,
+  };
+}
+
+function nearestFeedbackContext(el) {
+  const card = el?.closest?.('.dash-card,.core-panel,.core-stat-tile,.core-tracker-card,.card,.table-record-row,.workspace-card,.modal,.side-nav,.section');
+  return elementSummary(card);
+}
+
+function recordFeedbackTelemetry(kind, payload={}) {
+  feedbackTelemetry.push({
+    kind,
+    at: new Date().toISOString(),
+    payload,
+  });
+  if (feedbackTelemetry.length > FEEDBACK_TELEMETRY_LIMIT) {
+    feedbackTelemetry = feedbackTelemetry.slice(-FEEDBACK_TELEMETRY_LIMIT);
+  }
+}
+
+function recentFeedbackTelemetry() {
+  return feedbackTelemetry.slice(-30);
+}
+
+function initFeedbackTelemetry() {
+  window.addEventListener('error', e => recordFeedbackTelemetry('js_error', {
+    message: truncateFeedbackValue(e.message, 500),
+    source: e.filename || '',
+    line: e.lineno || 0,
+    column: e.colno || 0,
+  }));
+  window.addEventListener('unhandledrejection', e => recordFeedbackTelemetry('promise_rejection', {
+    reason: truncateFeedbackValue(e.reason?.message || e.reason || 'Unhandled rejection', 500),
+  }));
+  document.addEventListener('click', e => {
+    feedbackLastClick = {
+      at: new Date().toISOString(),
+      target: elementSummary(e.target),
+      nearest_context: nearestFeedbackContext(e.target),
+      pointer: { x: Math.round(e.clientX || 0), y: Math.round(e.clientY || 0) },
+    };
+  }, true);
+  const originalFetch = window.fetch.bind(window);
+  window.fetch = async function(input, init={}) {
+    const started = performance.now();
+    const rawUrl = typeof input === 'string' ? input : (input && input.url) || '';
+    const method = (init && init.method) || (input && input.method) || 'GET';
+    let normalizedPath = rawUrl;
+    try { normalizedPath = new URL(rawUrl, window.location.href).pathname; } catch {}
+    try {
+      const res = await originalFetch(input, init);
+      const duration_ms = Math.round(performance.now() - started);
+      if (String(normalizedPath).startsWith('/api/') || !res.ok) {
+        recordFeedbackTelemetry('fetch', {
+          method: String(method).toUpperCase(),
+          path: truncateFeedbackValue(normalizedPath, 260),
+          status: res.status,
+          ok: res.ok,
+          duration_ms,
+        });
+      }
+      return res;
+    } catch (err) {
+      recordFeedbackTelemetry('fetch_error', {
+        method: String(method).toUpperCase(),
+        path: truncateFeedbackValue(normalizedPath, 260),
+        message: truncateFeedbackValue(err?.message || err, 500),
+      });
+      throw err;
+    }
+  };
+}
+
+async function loadFeedbackAppContext() {
+  if (feedbackAppContext) return feedbackAppContext;
+  try {
+    const res = await fetch('/api/v1/app-context', { headers: { 'Accept':'application/json', 'X-CSRF-Token': CSRF_TOKEN } });
+    if (res.ok) feedbackAppContext = await res.json();
+    else recordFeedbackTelemetry('app_context_error', { status: res.status });
+  } catch (err) {
+    recordFeedbackTelemetry('app_context_error', { message: truncateFeedbackValue(err?.message || err, 500) });
+  }
+  return feedbackAppContext;
+}
+
 async function api(method, path, body) {
   const opts = {
     method,
@@ -1966,10 +2078,83 @@ function initShellHistory() {
   } catch {}
 }
 
+function collectFeedbackFilters() {
+  const out = {};
+  document.querySelectorAll('[id^="filter-"], .filter-select, #global-search, #project-command-number, #map-project-number-filter').forEach(el => {
+    if (!el.id) return;
+    if (['INPUT','SELECT'].includes(el.tagName)) out[el.id] = truncateFeedbackValue(el.value || '', 220);
+  });
+  return out;
+}
+
+function collectFeedbackLocalStorage() {
+  const out = {};
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('tasktrack-')) continue;
+      out[key] = truncateFeedbackValue(localStorage.getItem(key), 260);
+    }
+  } catch {}
+  return out;
+}
+
+function collectFeedbackVisibleCounts() {
+  return {
+    sections: document.querySelectorAll('.section').length,
+    active_rows: document.querySelectorAll('.section.active tbody tr').length,
+    visible_modals: Array.from(document.querySelectorAll('.modal-overlay.open')).map(el => el.id || 'modal'),
+    active_cards: document.querySelectorAll('.section.active .dash-card,.section.active .core-panel,.section.active .table-wrap').length,
+  };
+}
+
+function collectFeedbackUiState() {
+  const activeSection = document.querySelector('.section.active');
+  const workspace = (typeof workspaceState !== 'undefined' && workspaceState) ? {
+    project_number: workspaceState.project?.project_number || '',
+    project_id: workspaceState.project?.id || '',
+  } : null;
+  const mapFocus = (typeof mapProjectFocus !== 'undefined' && mapProjectFocus) ? mapProjectFocus : null;
+  return {
+    current_tab: currentTab,
+    active_section_id: activeSection?.id || '',
+    active_section_heading: truncateFeedbackValue(activeSection?.querySelector('h1,h2,.section-title,.dash-card-header')?.textContent?.trim() || '', 220),
+    filters: collectFeedbackFilters(),
+    sort_state: sortState[currentTab] || null,
+    table_cache_counts: Object.fromEntries(Object.entries(tableCache || {}).map(([k, v]) => [k, Array.isArray(v) ? v.length : 0])),
+    workspace,
+    map_focus: mapFocus,
+    visible: collectFeedbackVisibleCounts(),
+  };
+}
+
+function collectFeedbackBrowserState() {
+  return {
+    language: navigator.language || '',
+    languages: Array.from(navigator.languages || []).slice(0, 5),
+    platform: navigator.platform || '',
+    online: navigator.onLine,
+    cookie_enabled: navigator.cookieEnabled,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    device_pixel_ratio: window.devicePixelRatio || 1,
+    screen: {
+      width: window.screen?.width || 0,
+      height: window.screen?.height || 0,
+      avail_width: window.screen?.availWidth || 0,
+      avail_height: window.screen?.availHeight || 0,
+    },
+    performance: {
+      navigation_type: performance.getEntriesByType?.('navigation')?.[0]?.type || '',
+      elapsed_ms: Math.round(performance.now()),
+    },
+  };
+}
+
 function feedbackContextPayload() {
   const activeSection = document.querySelector('.section.active')?.id?.replace(/^sec-/, '') || currentTab || '';
   const activeTitle = document.getElementById('shell-context')?.textContent || '';
   return {
+    feedback_context_version: 2,
     source: 'tasktrack-shell',
     captured_at: new Date().toISOString(),
     url: window.location.href,
@@ -1979,11 +2164,29 @@ function feedbackContextPayload() {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     scroll: { x: Math.round(window.scrollX || 0), y: Math.round(window.scrollY || 0) },
     user_agent: navigator.userAgent,
+    app_context: feedbackAppContext || {},
+    route_state: {
+      history_state: history.state || null,
+      referrer: document.referrer || '',
+      title: document.title || '',
+    },
+    browser: collectFeedbackBrowserState(),
+    ui_state: collectFeedbackUiState(),
+    active_element: elementSummary(document.activeElement),
+    last_click: feedbackLastClick,
+    local_storage: collectFeedbackLocalStorage(),
+    recent_telemetry: recentFeedbackTelemetry(),
   };
 }
 
 function openFeedbackModal(componentLabel='') {
   const context = feedbackContextPayload();
+  loadFeedbackAppContext().then(() => {
+    const preview = document.getElementById('feedback-context-preview');
+    if (preview && document.getElementById('feedback-overlay')?.classList.contains('open')) {
+      preview.textContent = JSON.stringify(feedbackContextPayload(), null, 2);
+    }
+  });
   document.getElementById('feedback-title').value = '';
   document.getElementById('feedback-body').value = '';
   document.getElementById('feedback-type').value = 'Bug';
@@ -2020,6 +2223,7 @@ async function submitFeedback() {
     document.getElementById('feedback-status').textContent = 'Title is required.';
     return;
   }
+  await loadFeedbackAppContext();
   const context = feedbackContextPayload();
   const component = document.getElementById('feedback-component').value.trim();
   const payload = {
@@ -6030,8 +6234,10 @@ async function applyStartupRouteState() {
 }
 
 /* ── Init ──────────────────────────────────── */
+initFeedbackTelemetry();
 initIntake();
 initFeedbackWidget();
+loadFeedbackAppContext();
 initProjectCommand();
 initProjectTaskFilters();
 if (STANDALONE_TAB) {
