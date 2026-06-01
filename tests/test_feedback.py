@@ -46,6 +46,8 @@ def test_feedback_page_renders_management_contract(auth_client):
     assert "/api/v1/feedback_items" in html
     assert "/api/v1/attachments/feedback_items/" in html
     assert "Codex context loop" in html
+    assert "Paste, drop, or choose screenshots/PDFs" in html
+    assert "multiple" in html
 
 
 def test_app_context_endpoint_requires_auth(client):
