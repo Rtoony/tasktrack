@@ -15,6 +15,7 @@ from flask import Blueprint, g, jsonify, request
 from sqlalchemy import select
 
 from ..auth import admin_required, login_required
+from ..config import COMPETENCY_LEVELS
 from ..db import get_session
 from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User, to_dict
 from ..services.competency import (
@@ -166,19 +167,19 @@ def skill_matrix():
     detail = request.args.get("detail") in ("1", "true", "yes")
     scores_by_emp: dict[str, dict[str, float | dict]] = {}
     score_rows = sess.scalars(select(EmployeeSkillScore)).all()
+    pair_keys = {(s.employee_id, s.category_id) for s in score_rows}
+    if detail:
+        pair_keys.update(sess.execute(
+            select(EmployeeSkillSubscore.employee_id, EmployeeSkillSubscore.category_id).distinct()
+        ).all())
     for s in score_rows:
         if not detail:
             scores_by_emp.setdefault(str(s.employee_id), {})[str(s.category_id)] = s.score
-            continue
-        cell = detail_for_cell(sess, s.employee_id, s.category_id) or {
-            "score": s.score,
-            "confidence": s.confidence,
-            "confidence_band": confidence_band(s.confidence),
-            "sample_size": s.sample_size,
-            "last_observed_at": s.last_observed_at.isoformat(sep=" ") if s.last_observed_at else "",
-            "dimensions": [],
-        }
-        scores_by_emp.setdefault(str(s.employee_id), {})[str(s.category_id)] = cell
+    if detail:
+        for employee_id, category_id in pair_keys:
+            cell = detail_for_cell(sess, int(employee_id), int(category_id))
+            if cell is not None:
+                scores_by_emp.setdefault(str(employee_id), {})[str(category_id)] = cell
 
     payload = {
         "employees": employees,
@@ -190,6 +191,7 @@ def skill_matrix():
             str(c["id"]): [d.__dict__ for d in dimensions_for_category(sess.get(SkillCategory, c["id"]))]
             for c in categories
         }
+        payload["levels"] = COMPETENCY_LEVELS
     return jsonify(payload)
 
 
@@ -275,6 +277,62 @@ def bulk_upsert_scores_route():
 
     sess.commit()
     return jsonify({"updated": len(updated), "scores": updated})
+
+
+@bp.route("/api/v1/skills/task-ratings/bulk", methods=["POST"])
+@admin_required
+def bulk_upsert_task_ratings_route():
+    data = request.get_json(silent=True) or {}
+    try:
+        employee_id = int(data.get("employee_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "employee_id (int) required",
+                        "request_id": _rid()}), 400
+    ratings = data.get("ratings") or []
+    if not isinstance(ratings, list) or not ratings:
+        return jsonify({"error": "ratings array is required",
+                        "request_id": _rid()}), 400
+    source_kind = (data.get("source_kind") or "preliminary_rating").strip()
+    notes_default = (data.get("notes") or "").strip()
+
+    sess = get_session()
+    if sess.get(Employee, employee_id) is None:
+        return jsonify({"error": "employee not found",
+                        "request_id": _rid()}), 404
+
+    updated = []
+    try:
+        for item in ratings:
+            category_id = int(item.get("category_id"))
+            category = sess.get(SkillCategory, category_id)
+            if category is None:
+                return jsonify({"error": f"category {category_id} not found",
+                                "request_id": _rid()}), 404
+            dimension_slug = (item.get("dimension_slug") or "").strip()
+            valid_dimensions = {d.slug for d in dimensions_for_category(category)}
+            if dimension_slug not in valid_dimensions:
+                return jsonify({"error": f"dimension {dimension_slug or '(blank)'} not found for category {category_id}",
+                                "request_id": _rid()}), 400
+            evidence, cached = add_subscore(
+                sess,
+                employee_id=employee_id,
+                category_id=category_id,
+                dimension_slug=dimension_slug,
+                raw_score=item.get("score"),
+                weight=item.get("weight"),
+                observed_at=item.get("observed_at"),
+                source_kind=source_kind,
+                notes=(item.get("notes") or notes_default).strip(),
+            )
+            updated.append({"subscore": to_dict(evidence), "rollup": to_dict(cached)})
+    except (TypeError, ValueError):
+        return jsonify({"error": "each rating needs category_id, dimension_slug, and score",
+                        "request_id": _rid()}), 400
+    except CompetencyError as e:
+        return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
+
+    sess.commit()
+    return jsonify({"updated": len(updated), "ratings": updated})
 
 
 @bp.route("/api/v1/skills/scores/<int:employee_id>", methods=["GET"])

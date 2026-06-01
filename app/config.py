@@ -369,62 +369,138 @@ ADMIN_WORKFLOW_VIEWS = {
 }
 
 
-# ── Competency (Phase 1) ───────────────────────────────────────────────────
+# ── CAD/GIS Competency v2 ─────────────────────────────────────────────────
 #
-# These match eng-ops's rubric (`reset_brce_demo_data.py` SKILL_CATEGORIES)
-# so a person's score can mean roughly the same thing across both tools.
+# Task-level rubric for the supervision-anchored 0/1/2/3 competency system.
 # The seed runs the first time `/api/v1/skills/categories` is hit if the
 # table is empty; admins can add / disable categories afterward without
 # re-seeding.
 
+CAD_COMPETENCY_CATALOG = [
+    {
+        "slug": "computer-windows-literacy",
+        "name": "Computer & Windows Literacy",
+        "description": "Basic computer, Windows, Office, PDF, file, and troubleshooting fluency.",
+        "display_order": 10,
+        "tasks": [
+            ("file-folder-network-drive-management", "File, folder & network-drive management", "C", "Navigates project/network paths unaided; never loses files."),
+            ("file-naming-version-discipline", "File naming & version discipline", "C", "Follows convention unprompted; clean revisions."),
+            ("email-calendar-office-basics", "Email, calendar & Office basics", "C", "Outlook fluent; Word/Excel edits + simple formulas solo."),
+            ("pdf-tools-bluebeam-acrobat", "PDF tools (Bluebeam / Acrobat)", "C", "Create / combine / split / markup / compare solo."),
+            ("os-fluency", "OS fluency", "C", "Shortcuts, multi-monitor, cross-app copy/paste, screenshots."),
+            ("basic-troubleshooting-it-escalation", "Basic troubleshooting & IT escalation", "C", "Fixes drives/printers; knows what to fix vs. call IT."),
+        ],
+    },
+    {
+        "slug": "autocad-core",
+        "name": "AutoCAD Core",
+        "description": "Core AutoCAD production skill, references, plotting, cleanup, and sheet setup.",
+        "display_order": 20,
+        "tasks": [
+            ("command-line-interface-fluency", "Command-line & interface fluency", "C", "Commands/aliases from memory; rarely hunts the ribbon."),
+            ("precision-drafting", "Precision drafting", "C", "Osnaps, coordinate entry, units correct every time."),
+            ("layer-management", "Layer management", "C", "Create/set/freeze/isolate; uses layer states."),
+            ("core-draw-modify-commands", "Core draw & modify commands", "C", "Full modify suite fast and correct."),
+            ("blocks-dynamic-blocks", "Blocks & dynamic blocks", "C", "Insert/create/edit + attributes; builds dynamic params."),
+            ("annotation-text-dims-hatch-fields", "Annotation (text, dims, hatch, fields)", "C", "Styled, associative, clean; uses fields."),
+            ("xref-management", "Xref management", "C", "Attach/path/clip/bind without breaking references."),
+            ("layouts-viewports-annotation-scaling", "Layouts, viewports & annotation scaling", "C", "Viewport scales & annotative objects correct."),
+            ("plotting-pdf-output", "Plotting & PDF output", "C", "Page setups + CTB/STB; consistent output."),
+            ("sheet-set-manager", "Sheet Set Manager", "E", "Builds/maintains sheet sets with fields."),
+            ("drawing-cleanup-repair", "Drawing cleanup & repair", "C", "purge/audit/recover/overkill to healthy files."),
+        ],
+    },
+    {
+        "slug": "cad-standards-drawing-discipline",
+        "name": "CAD Standards & Drawing Discipline",
+        "description": "Firm standards, templates, title blocks, naming, styles, and drawing organization.",
+        "display_order": 30,
+        "tasks": [
+            ("company-layer-standard-compliance", "Company layer standard compliance", "C", "Matches the standard without being told."),
+            ("template-title-block-usage", "Template & title-block usage", "C", "Right template; fills it correctly."),
+            ("text-dim-linetype-style-compliance", "Text / dim / linetype style compliance", "C", "Company styles, not ad-hoc overrides."),
+            ("file-naming-drawing-organization", "File naming & drawing organization", "C", "Folder structure & names match firm convention."),
+        ],
+    },
+    {
+        "slug": "civil-3d",
+        "name": "Civil 3D",
+        "description": "Civil 3D points, surfaces, alignments, profiles, grading, networks, DREFs, and styles.",
+        "display_order": 40,
+        "tasks": [
+            ("points-point-groups-survey-import", "Points, point groups & survey import", "C", "Imports & manages point-group display solo."),
+            ("surfaces", "Surfaces", "C", "Build/edit, style, analyze, troubleshoot."),
+            ("alignments", "Alignments", "C", "Create/edit, criteria, labels."),
+            ("profiles-profile-views", "Profiles & profile views", "C", "Surface + layout profiles, views, bands."),
+            ("corridors", "Corridors", "E", "Build, edit regions/targets/frequency; rebuilds clean."),
+            ("assemblies-subassemblies", "Assemblies & subassemblies", "E", "Assemble/edit params; point/link/shape codes."),
+            ("grading-feature-lines-grading-groups", "Grading (feature lines, grading groups)", "C", "Feature-line edits, criteria, daylighting."),
+            ("pipe-networks-gravity", "Pipe networks (gravity)", "E", "Layout, edit structures, interference checks."),
+            ("pressure-networks", "Pressure networks", "E", "Models pressure networks where applicable."),
+            ("parcels", "Parcels", "E", "Create/edit parcels & labels."),
+            ("sample-lines-sections", "Sample lines & sections", "E", "Sample-line groups, section views, sheets."),
+            ("data-shortcuts-references", "Data shortcuts / references", "C", "Create/reference/repair paths; no broken DREFs."),
+            ("object-label-styles", "Object & label styles", "C", "Manages styles; keeps template clean; no hand overrides."),
+        ],
+    },
+    {
+        "slug": "plan-production-deliverables",
+        "name": "Plan Production & Deliverables",
+        "description": "Plan sheets, details, callouts, legends, revisions, final PDFs, and deliverable consistency.",
+        "display_order": 50,
+        "tasks": [
+            ("plan-profile-sheet-production", "Plan & profile sheet production", "C", "Clean, complete plan/profile sheets."),
+            ("grading-utility-plan-sheets", "Grading / utility plan sheets", "C", "Readable, labeled, standard-compliant."),
+            ("details-detail-management", "Details & detail management", "C", "Place/edit; keeps detail library tidy."),
+            ("sheet-consistency-match-lines-callouts", "Sheet consistency, match lines, callouts", "C", "Sheets agree; lines & callouts align."),
+            ("legends-scales-north-arrows-revisions-final-pdf", "Legends, scales, north arrows, revisions, final PDF", "C", "Submission-ready, consistent, correct scale."),
+        ],
+    },
+    {
+        "slug": "gis-other-software",
+        "name": "GIS & Other Software",
+        "description": "GIS, coordinate systems, projections, geospatial import/export, and specialty tools.",
+        "display_order": 60,
+        "tasks": [
+            ("coordinate-systems-projections", "Coordinate systems & projections", "E", "State plane / EPSG / datums — set & convert."),
+            ("arcgis-qgis-basics", "ArcGIS / QGIS basics", "E", "Load layers, basic edits/queries, simple maps."),
+            ("geospatial-import-export-georeferencing", "Geospatial import/export & georeferencing", "E", "Move data CAD <-> GIS; georeference imagery/scans."),
+            ("autocad-map-specialty-tools", "AutoCAD Map / specialty tools", "E", "Firm-specific tools as applicable."),
+        ],
+    },
+]
+
 SKILL_CATEGORY_DEFAULTS = [
-    {"slug": "project-setup",       "name": "Project Setup",
-     "description": "Kickoff, scope, baseline, drawing tree.", "display_order": 10},
-    {"slug": "cad-standards",       "name": "CAD Standards",
-     "description": "Layer + symbol + titleblock + revision discipline.", "display_order": 20},
-    {"slug": "civil-design",        "name": "Civil Design",
-     "description": "Roadway, site, grading, drainage, utility design.", "display_order": 30},
-    {"slug": "survey-coordination", "name": "Survey Coordination",
-     "description": "Survey data ingest, base sheet preparation, control.", "display_order": 40},
-    {"slug": "qa-qc-review",        "name": "QA / QC Review",
-     "description": "Cross-check, redline turnaround, deliverable QC.", "display_order": 50},
-    {"slug": "sheet-production",    "name": "Sheet Production",
-     "description": "Plotting, sheet sets, automation, output discipline.", "display_order": 60},
-    {"slug": "permitting",          "name": "Permitting & Environmental",
-     "description": "Permits, environmental, regulatory submittals.", "display_order": 70},
-    {"slug": "construction-support","name": "Construction Support",
-     "description": "RFI, submittal review, construction admin.", "display_order": 80},
-    {"slug": "client-communication","name": "Client Communication",
-     "description": "Meetings, expectation setting, deliverable narration.", "display_order": 90},
-    {"slug": "software-proficiency","name": "Software Proficiency",
-     "description": "Civil 3D, AutoCAD, Bluebeam, ArcGIS, project tooling.", "display_order": 100},
+    {
+        "slug": group["slug"],
+        "name": group["name"],
+        "description": group["description"],
+        "display_order": group["display_order"],
+    }
+    for group in CAD_COMPETENCY_CATALOG
 ]
 
 
-# Dimension templates for the 1-5 competency rollup. Confidence handles
-# evidence volume/recency separately, so these dimensions stay focused on
-# capability quality rather than frequency. Category-specific entries can
-# override weights; missing categories use "default".
+# Dimension templates for the CAD/GIS 0-3 task-level competency rollup.
+# Dimensions are now concrete tasks. C = core, E = extended/N/A-friendly.
 SKILL_DIMENSION_DEFAULTS = {
-    "default": [
-        {"slug": "accuracy", "name": "Accuracy", "weight": 1.3},
-        {"slug": "autonomy", "name": "Autonomy", "weight": 1.0},
-        {"slug": "complexity", "name": "Complexity", "weight": 1.1},
-        {"slug": "standards", "name": "Standards Follow-through", "weight": 0.9},
-    ],
-    "civil-design": [
-        {"slug": "accuracy", "name": "Accuracy", "weight": 1.5},
-        {"slug": "autonomy", "name": "Autonomy", "weight": 1.0},
-        {"slug": "complexity", "name": "Complexity", "weight": 1.2},
-        {"slug": "standards", "name": "Standards Follow-through", "weight": 0.8},
-    ],
-    "cad-standards": [
-        {"slug": "accuracy", "name": "Accuracy", "weight": 1.2},
-        {"slug": "autonomy", "name": "Autonomy", "weight": 0.9},
-        {"slug": "complexity", "name": "Complexity", "weight": 0.8},
-        {"slug": "standards", "name": "Standards Follow-through", "weight": 1.5},
-    ],
+    group["slug"]: [
+        {"slug": slug, "name": name, "weight": 1.0, "tier": tier, "anchor": anchor}
+        for slug, name, tier, anchor in group["tasks"]
+    ]
+    for group in CAD_COMPETENCY_CATALOG
 }
+SKILL_DIMENSION_DEFAULTS["default"] = [
+    {"slug": "observed-readiness", "name": "Observed readiness", "weight": 1.0, "tier": "C", "anchor": "Observed supervision level for this task."},
+]
+
+COMPETENCY_LEVELS = [
+    {"score": 0, "label": "Can't yet", "decision": "Training target"},
+    {"score": 1, "label": "Supervised", "decision": "Assign, but review output"},
+    {"score": 2, "label": "Independent", "decision": "Assign freely"},
+    {"score": 3, "label": "Go-to / teaches", "decision": "Assign + can train others"},
+]
+
 
 
 # ── Cross-tracker bridges (Phase 3) ────────────────────────────────────────

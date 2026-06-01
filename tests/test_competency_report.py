@@ -26,21 +26,21 @@ def _seed_competency_report(admin_client, temp_app):
         "employee_id": ids["emp1"],
         "source_kind": "preliminary_rating",
         "ratings": [
-            {"category_id": ids["cat1"], "score": 2.5, "notes": "needs training"},
-            {"category_id": ids["cat2"], "score": 4.0, "notes": "solid"},
+            {"category_id": ids["cat1"], "score": 1, "notes": "needs training"},
+            {"category_id": ids["cat2"], "score": 3, "notes": "solid"},
         ],
     })
     admin_client.post("/api/v1/skills/scores", json={
         "employee_id": ids["emp1"],
         "category_id": ids["cat2"],
-        "score": 4.0,
+        "score": 3,
         "source_kind": "official_baseline",
         "notes": "approved",
     })
     admin_client.post("/api/v1/skills/scores", json={
         "employee_id": ids["emp3"],
         "category_id": ids["cat1"],
-        "score": 5.0,
+        "score": 3,
         "source_kind": "preliminary_rating",
     })
     return ids
@@ -61,7 +61,7 @@ def test_competency_report_json_html_csv(admin_client, temp_app):
     rated = next(row for row in body["employees"] if row["display_name"] == "Report Rated")
     assert rated["preliminary_count"] == 2
     assert rated["baseline_count"] == 1
-    assert rated["low_scores"][0]["score"] == 2.5
+    assert rated["low_scores"][0]["score"] == 1.0
 
     html = admin_client.get("/reports/competency")
     assert html.status_code == 200

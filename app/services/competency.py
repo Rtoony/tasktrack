@@ -1,4 +1,4 @@
-"""Competency service — evidence rows + cached 1-5 rollups.
+"""Competency service — evidence rows + cached 0-3 task rollups.
 
 The public matrix still reads employee_skill_scores, but that row is now a
 cached rollup. Append-only employee_skill_subscores carry the evidence,
@@ -14,13 +14,26 @@ from flask import session as flask_session
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..config import SKILL_CATEGORY_DEFAULTS, SKILL_DIMENSION_DEFAULTS
+from ..config import COMPETENCY_LEVELS, SKILL_CATEGORY_DEFAULTS, SKILL_DIMENSION_DEFAULTS
 from ..models import EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
 from .audit import log_activity
 
-SCORE_MIN = 1.0
-SCORE_MAX = 5.0
+SCORE_MIN = 0.0
+SCORE_MAX = 3.0
 ROLLUP_VERSION = 2
+OBSERVED_ROLLUP_SOURCES = {
+    "manual",
+    "manual_override",
+    "observation",
+    "preliminary_rating",
+    "official_baseline",
+}
+RATING_MARKER_SOURCES = (
+    "preliminary_rating",
+    "official_baseline",
+    "manual_override",
+    "self_assessment",
+)
 
 
 class CompetencyError(Exception):
@@ -36,6 +49,8 @@ class Dimension:
     slug: str
     name: str
     weight: float
+    tier: str = "C"
+    anchor: str = ""
 
 
 def _utcnow() -> datetime:
@@ -54,19 +69,21 @@ def _parse_dt(value) -> datetime | None:
         return None
 
 
-def _round_half(value: float) -> float:
-    return round(value * 2.0) / 2.0
+def _round_score(value: float) -> float:
+    return round(float(value), 1)
 
 
 def _clamp_score(raw) -> float:
-    """Coerce a request payload value to a clamped 1-5 float."""
+    """Coerce a request payload value to a valid 0/1/2/3 competency level."""
     try:
         v = float(raw)
     except (TypeError, ValueError) as e:
         raise CompetencyError("score must be a number") from e
     if v < SCORE_MIN or v > SCORE_MAX:
-        raise CompetencyError(f"score must be between {SCORE_MIN} and {SCORE_MAX}")
-    return v
+        raise CompetencyError("score must be 0, 1, 2, or 3")
+    if v != int(v):
+        raise CompetencyError("score must be 0, 1, 2, or 3")
+    return float(int(v))
 
 
 def _clamp_weight(raw) -> float:
@@ -105,6 +122,8 @@ def dimensions_for_category(category: SkillCategory | None) -> list[Dimension]:
             slug=str(d["slug"]),
             name=str(d.get("name") or d["slug"]),
             weight=_clamp_weight(d.get("weight", 1.0)),
+            tier=str(d.get("tier") or "C"),
+            anchor=str(d.get("anchor") or ""),
         )
         for d in raw_dims
     ]
@@ -140,7 +159,9 @@ def _dimension_summary(rows: list[EmployeeSkillSubscore], dimension: Dimension, 
         "slug": dimension.slug,
         "name": dimension.name,
         "weight": dimension.weight,
-        "score": _round_half(score) if score is not None else None,
+        "tier": dimension.tier,
+        "anchor": dimension.anchor,
+        "score": _round_score(score) if score is not None else None,
         "raw_score": score,
         "n": len(dim_rows),
         "last_observed_at": latest.isoformat(sep=" ") if latest else "",
@@ -163,7 +184,8 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
     if not rows:
         return None
 
-    dim_summaries = [_dimension_summary(rows, dim, now=now) for dim in dims]
+    observed_rows = [r for r in rows if (r.source_kind or "manual") in OBSERVED_ROLLUP_SOURCES]
+    dim_summaries = [_dimension_summary(observed_rows, dim, now=now) for dim in dims]
     scored_dims = [
         (float(d["raw_score"]), float(d["weight"]))
         for d in dim_summaries
@@ -171,7 +193,10 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
     ]
     category_score = _weighted_mean(scored_dims)
 
-    manual_rows = [r for r in rows if r.dimension_slug == "manual" or r.source_kind == "manual_override"]
+    manual_rows = [
+        r for r in observed_rows
+        if r.dimension_slug == "manual" or r.source_kind in ("manual_override", "preliminary_rating", "official_baseline")
+    ]
     manual_latest = None
     if manual_rows:
         manual_latest = max(manual_rows, key=lambda r: (_parse_dt(r.observed_at) or now, r.id or 0))
@@ -181,7 +206,7 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
     if category_score is None:
         return None
 
-    observed_dates = [_parse_dt(r.observed_at) or now for r in rows]
+    observed_dates = [_parse_dt(r.observed_at) or now for r in observed_rows]
     most_recent = max(observed_dates)
     year_ago = now - timedelta(days=365)
     recent_n = len([d for d in observed_dates if d >= year_ago])
@@ -193,7 +218,7 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
         confidence = max(confidence, 0.3)
 
     return {
-        "score": max(SCORE_MIN, min(SCORE_MAX, _round_half(category_score))),
+        "score": max(SCORE_MIN, min(SCORE_MAX, _round_score(category_score))),
         "confidence": round(confidence, 4),
         "confidence_band": confidence_band(confidence),
         "sample_size": recent_n,
@@ -235,7 +260,7 @@ def rating_markers_for_cell(sess: Session, employee_id: int, category_id: int) -
         .where(
             EmployeeSkillSubscore.employee_id == employee_id,
             EmployeeSkillSubscore.category_id == category_id,
-            EmployeeSkillSubscore.source_kind.in_(("preliminary_rating", "official_baseline", "manual_override")),
+            EmployeeSkillSubscore.source_kind.in_(RATING_MARKER_SOURCES),
         )
         .order_by(EmployeeSkillSubscore.observed_at.desc(), EmployeeSkillSubscore.id.desc())
     ).all()
@@ -247,11 +272,43 @@ def rating_markers_for_cell(sess: Session, employee_id: int, category_id: int) -
     latest_preliminary = next((r for r in rows if r.source_kind == "preliminary_rating"), None)
     latest_baseline = next((r for r in rows if r.source_kind == "official_baseline"), None)
     latest_manual = next((r for r in rows if r.source_kind == "manual_override"), None)
+    latest_self = next((r for r in rows if r.source_kind == "self_assessment"), None)
     return {
         "latest_preliminary": _rating_payload(latest_preliminary, user_names),
         "latest_baseline": _rating_payload(latest_baseline, user_names),
         "latest_manual": _rating_payload(latest_manual, user_names),
+        "latest_self": _rating_payload(latest_self, user_names),
     }
+
+
+def task_rating_markers_for_cell(sess: Session, employee_id: int, category_id: int) -> dict[str, dict]:
+    """Latest prelim/baseline/self marker per task dimension."""
+    rows = sess.scalars(
+        select(EmployeeSkillSubscore)
+        .where(
+            EmployeeSkillSubscore.employee_id == employee_id,
+            EmployeeSkillSubscore.category_id == category_id,
+            EmployeeSkillSubscore.source_kind.in_(RATING_MARKER_SOURCES),
+        )
+        .order_by(EmployeeSkillSubscore.observed_at.desc(), EmployeeSkillSubscore.id.desc())
+    ).all()
+    user_ids = {r.created_by_user_id for r in rows if r.created_by_user_id}
+    user_names = {}
+    if user_ids:
+        user_names = dict(sess.execute(select(User.id, User.display_name).where(User.id.in_(user_ids))).all())
+    payload: dict[str, dict] = {}
+    for row in rows:
+        dim = row.dimension_slug or "manual"
+        bucket = payload.setdefault(dim, {})
+        if row.source_kind == "preliminary_rating" and "latest_preliminary" not in bucket:
+            bucket["latest_preliminary"] = _rating_payload(row, user_names)
+        elif row.source_kind == "official_baseline" and "latest_baseline" not in bucket:
+            bucket["latest_baseline"] = _rating_payload(row, user_names)
+        elif row.source_kind == "manual_override" and "latest_manual" not in bucket:
+            bucket["latest_manual"] = _rating_payload(row, user_names)
+        elif row.source_kind == "self_assessment" and "latest_self" not in bucket:
+            bucket["latest_self"] = _rating_payload(row, user_names)
+    return payload
 
 
 def write_cached_rollup(sess: Session, employee_id: int, category_id: int) -> EmployeeSkillScore | None:
@@ -360,17 +417,21 @@ def upsert_score(sess: Session, employee_id: int, category_id: int, raw_score, n
 def detail_for_cell(sess: Session, employee_id: int, category_id: int) -> dict | None:
     row = _score_row(sess, employee_id, category_id)
     rollup = aggregate_category(sess, employee_id, category_id)
-    if row is None and rollup is None:
-        return None
     markers = rating_markers_for_cell(sess, employee_id, category_id)
+    task_markers = task_rating_markers_for_cell(sess, employee_id, category_id)
+    if row is None and rollup is None and not task_markers:
+        return None
     if rollup is None:
+        category = sess.get(SkillCategory, category_id)
         payload = {
-            "score": row.score,
-            "confidence": row.confidence,
-            "confidence_band": confidence_band(row.confidence),
-            "sample_size": row.sample_size,
-            "last_observed_at": row.last_observed_at.isoformat(sep=" ") if row.last_observed_at else "",
-            "dimensions": [],
+            "score": row.score if row is not None else None,
+            "confidence": row.confidence if row is not None else 0,
+            "confidence_band": confidence_band(row.confidence if row is not None else 0),
+            "sample_size": row.sample_size if row is not None else 0,
+            "last_observed_at": row.last_observed_at.isoformat(sep=" ") if row is not None and row.last_observed_at else "",
+            "dimensions": [d.__dict__ | {"score": None, "n": 0, "last_observed_at": ""} for d in dimensions_for_category(category)],
+            "task_markers": task_markers,
+            "levels": COMPETENCY_LEVELS,
         }
         payload.update(markers)
         return payload
@@ -381,6 +442,8 @@ def detail_for_cell(sess: Session, employee_id: int, category_id: int) -> dict |
         "sample_size": rollup["sample_size"],
         "last_observed_at": rollup["last_observed_at"].isoformat(sep=" ") if rollup["last_observed_at"] else "",
         "dimensions": rollup["dimensions"],
+        "task_markers": task_markers,
+        "levels": COMPETENCY_LEVELS,
     }
     payload.update(markers)
     return payload

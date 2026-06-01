@@ -9,9 +9,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
-from .competency import confidence_band
+from .competency import confidence_band, dimensions_for_category
 
-LOW_SCORE_THRESHOLD = 3.0
+LOW_SCORE_THRESHOLD = 2.0
 CSV_FIELDS = [
     "employee",
     "title",
@@ -243,6 +243,8 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             "preliminary_count": 0,
             "baseline_count": 0,
             "low_score_count": 0,
+            "independent_count": 0,
+            "teach_count": 0,
             "average_score": None,
             "_score_sum": 0.0,
         }
@@ -259,6 +261,10 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
                 if float(cell["score"]) < LOW_SCORE_THRESHOLD:
                     low_score_cells += 1
                     summary["low_score_count"] += 1
+                if float(cell["score"]) >= 2.0:
+                    summary["independent_count"] += 1
+                if float(cell["score"]) >= 3.0:
+                    summary["teach_count"] += 1
             if cell["preliminary"] is not None:
                 preliminary_cells += 1
                 summary["preliminary_count"] += 1
@@ -291,7 +297,13 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             "low_score_cells": low_score_cells,
         },
         "categories": [
-            {"id": c.id, "slug": c.slug, "name": c.name, "description": c.description or ""}
+            {
+                "id": c.id,
+                "slug": c.slug,
+                "name": c.name,
+                "description": c.description or "",
+                "tasks": [d.__dict__ for d in dimensions_for_category(c)],
+            }
             for c in categories
         ],
         "category_summary": list(category_summary.values()),

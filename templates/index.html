@@ -1203,7 +1203,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Competency</h2>
-        <div class="section-subtitle">Per-employee competency rollups on a 1–5 scale. Click a cell to review evidence, confidence, and add observations. Management views should use the rounded score only; this power view shows confidence and sample size.</div>
+        <div class="section-subtitle">CAD/GIS competency coverage on a 0-3 supervision scale. N/A means the task is not in that person's role; 0 is a real training target, 2 is independent, and 3 is go-to/teaches.</div>
       </div>
       <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
@@ -1228,6 +1228,7 @@
         <div class="empty-title">No employees yet</div>
         <p class="empty-copy">Add people on <a href="/admin/people" style="color:var(--accent)">/admin/people</a> first.</p>
       </div>
+      <div id="comp-summary" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-scorecard" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-detail" class="workspace-card" style="display:none;margin-bottom:0.75rem;"></div>
       <div id="comp-wrap" style="display:none; overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius);">
@@ -2426,19 +2427,28 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
 
-/* ── Competency matrix (dual-layer 1-5 rollup) ─────────────────────
-   /api/v1/skills/matrix?detail=1 returns cached 1-5 score cells plus
-   confidence/sample metadata and dimension rollups for the power view. */
-let compState = { employees: [], categories: [], scores: {}, dimensions: {} };
+/* ── Competency matrix (CAD/GIS 0-3 task coverage) ────────────────
+   /api/v1/skills/matrix?detail=1 returns categories, task dimensions,
+   cached category rollups, and latest task markers. The visible matrix is
+   intentionally coverage-first: task rows by employee columns. */
+let compState = { employees: [], categories: [], scores: {}, dimensions: {}, levels: [] };
 let compSelected = null;
 let compScorecardEmpId = null;
 
 function scoreBandColor(s) {
   if (s == null || isNaN(s)) return '';
-  if (s >= 4) return '#defbe6';
   if (s >= 3) return '#d0e2ff';
-  if (s >= 2) return '#fcf4d6';
+  if (s >= 2) return '#defbe6';
+  if (s >= 1) return '#fcf4d6';
   return '#fff1f1';
+}
+function scoreLabel(s) {
+  const n = Number(s);
+  if (n === 0) return '0';
+  if (n === 1) return '1';
+  if (n === 2) return '2';
+  if (n === 3) return '3';
+  return 'N/A';
 }
 function confidenceLabel(band) {
   const b = String(band || 'low').toLowerCase();
@@ -2454,8 +2464,25 @@ function compCellValue(cell) {
 function compCellDetail(empId, catId) {
   const cell = compState.scores[String(empId)]?.[String(catId)];
   if (cell && typeof cell === 'object') return cell;
-  if (cell != null) return { score: cell, confidence: 0, confidence_band: 'low', sample_size: 0, dimensions: [] };
+  if (cell != null) return { score: cell, confidence: 0, confidence_band: 'low', sample_size: 0, dimensions: [], task_markers: {} };
   return null;
+}
+function compDimensions(catId) {
+  return compState.dimensions?.[String(catId)] || [];
+}
+function compTaskRows() {
+  const rows = [];
+  (compState.categories || []).forEach(cat => {
+    compDimensions(cat.id).forEach(dim => rows.push({ category: cat, dimension: dim }));
+  });
+  return rows;
+}
+function compTaskScore(empId, catId, dimSlug) {
+  const detail = compCellDetail(empId, catId);
+  if (!detail) return { score: null, marker: null, categoryDetail: null };
+  const dim = (detail.dimensions || []).find(d => d.slug === dimSlug);
+  const marker = detail.task_markers?.[dimSlug] || {};
+  return { score: dim?.score ?? null, marker, categoryDetail: detail };
 }
 function visibleCompetencyEmployees() {
   const nameFilter = (document.getElementById('comp-filter')?.value || '').trim().toLowerCase();
@@ -2469,20 +2496,26 @@ function compRatingShortLabel(kind) {
   if (kind === 'official_baseline') return 'baseline';
   if (kind === 'preliminary_rating') return 'prelim';
   if (kind === 'manual_override') return 'manual';
+  if (kind === 'self_assessment') return 'self';
   return (kind || 'rating').replace(/_/g, ' ');
 }
 function compHumanRating(detail) {
   if (!detail || typeof detail !== 'object') return null;
   return detail.latest_baseline || detail.latest_preliminary || detail.latest_manual || null;
 }
+function scorecardMarkerSummary(marker) {
+  if (!marker) return '—';
+  const who = marker.created_by_name ? ' · ' + marker.created_by_name : '';
+  const notes = marker.notes ? ' · ' + marker.notes : '';
+  return scoreLabel(marker.score) + who + notes;
+}
 function compRatingCard(marker, title) {
   if (!marker) return '';
   const who = marker.created_by_name || 'Unknown';
-  const score = marker.score == null ? '—' : Number(marker.score).toFixed(1);
   const notes = marker.notes ? '<div style="margin-top:0.25rem;color:var(--text-muted)">' + esc(marker.notes) + '</div>' : '';
   return '<div style="border:1px solid var(--border);border-radius:12px;padding:0.55rem;background:var(--surface-muted)">' +
     '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em">' + esc(title) + '</div>' +
-    '<div style="font-weight:700;margin-top:0.2rem">' + esc(who) + ': ' + score + '</div>' +
+    '<div style="font-weight:700;margin-top:0.2rem">' + esc(who) + ': ' + scoreLabel(marker.score) + '</div>' +
     '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc(marker.observed_at || '') + '</div>' +
     notes +
   '</div>';
@@ -2492,18 +2525,52 @@ async function loadCompetency() {
   const loading = document.getElementById('comp-loading');
   const empty = document.getElementById('comp-empty');
   const wrap = document.getElementById('comp-wrap');
+  const summary = document.getElementById('comp-summary');
   loading.style.display = 'block'; empty.style.display = 'none'; wrap.style.display = 'none';
+  if (summary) summary.style.display = 'none';
   const includeExcluded = document.getElementById('comp-include-untracked')?.checked ? '&include_untracked_emp=1' : '';
   const data = await api('GET', '/api/v1/skills/matrix?detail=1' + includeExcluded);
-  if (!data) return;  // 401 already redirected
+  if (!data) return;
   compState = data;
   loading.style.display = 'none';
   if (!compState.employees.length) { empty.style.display = 'block'; return; }
   wrap.style.display = 'block';
   renderScorecardSelect();
+  renderCompetencySummary();
   renderMatrix();
   renderEmployeeScorecard();
   renderCompetencyDetail();
+}
+
+function renderCompetencySummary() {
+  const host = document.getElementById('comp-summary');
+  if (!host) return;
+  const emps = visibleCompetencyEmployees();
+  const tasks = compTaskRows();
+  let rated = 0, independent = 0, teach = 0, training = 0;
+  tasks.forEach(task => {
+    emps.forEach(emp => {
+      const score = compTaskScore(emp.id, task.category.id, task.dimension.slug).score;
+      if (score == null) return;
+      rated += 1;
+      if (score >= 2) independent += 1;
+      if (score >= 3) teach += 1;
+      if (score < 2) training += 1;
+    });
+  });
+  const total = emps.length * tasks.length;
+  const pct = total ? Math.round((independent / total) * 100) : 0;
+  host.style.display = 'grid';
+  host.style.gridTemplateColumns = 'repeat(auto-fit,minmax(150px,1fr))';
+  host.style.gap = '0.55rem';
+  host.innerHTML = [
+    ['Visible people', emps.length],
+    ['CAD/GIS tasks', tasks.length],
+    ['Rated cells', rated + ' / ' + total],
+    ['Independent+ coverage', pct + '%'],
+    ['Training targets', training],
+    ['Go-to / teaches', teach],
+  ].map(([label, value]) => '<div style="border:1px solid var(--border);border-radius:12px;padding:0.65rem;background:var(--surface)"><div style="font-size:0.67rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">' + esc(label) + '</div><div style="font-size:1.25rem;font-weight:750;margin-top:0.2rem">' + esc(String(value)) + '</div></div>').join('');
 }
 
 function renderMatrix() {
@@ -2513,63 +2580,71 @@ function renderMatrix() {
   tbody.replaceChildren();
 
   const visibleEmps = visibleCompetencyEmployees();
+  const tasks = compTaskRows();
+  renderCompetencySummary();
 
   const trh = document.createElement('tr');
   const th0 = document.createElement('th');
-  th0.style.cssText = 'text-align:left; padding:0.5rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); min-width:200px; z-index:2;';
-  th0.textContent = 'Employee';
+  th0.style.cssText = 'text-align:left; padding:0.5rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); min-width:300px; z-index:3;';
+  th0.textContent = 'Task';
   trh.appendChild(th0);
-  compState.categories.forEach(c => {
+  visibleEmps.forEach(emp => {
     const th = document.createElement('th');
-    th.style.cssText = 'text-align:center; padding:0.5rem 0.4rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--text-muted); min-width:92px;';
-    th.title = c.description || '';
-    th.textContent = c.name;
+    th.style.cssText = 'text-align:center; padding:0.5rem 0.35rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--text-muted); min-width:74px; max-width:84px; cursor:pointer;';
+    th.title = 'Open scorecard for ' + emp.display_name;
+    th.innerHTML = '<div style="writing-mode:vertical-rl;transform:rotate(180deg);margin:auto;max-height:130px;white-space:nowrap">' + esc(emp.display_name) + '</div>';
+    th.addEventListener('click', () => openEmployeeScorecard(emp.id));
     trh.appendChild(th);
   });
-  const thAvg = document.createElement('th');
-  thAvg.style.cssText = 'text-align:center; padding:0.5rem 0.5rem; border-bottom:1px solid var(--border); font-weight:500; color:var(--accent); min-width:70px;';
-  thAvg.textContent = 'Avg';
-  trh.appendChild(thAvg);
+  ['Indep+', 'Teach'].forEach(label => {
+    const th = document.createElement('th');
+    th.style.cssText = 'text-align:center; padding:0.5rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); min-width:70px; position:sticky; right:' + (label === 'Teach' ? '0' : '70px') + '; background:var(--surface); z-index:2;';
+    th.textContent = label;
+    trh.appendChild(th);
+  });
   thead.appendChild(trh);
 
-  visibleEmps.forEach(emp => {
+  let lastCat = '';
+  tasks.forEach(task => {
     const tr = document.createElement('tr');
-    tr.dataset.empId = emp.id;
-    const tdName = document.createElement('td');
-    tdName.style.cssText = 'padding:0.45rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); white-space:nowrap; z-index:1; cursor:pointer;';
-    const strong = document.createElement('div'); strong.style.fontWeight = '500'; strong.textContent = emp.display_name;
-    const sub = document.createElement('div'); sub.style.cssText = 'font-size:0.7rem;color:var(--text-muted)'; sub.textContent = (emp.title || '') + (emp.role ? ' · ' + emp.role : '') + (emp.competency_tracked ? '' : ' · excluded from ratings');
-    tdName.title = 'Open employee scorecard';
-    tdName.addEventListener('click', () => openEmployeeScorecard(emp.id));
-    tdName.appendChild(strong); tdName.appendChild(sub); tr.appendChild(tdName);
+    const tdTask = document.createElement('td');
+    tdTask.style.cssText = 'padding:0.48rem 0.6rem; position:sticky; left:0; background:var(--surface); border-bottom:1px solid var(--border); z-index:2;';
+    const showCat = lastCat !== task.category.slug;
+    lastCat = task.category.slug;
+    tdTask.innerHTML = (showCat ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.15rem">' + esc(task.category.name) + '</div>' : '') +
+      '<div style="font-weight:650">' + esc(task.dimension.name || task.dimension.slug) + ' <span style="font-size:0.65rem;color:var(--text-muted)">' + esc(task.dimension.tier || 'C') + '</span></div>' +
+      '<div style="font-size:0.68rem;color:var(--text-muted);max-width:420px">' + esc(task.dimension.anchor || '') + '</div>';
+    tr.appendChild(tdTask);
 
-    let sum = 0, count = 0;
-    compState.categories.forEach(cat => {
+    let indep = 0, teach = 0;
+    visibleEmps.forEach(emp => {
       const td = document.createElement('td');
-      const detail = compCellDetail(emp.id, cat.id);
-      const val = compCellValue(detail);
+      const taskCell = compTaskScore(emp.id, task.category.id, task.dimension.slug);
+      const val = taskCell.score;
+      const self = taskCell.marker?.latest_self;
       const selected = compScorecardEmpId === emp.id;
+      const naStyle = 'background:repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 5px, var(--surface) 5px, var(--surface) 10px); color:var(--text-muted);';
       td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
-                        (val != null ? 'background:' + scoreBandColor(val) + ';' : 'color:var(--text-muted);') +
+                        (val != null ? 'background:' + scoreBandColor(val) + ';' : naStyle) +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
       if (val != null) {
-        const marker = compHumanRating(detail);
-        const markerLine = marker
-          ? '<div style="font-size:0.58rem;color:var(--text-muted);white-space:nowrap">' + esc(marker.created_by_name || 'User') + ' ' + esc(compRatingShortLabel(marker.source_kind)) + ' ' + Number(marker.score).toFixed(1) + '</div>'
-          : '<div style="font-size:0.62rem;color:var(--text-muted)">' + confidenceLabel(detail.confidence_band) + ' · n=' + (detail.sample_size || 0) + '</div>';
-        td.innerHTML = '<div style="font-weight:700;font-family:IBM Plex Mono,monospace">' + Number(val).toFixed(1) + '</div>' + markerLine;
-        sum += Number(val); count += 1;
+        if (val >= 2) indep += 1;
+        if (val >= 3) teach += 1;
+        td.innerHTML = '<div style="font-weight:800;font-family:IBM Plex Mono,monospace">' + scoreLabel(val) + '</div>' +
+          (self ? '<div style="font-size:0.56rem;color:var(--text-muted);white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
       } else {
-        td.textContent = '—';
+        td.innerHTML = '<div style="font-size:0.66rem">N/A</div>';
       }
-      td.title = 'Open employee scorecard';
+      td.title = emp.display_name + ' · ' + task.dimension.name + ' · click to open scorecard';
       td.addEventListener('click', () => openEmployeeScorecard(emp.id));
       tr.appendChild(td);
     });
-    const tdAvg = document.createElement('td');
-    tdAvg.style.cssText = 'text-align:center; padding:0.3rem 0.5rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--accent);';
-    tdAvg.textContent = count ? (sum / count).toFixed(1) : '—';
-    tr.appendChild(tdAvg);
+    [indep, teach].forEach((value, i) => {
+      const td = document.createElement('td');
+      td.style.cssText = 'text-align:center; padding:0.35rem 0.5rem; border-bottom:1px solid var(--border); font-weight:800; color:var(--accent); position:sticky; right:' + (i === 1 ? '0' : '70px') + '; background:var(--surface);';
+      td.textContent = value;
+      tr.appendChild(td);
+    });
     tbody.appendChild(tr);
   });
 }
@@ -2593,13 +2668,6 @@ function openEmployeeScorecard(rawEmpId) {
   renderCompetencyDetail();
 }
 
-function scorecardMarkerSummary(marker) {
-  if (!marker) return '—';
-  const who = marker.created_by_name ? ' · ' + marker.created_by_name : '';
-  const notes = marker.notes ? ' · ' + marker.notes : '';
-  return Number(marker.score).toFixed(1) + who + notes;
-}
-
 function renderEmployeeScorecard() {
   const host = document.getElementById('comp-scorecard');
   if (!host) return;
@@ -2607,29 +2675,49 @@ function renderEmployeeScorecard() {
   const emp = (compState.employees || []).find(e => e.id === compScorecardEmpId);
   if (!emp) { host.style.display = 'none'; host.replaceChildren(); return; }
   host.style.display = 'block';
-  const rows = (compState.categories || []).map(cat => {
-    const detail = compCellDetail(emp.id, cat.id) || {};
-    const prelim = detail.latest_preliminary;
-    const baseline = detail.latest_baseline;
-    const existing = prelim?.score ?? detail.score ?? '';
-    const note = prelim?.notes || '';
-    return '<tr data-scorecard-row="1" data-cat-id="' + cat.id + '">' +
-      '<td style="min-width:180px"><strong>' + esc(cat.name) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(cat.description || '') + '</div></td>' +
-      '<td style="white-space:nowrap">' + (detail.score == null ? '—' : Number(detail.score).toFixed(1)) + '</td>' +
-      '<td style="font-size:0.72rem;color:var(--text-muted);min-width:145px">' + esc(scorecardMarkerSummary(prelim)) + '</td>' +
-      '<td style="font-size:0.72rem;color:var(--text-muted);min-width:145px">' + esc(scorecardMarkerSummary(baseline)) + '</td>' +
-      '<td><input class="scorecard-score" type="number" min="1" max="5" step="0.5" value="' + esc(existing) + '" style="width:5.5rem"></td>' +
-      '<td><input class="scorecard-note" type="text" value="' + esc(note) + '" placeholder="optional note" style="min-width:190px"></td>' +
-    '</tr>';
-  }).join('');
+  const rows = [];
+  (compState.categories || []).forEach(cat => {
+    compDimensions(cat.id).forEach((dim, idx) => {
+      const detail = compCellDetail(emp.id, cat.id) || {};
+      const dimDetail = (detail.dimensions || []).find(d => d.slug === dim.slug) || {};
+      const markers = detail.task_markers?.[dim.slug] || {};
+      const prelim = markers.latest_preliminary;
+      const baseline = markers.latest_baseline;
+      const self = markers.latest_self;
+      const existing = prelim?.score ?? baseline?.score ?? dimDetail.score ?? '';
+      const note = prelim?.notes || '';
+      rows.push('<tr data-scorecard-row="1" data-cat-id="' + cat.id + '" data-dim-slug="' + esc(dim.slug) + '">' +
+        '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' : '') +
+          '<strong>' + esc(dim.name || dim.slug) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(dim.tier || 'C') + ' · ' + esc(dim.anchor || '') + '</div></td>' +
+        '<td style="white-space:nowrap;font-weight:700">' + (dimDetail.score == null ? 'N/A' : scoreLabel(dimDetail.score)) + '</td>' +
+        '<td style="font-size:0.72rem;color:var(--text-muted);min-width:105px">' + esc(scorecardMarkerSummary(self)) + '</td>' +
+        '<td style="font-size:0.72rem;color:var(--text-muted);min-width:115px">' + esc(scorecardMarkerSummary(prelim)) + '</td>' +
+        '<td style="font-size:0.72rem;color:var(--text-muted);min-width:115px">' + esc(scorecardMarkerSummary(baseline)) + '</td>' +
+        '<td><select class="scorecard-score" style="width:6.2rem">' + scoreOptions(existing) + '</select></td>' +
+        '<td><input class="scorecard-note" type="text" value="' + esc(note) + '" placeholder="optional note" style="min-width:190px"></td>' +
+      '</tr>');
+    });
+  });
   host.innerHTML =
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;flex-wrap:wrap">' +
       '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
-      '<div class="workspace-sub">Set this person across every competency category. Blank score fields are skipped.</div></div>' +
+      '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
       '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
     '</div>' +
-    '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:920px;width:100%;font-size:0.76rem"><thead><tr><th>Category</th><th>Visible</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save all preliminary</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark all official baseline</button></div>';
+    '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:1120px;width:100%;font-size:0.76rem"><thead><tr><th>Task</th><th>Observed</th><th>Self</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' +
+    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save preliminary task ratings</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark official baseline</button><button class="btn btn-ghost" type="button" onclick="saveEmployeeScorecard(\'self_assessment\', false)">Record self-assessment</button></div>';
+}
+
+function scoreOptions(value) {
+  const selected = value === null || value === undefined ? '' : String(value);
+  const opts = [
+    ['', 'N/A'],
+    ['0', '0 · Can\'t yet'],
+    ['1', '1 · Supervised'],
+    ['2', '2 · Independent'],
+    ['3', '3 · Go-to / teaches'],
+  ];
+  return opts.map(([val, label]) => '<option value="' + val + '"' + (String(val) === selected ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
 }
 
 async function saveEmployeeScorecard(sourceKind, advance) {
@@ -2640,24 +2728,26 @@ async function saveEmployeeScorecard(sourceKind, advance) {
     const rawScore = row.querySelector('.scorecard-score')?.value;
     if (rawScore === '') continue;
     const score = Number(rawScore);
-    if (!Number.isFinite(score) || score < 1 || score > 5) {
-      toast('Scores must be between 1 and 5');
+    if (!Number.isInteger(score) || score < 0 || score > 3) {
+      toast('Scores must be 0, 1, 2, or 3');
       return;
     }
     ratings.push({
       category_id: Number(row.dataset.catId),
+      dimension_slug: row.dataset.dimSlug,
       score: rawScore,
       notes: row.querySelector('.scorecard-note')?.value || '',
     });
   }
-  if (!ratings.length) { toast('No scorecard ratings to save'); return; }
-  const res = await api('POST', '/api/v1/skills/scores/bulk', {
+  if (!ratings.length) { toast('No task ratings to save'); return; }
+  const res = await api('POST', '/api/v1/skills/task-ratings/bulk', {
     employee_id: compScorecardEmpId,
     source_kind: sourceKind,
     ratings,
   });
   if (!res || res.error) { toast(res?.error || 'Scorecard save failed'); return; }
-  toast((sourceKind === 'official_baseline' ? 'Official baseline' : 'Preliminary scorecard') + ' saved for ' + ratings.length + ' categories');
+  const label = sourceKind === 'official_baseline' ? 'Official baseline' : (sourceKind === 'self_assessment' ? 'Self-assessment' : 'Preliminary scorecard');
+  toast(label + ' saved for ' + ratings.length + ' tasks');
   await loadCompetency();
   if (advance) advanceScorecardEmployee();
   else renderEmployeeScorecard();
@@ -2676,42 +2766,14 @@ function advanceScorecardEmployee() {
 }
 
 function openCompetencyCell(empId, catId) {
-  compSelected = { empId, catId };
-  renderMatrix();
-  renderCompetencyDetail();
+  openEmployeeScorecard(empId);
 }
 
 function renderCompetencyDetail() {
   const host = document.getElementById('comp-detail');
   if (!host) return;
-  if (!compSelected) { host.style.display = 'none'; host.replaceChildren(); return; }
-  const emp = compState.employees.find(e => e.id === compSelected.empId);
-  const cat = compState.categories.find(c => c.id === compSelected.catId);
-  if (!emp || !cat) { host.style.display = 'none'; return; }
-  const detail = compCellDetail(emp.id, cat.id) || { score:null, confidence_band:'low', sample_size:0, dimensions: compState.dimensions?.[String(cat.id)] || [] };
-  const dims = detail.dimensions?.length ? detail.dimensions : (compState.dimensions?.[String(cat.id)] || []);
-  host.style.display = 'block';
-  const dimOptions = dims.map(d => '<option value="' + esc(d.slug) + '">' + esc(d.name || d.slug) + '</option>').join('');
-  const dimRows = dims.map(d => '<tr><td>' + esc(d.name || d.slug) + '</td><td>' + (d.score == null ? '—' : Number(d.score).toFixed(1)) + '</td><td>' + (d.n || 0) + '</td><td>' + esc(d.last_observed_at || '') + '</td></tr>').join('');
-  const ratingCards = [
-    compRatingCard(detail.latest_preliminary, 'Preliminary rating'),
-    compRatingCard(detail.latest_baseline, 'Official baseline'),
-  ].filter(Boolean).join('');
-  const currentScore = detail.score == null ? '3' : Number(detail.score).toFixed(1);
-  host.innerHTML =
-    '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem">' +
-      '<div><div class="workspace-kicker">Competency evidence</div><div class="workspace-title">' + esc(emp.display_name) + ' · ' + esc(cat.name) + '</div>' +
-      '<div class="workspace-sub">Visible score: <strong>' + (detail.score == null ? '—' : Number(detail.score).toFixed(1)) + '</strong> · confidence ' + esc(detail.confidence_band || 'low') + ' · sample size ' + (detail.sample_size || 0) + '</div></div>' +
-      '<button class="btn btn-ghost" type="button" onclick="compSelected=null;renderMatrix();renderCompetencyDetail();">Close</button>' +
-    '</div>' +
-    (ratingCards ? '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.55rem;margin-bottom:0.75rem">' + ratingCards + '</div>' : '') +
-    '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:520px;width:100%;font-size:0.76rem"><thead><tr><th>Dimension</th><th>Score</th><th>n</th><th>Last observed</th></tr></thead><tbody>' + (dimRows || '<tr><td colspan="4">No evidence yet.</td></tr>') + '</tbody></table></div>' +
-    '<div class="field-row">' +
-      '<div class="field"><label>Dimension</label><select id="comp-dimension">' + dimOptions + '</select></div>' +
-      '<div class="field"><label>Score 1-5</label><input id="comp-score" type="number" min="1" max="5" step="0.5" value="' + currentScore + '"></div>' +
-      '<div class="field"><label>Notes</label><input id="comp-notes" type="text" placeholder="Evidence or context"></div>' +
-    '</div>' +
-    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveCompetencyObservation(\'observation\')">Add observation</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary\')">Save preliminary rating</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'preliminary_next\')">Save prelim + next</button><button class="btn btn-export" type="button" onclick="saveCompetencyObservation(\'baseline\')">Mark official baseline</button></div>';
+  host.style.display = 'none';
+  host.replaceChildren();
 }
 
 async function saveCompetencyObservation(mode) {
@@ -2721,7 +2783,7 @@ async function saveCompetencyObservation(mode) {
   const score = document.getElementById('comp-score')?.value;
   const notes = document.getElementById('comp-notes')?.value || '';
   const isObservation = ratingMode === 'observation';
-  const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || 'accuracy') : 'manual';
+  const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || '') : 'manual';
   const path = isObservation ? '/api/v1/skills/subscores' : '/api/v1/skills/scores';
   const payload = {
     employee_id: compSelected.empId,
@@ -2740,19 +2802,7 @@ async function saveCompetencyObservation(mode) {
 }
 
 function advanceCompetencySelection() {
-  if (!compSelected) return;
-  const emps = visibleCompetencyEmployees();
-  const cats = compState.categories || [];
-  const empIndex = emps.findIndex(e => e.id === compSelected.empId);
-  const catIndex = cats.findIndex(c => c.id === compSelected.catId);
-  if (empIndex < 0 || catIndex < 0) return;
-  let nextEmp = empIndex;
-  let nextCat = catIndex + 1;
-  if (nextCat >= cats.length) { nextCat = 0; nextEmp += 1; }
-  if (nextEmp >= emps.length) { toast('Reached end of visible competency list'); return; }
-  compSelected = { empId: emps[nextEmp].id, catId: cats[nextCat].id };
-  renderMatrix();
-  renderCompetencyDetail();
+  advanceScorecardEmployee();
 }
 
 // Live filter input — debounced re-render without re-fetching.
