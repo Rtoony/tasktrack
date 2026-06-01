@@ -51,6 +51,11 @@ def test_feedback_page_renders_management_contract(auth_client):
     assert "Active Loop" in html
     assert "Ready For Josh" in html
     assert "Discussion" in html
+    assert "Activity" in html
+    assert "Captured Context" in html
+    assert "View raw context JSON" in html
+    assert "feedback-context-summary" in html
+    assert "/api/v1/feedback_items/${id}/activity" in html
     assert "Needs Info" in html
     assert "Ready to Test" in html
     assert "Accepted" in html

@@ -74,13 +74,18 @@ textarea { min-height:96px; resize:vertical; }
 .comments { display:flex; flex-direction:column; gap:0.45rem; margin-top:0.35rem; }
 .comment { border:1px solid var(--border); background:var(--surface-2); padding:0.55rem 0.65rem; font-size:0.8rem; }
 .comment-meta { color:var(--muted); font-size:0.68rem; margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
+.context-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.45rem; margin-bottom:0.5rem; }
+.context-tile { border:1px solid var(--border); background:var(--surface-2); padding:0.5rem 0.6rem; min-width:0; }
+.context-label { color:var(--muted); font-size:0.64rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; margin-bottom:0.18rem; }
+.context-value { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+details.context-raw summary { cursor:pointer; color:var(--muted); font-size:0.72rem; font-weight:700; margin-bottom:0.35rem; }
 .empty { padding:2rem 1rem; text-align:center; color:var(--muted); font-size:0.86rem; }
 .toast { position:fixed; bottom:1.25rem; right:1.25rem; background:#161616; color:#fff; padding:0.65rem 1rem; opacity:0; transition:opacity .2s; z-index:50; font-size:0.82rem; }
 .toast.show { opacity:1; }
 @media (max-width:900px) {
   .hero, .layout { grid-template-columns:1fr; }
   .hero-main { border-right:0; border-bottom:1px solid var(--border); }
-  .form-grid { grid-template-columns:1fr; }
+  .form-grid, .context-summary { grid-template-columns:1fr; }
   .list { max-height:none; }
 }
 </style>
@@ -147,8 +152,9 @@ textarea { min-height:96px; resize:vertical; }
         </div>
         <div class="field"><label>Page URL</label><input class="input" id="feedback-page"></div>
         <div class="field"><label>Resolution Notes</label><textarea id="feedback-resolution" placeholder="Codex: what changed, commit reference, test result, or exact question for Josh."></textarea></div>
-        <div class="field"><label>Context JSON</label><pre class="context-box" id="feedback-context">{}</pre></div>
+        <div class="field"><label>Captured Context</label><div class="context-summary" id="feedback-context-summary"><div class="panel-sub">No captured context summary yet.</div></div><details class="context-raw"><summary>View raw context JSON</summary><pre class="context-box" id="feedback-context">{}</pre></details></div>
         <div class="field"><label>Screenshot / Attachment</label><div class="drop-zone" id="feedback-drop-zone">Paste, drop, or choose screenshots/PDFs for the selected feedback item.</div><input class="input" type="file" id="feedback-file" accept="image/png,image/jpeg,image/jpg,application/pdf" multiple><div class="panel-sub" id="feedback-file-hint">No staged files.</div><div class="attachments" id="feedback-attachments"></div></div>
+        <div class="field"><label>Activity</label><div class="comments" id="feedback-activity"><div class="panel-sub">Save or select feedback to view activity.</div></div></div>
         <div class="field"><label>Discussion</label><div class="comments" id="feedback-comments"><div class="panel-sub">Save or select feedback to discuss it.</div></div><textarea id="feedback-comment-body" placeholder="Add a note for Codex or Josh. Example: 'Still broken on Chromebook' or 'Need clarification on expected behavior.'"></textarea><div style="display:flex;justify-content:flex-end;margin-top:.4rem"><button class="btn btn-ghost" type="button" onclick="addFeedbackComment()">Add Comment</button></div></div>
         <div style="display:flex;gap:.5rem;justify-content:space-between;flex-wrap:wrap">
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
@@ -233,11 +239,14 @@ function clearForm() {
   document.getElementById('feedback-id').value = '';
   setValue('feedback-title', ''); setValue('feedback-body', ''); setValue('feedback-type', 'Bug'); setValue('feedback-priority', 'Medium'); setValue('feedback-status', 'New');
   setValue('feedback-tab', ''); setValue('feedback-component', ''); setValue('feedback-tags', ''); setValue('feedback-page', window.location.origin + '/'); setValue('feedback-resolution', '');
-  document.getElementById('feedback-context').textContent = JSON.stringify({ source: 'feedback-page', captured_at: new Date().toISOString() }, null, 2);
+  const emptyContext = JSON.stringify({ source: 'feedback-page', captured_at: new Date().toISOString() }, null, 2);
+  document.getElementById('feedback-context').textContent = emptyContext;
+  renderContextSummary(emptyContext);
   document.getElementById('feedback-file').value = '';
   document.getElementById('feedback-file-hint').textContent = 'No staged files.';
   document.getElementById('feedback-attachments').innerHTML = '<div class="panel-sub">Save the feedback item before attaching files.</div>';
   document.getElementById('feedback-comments').innerHTML = '<div class="panel-sub">Save the feedback item before commenting.</div>';
+  document.getElementById('feedback-activity').innerHTML = '<div class="panel-sub">Save the feedback item before viewing activity.</div>';
   document.getElementById('feedback-comment-body').value = '';
   document.getElementById('detail-title').textContent = 'New feedback';
   document.getElementById('detail-subtitle').textContent = 'Create a structured note for later implementation.';
@@ -254,10 +263,12 @@ async function selectFeedback(id) {
   let context = row.context_json || '{}';
   try { context = JSON.stringify(JSON.parse(context), null, 2); } catch {}
   document.getElementById('feedback-context').textContent = context;
+  renderContextSummary(context);
   document.getElementById('detail-title').textContent = `Feedback #${row.id}`;
   document.getElementById('detail-subtitle').textContent = `${row.status || 'New'} / ${row.priority || 'Medium'} / ${row.created_by_name || 'TaskTrack'}`;
   renderList();
   await loadAttachments(id);
+  await loadActivity(id);
   await loadComments(id);
 }
 function formPayload() {
@@ -318,6 +329,45 @@ async function saveFeedback(event) {
     await loadFeedback(row.id);
   } catch (err) { toast(err.message); }
 }
+function contextValue(value, fallback='n/a') {
+  if (value === undefined || value === null || value === '') return fallback;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+function latestTelemetry(context, predicate) {
+  const events = Array.isArray(context?.recent_telemetry) ? context.recent_telemetry : [];
+  return [...events].reverse().find(predicate) || null;
+}
+function renderContextSummary(contextText) {
+  const wrap = document.getElementById('feedback-context-summary');
+  if (!wrap) return;
+  let context = {};
+  try { context = JSON.parse(contextText || '{}'); } catch {
+    wrap.innerHTML = '<div class="panel-sub">Context JSON could not be parsed.</div>';
+    return;
+  }
+  const telemetry = Array.isArray(context.recent_telemetry) ? context.recent_telemetry : [];
+  const jsErrors = telemetry.filter(e => ['js_error','promise_rejection'].includes(e.kind)).length;
+  const failedApi = latestTelemetry(context, e => ['fetch','fetch_error'].includes(e.kind) && (e.kind === 'fetch_error' || e.payload?.ok === false));
+  const lastClick = context.last_click?.target?.label || context.last_click?.target?.tag || context.last_click?.target || '';
+  const activeElement = context.active_element?.label || context.active_element?.tag || context.active_element || '';
+  const visibleModals = context.ui_state?.visible?.visible_modals || [];
+  const workspace = context.ui_state?.workspace?.project_number || context.ui_state?.workspace?.project_id || '';
+  const appCommit = context.app_context?.git?.short_commit || context.app_context?.git?.commit || '';
+  const rows = [
+    ['Tab', context.tab || context.ui_state?.current_tab || 'n/a'],
+    ['Path', context.path || context.url || 'n/a'],
+    ['Commit', appCommit || 'n/a'],
+    ['Viewport', context.viewport ? `${context.viewport.width}x${context.viewport.height}` : 'n/a'],
+    ['Last click', lastClick || 'n/a'],
+    ['Active element', activeElement || 'n/a'],
+    ['Visible modal', visibleModals.length ? visibleModals.join(', ') : 'none'],
+    ['Workspace', workspace || 'n/a'],
+    ['JS errors', String(jsErrors)],
+    ['Last API issue', failedApi ? `${failedApi.payload?.method || ''} ${failedApi.payload?.path || ''} ${failedApi.payload?.status || failedApi.payload?.message || ''}`.trim() : 'none'],
+  ];
+  wrap.innerHTML = rows.map(([label, value]) => `<div class="context-tile"><div class="context-label">${esc(label)}</div><div class="context-value" title="${esc(contextValue(value))}">${esc(contextValue(value))}</div></div>`).join('');
+}
 async function loadAttachments(id) {
   const wrap = document.getElementById('feedback-attachments');
   wrap.innerHTML = '<div class="panel-sub">Loading attachments...</div>';
@@ -328,6 +378,19 @@ async function loadAttachments(id) {
       const isImage = String(a.content_type || '').startsWith('image/');
       const preview = isImage ? `<img class="attachment-preview" src="${esc(a.download_url)}" alt="${esc(a.filename)}">` : '<span class="badge">File</span>';
       return `<div class="attachment"><span>${preview} ${esc(a.filename)} (${Math.ceil((a.size_bytes || 0)/1024)} KB)</span><a class="btn btn-ghost" href="${esc(a.download_url)}" target="_blank" rel="noopener">Open</a></div>`;
+    }).join('');
+  } catch (err) { wrap.innerHTML = `<div class="panel-sub">${esc(err.message)}</div>`; }
+}
+async function loadActivity(id) {
+  const wrap = document.getElementById('feedback-activity');
+  wrap.innerHTML = '<div class="panel-sub">Loading activity...</div>';
+  try {
+    const rows = await api('GET', `/api/v1/feedback_items/${id}/activity`);
+    if (!rows.length) { wrap.innerHTML = '<div class="panel-sub">No activity yet.</div>'; return; }
+    wrap.innerHTML = rows.slice(0, 12).map(a => {
+      const field = a.field_name ? ` · ${esc(a.field_name)}` : '';
+      const values = (a.old_value || a.new_value) ? `<div>${esc(a.old_value || '')} -> ${esc(a.new_value || '')}</div>` : '';
+      return `<div class="comment"><div class="comment-meta">${esc(a.user_name || 'TaskTrack')} · ${esc(a.action || '')}${field} · ${esc(a.created_at || '')}</div>${values}</div>`;
     }).join('');
   } catch (err) { wrap.innerHTML = `<div class="panel-sub">${esc(err.message)}</div>`; }
 }
