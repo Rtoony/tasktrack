@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.db import get_session
-from app.models import Attachment, FeedbackItem
+from app.models import ActivityLog, Attachment, Comment, FeedbackItem
 from app.services import attachments as att_svc
 
 
@@ -48,6 +48,13 @@ def test_feedback_page_renders_management_contract(auth_client):
     assert "Codex context loop" in html
     assert "Paste, drop, or choose screenshots/PDFs" in html
     assert "multiple" in html
+    assert "Active Loop" in html
+    assert "Ready For Josh" in html
+    assert "Discussion" in html
+    assert "Needs Info" in html
+    assert "Ready to Test" in html
+    assert "Accepted" in html
+    assert "Archived" in html
 
 
 def test_app_context_endpoint_requires_auth(client):
@@ -101,12 +108,25 @@ def test_feedback_api_create_and_update(auth_client, temp_app):
     assert row["status"] == "New"
     assert row["created_by_name"] == "Tester"
 
-    update = {"status": "Fixed", "resolution_notes": "Adjusted left rail copy."}
+    update = {"status": "Ready to Test", "resolution_notes": "Adjusted left rail copy."}
     res = auth_client.put(f"/api/v1/feedback_items/{row['id']}", json=update)
     assert res.status_code == 200, res.data
     updated = res.get_json()
-    assert updated["status"] == "Fixed"
+    assert updated["status"] == "Ready to Test"
     assert updated["resolution_notes"] == "Adjusted left rail copy."
+    assert updated["completed_at"] is None
+
+    res = auth_client.put(f"/api/v1/feedback_items/{row['id']}", json={"status": "Accepted"})
+    assert res.status_code == 200, res.data
+    accepted = res.get_json()
+    assert accepted["status"] == "Accepted"
+    assert accepted["completed_at"]
+
+    res = auth_client.put(f"/api/v1/feedback_items/{row['id']}", json={"status": "Needs Info"})
+    assert res.status_code == 200, res.data
+    reopened = res.get_json()
+    assert reopened["status"] == "Needs Info"
+    assert reopened["completed_at"] is None
 
     with temp_app.app_context():
         sess = get_session()
@@ -114,6 +134,8 @@ def test_feedback_api_create_and_update(auth_client, temp_app):
         assert saved is not None
         assert saved.title == "Sidebar wording is confusing"
         assert json.loads(saved.context_json)["tab"] == "dashboard"
+        actions = [a.action for a in sess.query(ActivityLog).filter_by(table_name="feedback_items", record_id=row["id"]).all()]
+        assert "status_change" in actions
 
 
 def test_feedback_rejects_bad_context_json(auth_client):
@@ -123,6 +145,35 @@ def test_feedback_rejects_bad_context_json(auth_client):
     })
     assert res.status_code == 400
     assert "context_json" in res.get_json()["error"]
+
+
+def test_feedback_rejects_bad_resolution_metadata_json(auth_client):
+    res = auth_client.post("/api/v1/feedback_items", json={
+        "title": "Bad metadata",
+        "resolution_metadata_json": "{not-json",
+    })
+    assert res.status_code == 400
+    assert "resolution_metadata_json" in res.get_json()["error"]
+
+
+def test_feedback_comments_roundtrip(auth_client, temp_app):
+    res = auth_client.post("/api/v1/feedback_items", json={"title": "Needs a conversation"})
+    assert res.status_code == 201
+    feedback_id = res.get_json()["id"]
+
+    res = auth_client.post(f"/api/v1/feedback_items/{feedback_id}/comments", json={"body": "Josh: still seeing this on Chromebook."})
+    assert res.status_code == 201, res.data
+    assert res.get_json()["user_name"] == "Tester"
+
+    res = auth_client.get(f"/api/v1/feedback_items/{feedback_id}/comments")
+    assert res.status_code == 200
+    rows = res.get_json()
+    assert len(rows) == 1
+    assert "Chromebook" in rows[0]["body"]
+
+    with temp_app.app_context():
+        sess = get_session()
+        assert sess.query(Comment).filter_by(table_name="feedback_items", record_id=feedback_id).count() == 1
 
 
 def test_feedback_screenshot_attachment_roundtrip(auth_client, temp_app, patched_minio):

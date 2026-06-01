@@ -150,11 +150,12 @@ ALLOWED_TABLES = {
             "context_json",
             "tags",
             "resolution_notes",
+            "resolution_metadata_json",
             "source",
         ],
         "required": ["title"],
         "label": "Feedback",
-        "status_flow": ["New", "Triaged", "Planned", "In Progress", "Fixed", "Closed", "Won't Fix"],
+        "status_flow": ["New", "Triaged", "Planned", "In Progress", "Needs Info", "Ready to Test", "Fixed", "Accepted", "Closed", "Won't Fix", "Archived"],
     },
     "calendar_events": {
         "fields": [

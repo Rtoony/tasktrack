@@ -502,6 +502,8 @@ def create_record(table):
     kwargs = {k: v for k, v in data.items() if k in valid_cols}
     sess = get_session()
     record = Model(**kwargs)
+    if table == "feedback_items" and kwargs.get("status") in done_statuses_for_table("feedback_items"):
+        record.completed_at = datetime.utcnow()
     sess.add(record)
     sess.flush()
     # Phase-0: best-effort FK enrichment from text columns. Quiet no-op
@@ -561,8 +563,15 @@ def update_record(table, record_id):
         old_val = getattr(row, f, "")
         new_val = data[f]
         if str(old_val) != str(new_val):
-            log_activity(sess, table, record_id, "updated", f, old_val, new_val)
+            action = "status_change" if f == "status" else "updated"
+            log_activity(sess, table, record_id, action, f, old_val, new_val)
         setattr(row, f, new_val)
+
+    if table == "feedback_items" and "status" in fields:
+        if getattr(row, "status", "") in done_statuses_for_table("feedback_items"):
+            row.completed_at = datetime.utcnow()
+        else:
+            row.completed_at = None
 
     enrich_with_fks(sess, table, row, refresh_existing=True, changed_fields=set(fields))
     row.updated_at = datetime.utcnow()

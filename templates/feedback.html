@@ -65,8 +65,15 @@ textarea { min-height:96px; resize:vertical; }
 .context-box { background:#161616; color:#c6c6c6; font-family:'IBM Plex Mono',monospace; font-size:0.68rem; line-height:1.45; padding:0.7rem; overflow:auto; max-height:160px; white-space:pre-wrap; }
 .attachments { display:flex; flex-direction:column; gap:0.35rem; margin-top:0.35rem; }
 .attachment { display:flex; justify-content:space-between; gap:0.5rem; align-items:center; border:1px solid var(--border); background:var(--surface-2); padding:0.45rem 0.55rem; font-size:0.78rem; }
+.attachment-preview { max-width:120px; max-height:72px; object-fit:cover; border:1px solid var(--border); background:#fff; }
 .drop-zone { border:1px dashed var(--border-strong); background:var(--surface-2); padding:0.65rem; color:var(--muted); font-size:0.78rem; line-height:1.4; }
 .drop-zone.dragging { border-color:var(--accent); background:#edf5ff; color:var(--text); }
+.queue-tabs { display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:1rem; }
+.queue-tab { border:1px solid var(--border); background:var(--surface); color:var(--text); padding:0.45rem 0.65rem; font-size:0.75rem; font-weight:700; cursor:pointer; }
+.queue-tab.active { background:#161616; color:#fff; border-color:#161616; }
+.comments { display:flex; flex-direction:column; gap:0.45rem; margin-top:0.35rem; }
+.comment { border:1px solid var(--border); background:var(--surface-2); padding:0.55rem 0.65rem; font-size:0.8rem; }
+.comment-meta { color:var(--muted); font-size:0.68rem; margin-bottom:0.25rem; text-transform:uppercase; letter-spacing:0.04em; }
 .empty { padding:2rem 1rem; text-align:center; color:var(--muted); font-size:0.86rem; }
 .toast { position:fixed; bottom:1.25rem; right:1.25rem; background:#161616; color:#fff; padding:0.65rem 1rem; opacity:0; transition:opacity .2s; z-index:50; font-size:0.82rem; }
 .toast.show { opacity:1; }
@@ -88,11 +95,11 @@ textarea { min-height:96px; resize:vertical; }
     <div class="hero-main">
       <div class="kicker">Codex context loop</div>
       <h1>Feedback inbox</h1>
-      <p class="hero-copy">Capture rough testing notes from any screen, attach a screenshot, then triage them here. These records are intentionally structured so a future Codex session can read the issue, page context, status, and screenshots before changing code.</p>
+      <p class="hero-copy">Capture rough testing notes from any screen, attach screenshots, then use this page as the two-way contract between tester and builder. New items are Codex queue work; Needs Info / Ready to Test are Josh queue work; Accepted and Closed leave the active loop.</p>
     </div>
     <div class="hero-side">
-      <div class="stat"><div class="stat-value" id="stat-open">0</div><div class="stat-label">Open</div></div>
-      <div class="stat"><div class="stat-value" id="stat-fixed">0</div><div class="stat-label">Fixed</div></div>
+      <div class="stat"><div class="stat-value" id="stat-open">0</div><div class="stat-label">Codex Queue</div></div>
+      <div class="stat"><div class="stat-value" id="stat-fixed">0</div><div class="stat-label">Ready For Josh</div></div>
       <div class="stat"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
     </div>
   </section>
@@ -101,11 +108,19 @@ textarea { min-height:96px; resize:vertical; }
     <input class="input search" id="feedback-search" placeholder="Search title, notes, page, tags...">
     <select id="feedback-status-filter" style="max-width:190px">
       <option value="">All statuses</option>
-      <option>New</option><option>Triaged</option><option>Planned</option><option>In Progress</option><option>Fixed</option><option>Closed</option><option>Won't Fix</option>
+      <option>New</option><option>Triaged</option><option>Planned</option><option>In Progress</option><option>Needs Info</option><option>Ready to Test</option><option>Fixed</option><option>Accepted</option><option>Closed</option><option>Won't Fix</option><option>Archived</option>
     </select>
     <button class="btn btn-primary" type="button" onclick="newFeedback()">New Feedback</button>
     <button class="btn btn-ghost" type="button" onclick="loadFeedback()">Refresh</button>
     <a class="btn btn-ghost" href="/api/v1/feedback_items/export.csv">Export CSV</a>
+  </div>
+
+  <div class="queue-tabs" aria-label="Feedback queues">
+    <button class="queue-tab active" type="button" data-queue="active">Active Loop</button>
+    <button class="queue-tab" type="button" data-queue="codex">Codex Queue</button>
+    <button class="queue-tab" type="button" data-queue="josh">Ready For Josh</button>
+    <button class="queue-tab" type="button" data-queue="terminal">Accepted / Closed</button>
+    <button class="queue-tab" type="button" data-queue="all">All</button>
   </div>
 
   <section class="layout">
@@ -123,7 +138,7 @@ textarea { min-height:96px; resize:vertical; }
         <div class="form-grid">
           <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
           <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
-          <div class="field"><label>Status</label><select id="feedback-status"><option>New</option><option>Triaged</option><option>Planned</option><option>In Progress</option><option>Fixed</option><option>Closed</option><option>Won't Fix</option></select></div>
+          <div class="field"><label>Status</label><select id="feedback-status"><option>New</option><option>Triaged</option><option>Planned</option><option>In Progress</option><option>Needs Info</option><option>Ready to Test</option><option>Fixed</option><option>Accepted</option><option>Closed</option><option>Won't Fix</option><option>Archived</option></select></div>
         </div>
         <div class="form-grid">
           <div class="field"><label>Tab</label><input class="input" id="feedback-tab"></div>
@@ -131,12 +146,21 @@ textarea { min-height:96px; resize:vertical; }
           <div class="field"><label>Tags</label><input class="input" id="feedback-tags" placeholder="testing, sidebar, copy"></div>
         </div>
         <div class="field"><label>Page URL</label><input class="input" id="feedback-page"></div>
-        <div class="field"><label>Resolution Notes</label><textarea id="feedback-resolution" placeholder="What changed, commit reference, or why this was closed."></textarea></div>
+        <div class="field"><label>Resolution Notes</label><textarea id="feedback-resolution" placeholder="Codex: what changed, commit reference, test result, or exact question for Josh."></textarea></div>
         <div class="field"><label>Context JSON</label><pre class="context-box" id="feedback-context">{}</pre></div>
         <div class="field"><label>Screenshot / Attachment</label><div class="drop-zone" id="feedback-drop-zone">Paste, drop, or choose screenshots/PDFs for the selected feedback item.</div><input class="input" type="file" id="feedback-file" accept="image/png,image/jpeg,image/jpg,application/pdf" multiple><div class="panel-sub" id="feedback-file-hint">No staged files.</div><div class="attachments" id="feedback-attachments"></div></div>
-        <div style="display:flex;gap:.5rem;justify-content:flex-end;flex-wrap:wrap">
-          <button class="btn btn-ghost" type="button" onclick="clearForm()">Clear</button>
-          <button class="btn btn-primary" type="submit">Save Feedback</button>
+        <div class="field"><label>Discussion</label><div class="comments" id="feedback-comments"><div class="panel-sub">Save or select feedback to discuss it.</div></div><textarea id="feedback-comment-body" placeholder="Add a note for Codex or Josh. Example: 'Still broken on Chromebook' or 'Need clarification on expected behavior.'"></textarea><div style="display:flex;justify-content:flex-end;margin-top:.4rem"><button class="btn btn-ghost" type="button" onclick="addFeedbackComment()">Add Comment</button></div></div>
+        <div style="display:flex;gap:.5rem;justify-content:space-between;flex-wrap:wrap">
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Needs Info')">Needs Info</button>
+            <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Ready to Test')">Ready to Test</button>
+            <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Accepted')">Accept</button>
+            <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Archived')">Archive</button>
+          </div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-ghost" type="button" onclick="clearForm()">Clear</button>
+            <button class="btn btn-primary" type="submit">Save Changes</button>
+          </div>
         </div>
       </form>
     </div>
@@ -145,9 +169,12 @@ textarea { min-height:96px; resize:vertical; }
 <div class="toast" id="toast"></div>
 <script>
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
-const DONE = new Set(['Fixed','Closed',"Won't Fix"]);
+const TERMINAL = new Set(['Accepted','Closed',"Won't Fix",'Archived']);
+const CODEX_QUEUE = new Set(['New','Triaged','Planned','In Progress']);
+const USER_QUEUE = new Set(['Needs Info','Ready to Test','Fixed']);
 let feedbackRows = [];
 let selectedId = null;
+let queueFilter = 'active';
 
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2400); }
@@ -161,18 +188,27 @@ async function api(method, path, body) {
   return data;
 }
 function badgeClass(value) { return 'badge-' + String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function rowMatchesQueue(row) {
+  const status = row.status || 'New';
+  if (queueFilter === 'all') return true;
+  if (queueFilter === 'codex') return CODEX_QUEUE.has(status);
+  if (queueFilter === 'josh') return USER_QUEUE.has(status);
+  if (queueFilter === 'terminal') return TERMINAL.has(status);
+  return !TERMINAL.has(status);
+}
 function rowMatches(row) {
   const q = document.getElementById('feedback-search').value.trim().toLowerCase();
   const status = document.getElementById('feedback-status-filter').value;
   if (status && row.status !== status) return false;
+  if (!rowMatchesQueue(row)) return false;
   if (!q) return true;
   const hay = [row.title,row.body,row.page_url,row.tab,row.component_label,row.tags,row.resolution_notes].join(' ').toLowerCase();
   return hay.includes(q);
 }
 function renderStats() {
   document.getElementById('stat-total').textContent = feedbackRows.length;
-  document.getElementById('stat-fixed').textContent = feedbackRows.filter(r => DONE.has(r.status)).length;
-  document.getElementById('stat-open').textContent = feedbackRows.filter(r => !DONE.has(r.status)).length;
+  document.getElementById('stat-fixed').textContent = feedbackRows.filter(r => USER_QUEUE.has(r.status)).length;
+  document.getElementById('stat-open').textContent = feedbackRows.filter(r => CODEX_QUEUE.has(r.status)).length;
 }
 function renderList() {
   const list = document.getElementById('feedback-list');
@@ -201,6 +237,8 @@ function clearForm() {
   document.getElementById('feedback-file').value = '';
   document.getElementById('feedback-file-hint').textContent = 'No staged files.';
   document.getElementById('feedback-attachments').innerHTML = '<div class="panel-sub">Save the feedback item before attaching files.</div>';
+  document.getElementById('feedback-comments').innerHTML = '<div class="panel-sub">Save the feedback item before commenting.</div>';
+  document.getElementById('feedback-comment-body').value = '';
   document.getElementById('detail-title').textContent = 'New feedback';
   document.getElementById('detail-subtitle').textContent = 'Create a structured note for later implementation.';
   renderList();
@@ -220,6 +258,7 @@ async function selectFeedback(id) {
   document.getElementById('detail-subtitle').textContent = `${row.status || 'New'} / ${row.priority || 'Medium'} / ${row.created_by_name || 'TaskTrack'}`;
   renderList();
   await loadAttachments(id);
+  await loadComments(id);
 }
 function formPayload() {
   return {
@@ -285,8 +324,37 @@ async function loadAttachments(id) {
   try {
     const rows = await api('GET', `/api/v1/attachments/feedback_items/${id}`);
     if (!rows.length) { wrap.innerHTML = '<div class="panel-sub">No screenshots attached yet.</div>'; return; }
-    wrap.innerHTML = rows.map(a => `<div class="attachment"><span>${esc(a.filename)} (${Math.ceil((a.size_bytes || 0)/1024)} KB)</span><a class="btn btn-ghost" href="${esc(a.download_url)}" target="_blank" rel="noopener">Open</a></div>`).join('');
+    wrap.innerHTML = rows.map(a => {
+      const isImage = String(a.content_type || '').startsWith('image/');
+      const preview = isImage ? `<img class="attachment-preview" src="${esc(a.download_url)}" alt="${esc(a.filename)}">` : '<span class="badge">File</span>';
+      return `<div class="attachment"><span>${preview} ${esc(a.filename)} (${Math.ceil((a.size_bytes || 0)/1024)} KB)</span><a class="btn btn-ghost" href="${esc(a.download_url)}" target="_blank" rel="noopener">Open</a></div>`;
+    }).join('');
   } catch (err) { wrap.innerHTML = `<div class="panel-sub">${esc(err.message)}</div>`; }
+}
+async function loadComments(id) {
+  const wrap = document.getElementById('feedback-comments');
+  wrap.innerHTML = '<div class="panel-sub">Loading discussion...</div>';
+  try {
+    const rows = await api('GET', `/api/v1/feedback_items/${id}/comments`);
+    if (!rows.length) { wrap.innerHTML = '<div class="panel-sub">No discussion yet.</div>'; return; }
+    wrap.innerHTML = rows.map(c => `<div class="comment"><div class="comment-meta">${esc(c.user_name || 'TaskTrack')} · ${esc(c.created_at || '')}</div><div>${esc(c.body || '')}</div></div>`).join('');
+  } catch (err) { wrap.innerHTML = `<div class="panel-sub">${esc(err.message)}</div>`; }
+}
+async function addFeedbackComment() {
+  const body = document.getElementById('feedback-comment-body').value.trim();
+  if (!selectedId) { toast('Select or save feedback before commenting'); return; }
+  if (!body) { toast('Comment is empty'); return; }
+  try {
+    await api('POST', `/api/v1/feedback_items/${selectedId}/comments`, {body});
+    document.getElementById('feedback-comment-body').value = '';
+    toast('Comment added');
+    await loadComments(selectedId);
+  } catch (err) { toast(err.message); }
+}
+async function setFeedbackStatus(status) {
+  if (!selectedId) { toast('Select feedback first'); return; }
+  document.getElementById('feedback-status').value = status;
+  await saveFeedback(new Event('submit'));
 }
 async function loadFeedback(selectId) {
   try {
@@ -302,6 +370,11 @@ document.getElementById('feedback-form').addEventListener('submit', saveFeedback
 document.getElementById('feedback-file').addEventListener('change', updateStagedFileHint);
 document.getElementById('feedback-search').addEventListener('input', renderList);
 document.getElementById('feedback-status-filter').addEventListener('change', renderList);
+document.querySelectorAll('.queue-tab').forEach(btn => btn.addEventListener('click', () => {
+  queueFilter = btn.dataset.queue || 'active';
+  document.querySelectorAll('.queue-tab').forEach(b => b.classList.toggle('active', b === btn));
+  renderList();
+}));
 document.addEventListener('paste', e => {
   const files = Array.from(e.clipboardData?.files || []);
   if (!files.length) return;

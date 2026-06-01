@@ -217,7 +217,7 @@ def done_statuses_for_table(table_name):
     if table_name == "calendar_events":
         return {"done", "cancelled"}
     if table_name == "feedback_items":
-        return {"Fixed", "Closed", "Won\'t Fix"}
+        return {"Accepted", "Closed", "Won\'t Fix", "Archived"}
     return {"Complete"}
 
 
@@ -394,13 +394,14 @@ def validate_record_data(table, data, creating=False):
             if status not in ALLOWED_TABLES["feedback_items"]["status_flow"]:
                 return f"status must be one of: {', '.join(ALLOWED_TABLES['feedback_items']['status_flow'])}"
             data["status"] = status
-        if "context_json" in data:
-            raw_context = str(data.get("context_json") or "{}").strip() or "{}"
-            try:
-                json.loads(raw_context)
-            except json.JSONDecodeError:
-                return "context_json must be valid JSON"
-            data["context_json"] = raw_context
+        for json_key in ("context_json", "resolution_metadata_json"):
+            if json_key in data:
+                raw_json = str(data.get(json_key) or "{}").strip() or "{}"
+                try:
+                    json.loads(raw_json)
+                except json.JSONDecodeError:
+                    return f"{json_key} must be valid JSON"
+                data[json_key] = raw_json
         return None
 
     if table != "project_work_tasks":

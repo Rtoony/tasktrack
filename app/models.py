@@ -278,6 +278,7 @@ class FeedbackItem(Base):
     context_json: Mapped[str] = mapped_column(Text, server_default=text("'{}'"))
     tags: Mapped[str] = mapped_column(Text, server_default=text("''"))
     resolution_notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    resolution_metadata_json: Mapped[str] = mapped_column(Text, server_default=text("'{}'"))
     source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'in-app'"))
     created_by_user_id: Mapped[int | None] = mapped_column(Integer)
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
