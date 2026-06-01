@@ -1207,11 +1207,9 @@
       </div>
       <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
-        <option value="">All roles</option>
-        <option value="executive">Executive</option>
-        <option value="manager">Manager</option>
-        <option value="engineer">Engineer</option>
-        <option value="drafter">Drafter</option>
+        <option value="technical" selected>Engineering + Drafting</option>
+        <option value="engineer">Engineers</option>
+        <option value="drafter">Drafters</option>
       </select>
       <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
         <option value="">Employee scorecard...</option>
@@ -2462,6 +2460,12 @@ function employeePhotoPath(emp) {
   if (!raw) return '';
   return raw.startsWith('/') ? raw : '/' + raw.replace(/^\/+/, '');
 }
+function employeeShortName(emp) {
+  const raw = String(emp?.display_name || '').replace(/,.*/, '').trim();
+  const words = raw.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return raw || 'Employee';
+  return words[0] + ' ' + words[words.length - 1];
+}
 function employeeAvatarHtml(emp, size) {
   const initials = esc(employeeInitials(emp));
   const name = esc(emp?.display_name || 'Employee');
@@ -2509,11 +2513,14 @@ function compTaskScore(empId, catId, dimSlug) {
 }
 function visibleCompetencyEmployees() {
   const nameFilter = (document.getElementById('comp-filter')?.value || '').trim().toLowerCase();
-  const roleFilter = document.getElementById('comp-role-filter')?.value || '';
-  return (compState.employees || []).filter(e =>
-    (!roleFilter || e.role === roleFilter) &&
-    (!nameFilter || e.display_name.toLowerCase().includes(nameFilter))
-  );
+  const roleFilter = document.getElementById('comp-role-filter')?.value || 'technical';
+  return (compState.employees || []).filter(e => {
+    const role = String(e.role || '').toLowerCase();
+    const roleOk = roleFilter === 'technical'
+      ? (role === 'engineer' || role === 'drafter')
+      : role === roleFilter;
+    return roleOk && (!nameFilter || e.display_name.toLowerCase().includes(nameFilter));
+  });
 }
 function compRatingShortLabel(kind) {
   if (kind === 'official_baseline') return 'baseline';
@@ -2613,11 +2620,11 @@ function renderMatrix() {
   trh.appendChild(th0);
   visibleEmps.forEach(emp => {
     const th = document.createElement('th');
-    th.style.cssText = 'text-align:center; padding:0.5rem 0.35rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--text-muted); min-width:74px; max-width:84px; cursor:pointer;';
+    th.style.cssText = 'text-align:center; padding:0.45rem 0.28rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--text-muted); min-width:70px; max-width:82px; cursor:pointer;';
     th.title = 'Open scorecard for ' + emp.display_name;
-    th.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:0.28rem;min-height:150px;justify-content:flex-end">' +
+    th.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:0.24rem;min-height:64px;justify-content:center">' +
       employeeAvatarHtml(emp, 34) +
-      '<div style="writing-mode:vertical-rl;transform:rotate(180deg);margin:auto;max-height:108px;white-space:nowrap">' + esc(emp.display_name) + '</div>' +
+      '<div style="font-size:0.58rem;line-height:1.05;max-width:72px;white-space:normal;color:var(--text-muted)">' + esc(employeeShortName(emp)) + '</div>' +
     '</div>';
     th.addEventListener('click', () => openEmployeeScorecard(emp.id));
     trh.appendChild(th);
@@ -2638,7 +2645,7 @@ function renderMatrix() {
     const showCat = lastCat !== task.category.slug;
     lastCat = task.category.slug;
     tdTask.innerHTML = (showCat ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.15rem">' + esc(task.category.name) + '</div>' : '') +
-      '<div style="font-weight:650">' + esc(task.dimension.name || task.dimension.slug) + ' <span style="font-size:0.65rem;color:var(--text-muted)">' + esc(task.dimension.tier || 'C') + '</span></div>' +
+      '<div style="font-weight:650">' + esc(task.dimension.name || task.dimension.slug) + '</div>' +
       '<div style="font-size:0.68rem;color:var(--text-muted);max-width:420px">' + esc(task.dimension.anchor || '') + '</div>';
     tr.appendChild(tdTask);
 
@@ -2679,7 +2686,7 @@ function renderScorecardSelect() {
   const sel = document.getElementById('comp-scorecard-select');
   if (!sel) return;
   const current = compScorecardEmpId ? String(compScorecardEmpId) : '';
-  sel.innerHTML = '<option value="">Employee scorecard...</option>' + (compState.employees || []).map(emp =>
+  sel.innerHTML = '<option value="">Employee scorecard...</option>' + visibleCompetencyEmployees().map(emp =>
     '<option value="' + emp.id + '"' + (String(emp.id) === current ? ' selected' : '') + '>' + esc(emp.display_name) + (emp.competency_tracked ? '' : ' (excluded)') + '</option>'
   ).join('');
 }
@@ -2714,7 +2721,7 @@ function renderEmployeeScorecard() {
       const note = prelim?.notes || '';
       rows.push('<tr data-scorecard-row="1" data-cat-id="' + cat.id + '" data-dim-slug="' + esc(dim.slug) + '">' +
         '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' : '') +
-          '<strong>' + esc(dim.name || dim.slug) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(dim.tier || 'C') + ' · ' + esc(dim.anchor || '') + '</div></td>' +
+          '<strong>' + esc(dim.name || dim.slug) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(dim.anchor || '') + '</div></td>' +
         '<td style="white-space:nowrap;font-weight:700">' + (dimDetail.score == null ? 'N/A' : scoreLabel(dimDetail.score)) + '</td>' +
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:105px">' + esc(scorecardMarkerSummary(self)) + '</td>' +
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:115px">' + esc(scorecardMarkerSummary(prelim)) + '</td>' +
