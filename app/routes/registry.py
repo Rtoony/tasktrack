@@ -135,6 +135,9 @@ def create_employee():
         notes=(data.get("notes") or "").strip(),
         active=1 if data.get("active", 1) else 0,
         competency_tracked=1 if data.get("competency_tracked", 1) else 0,
+        photo_path=(data.get("photo_path") or "").strip(),
+        photo_source_url=(data.get("photo_source_url") or "").strip(),
+        photo_updated_at=(data.get("photo_updated_at") or "").strip(),
     )
     sess.add(emp)
     sess.commit()
@@ -159,7 +162,7 @@ def update_employee(emp_id):
     if emp is None:
         return jsonify({"error": "not found", "request_id": _rid()}), 404
     data = request.get_json(silent=True) or {}
-    for col in ("display_name", "email", "role", "title", "notes"):
+    for col in ("display_name", "email", "role", "title", "notes", "photo_path", "photo_source_url", "photo_updated_at"):
         if col in data:
             val = (data[col] or "").strip()
             if col == "display_name" and not val:

@@ -162,6 +162,9 @@ def skill_matrix():
         "role": e.role,
         "active": e.active,
         "competency_tracked": e.competency_tracked,
+        "photo_path": e.photo_path or "",
+        "photo_source_url": e.photo_source_url or "",
+        "photo_updated_at": e.photo_updated_at or "",
     } for e in sess.scalars(emp_stmt).all()]
 
     detail = request.args.get("detail") in ("1", "true", "yes")

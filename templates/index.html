@@ -2450,6 +2450,29 @@ function scoreLabel(s) {
   if (n === 3) return '3';
   return 'N/A';
 }
+function employeeInitials(emp) {
+  const words = String(emp?.display_name || '').replace(/,.*/, '').trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return '?';
+  const first = words[0]?.[0] || '';
+  const last = words.length > 1 ? words[words.length - 1]?.[0] : '';
+  return (first + last).toUpperCase();
+}
+function employeePhotoPath(emp) {
+  const raw = String(emp?.photo_path || '').trim();
+  if (!raw) return '';
+  return raw.startsWith('/') ? raw : '/' + raw.replace(/^\/+/, '');
+}
+function employeeAvatarHtml(emp, size) {
+  const initials = esc(employeeInitials(emp));
+  const name = esc(emp?.display_name || 'Employee');
+  const src = employeePhotoPath(emp);
+  const base = 'width:' + size + 'px;height:' + size + 'px;border-radius:999px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto;border:1px solid var(--border);background:linear-gradient(135deg,#0f2f4a,#2f6f79);color:white;font-weight:800;font-size:' + Math.max(10, Math.round(size * 0.34)) + 'px;letter-spacing:0.02em;';
+  if (!src) return '<span style="' + base + '" title="' + name + '">' + initials + '</span>';
+  return '<span style="' + base + 'background:var(--surface-muted)" title="' + name + '">' +
+    '<img src="' + esc(src) + '" alt="' + name + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
+    '<span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f2f4a,#2f6f79);color:white;">' + initials + '</span>' +
+  '</span>';
+}
 function confidenceLabel(band) {
   const b = String(band || 'low').toLowerCase();
   if (b === 'high') return 'H';
@@ -2592,7 +2615,10 @@ function renderMatrix() {
     const th = document.createElement('th');
     th.style.cssText = 'text-align:center; padding:0.5rem 0.35rem; border-bottom:1px solid var(--border); font-weight:600; color:var(--text-muted); min-width:74px; max-width:84px; cursor:pointer;';
     th.title = 'Open scorecard for ' + emp.display_name;
-    th.innerHTML = '<div style="writing-mode:vertical-rl;transform:rotate(180deg);margin:auto;max-height:130px;white-space:nowrap">' + esc(emp.display_name) + '</div>';
+    th.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:0.28rem;min-height:150px;justify-content:flex-end">' +
+      employeeAvatarHtml(emp, 34) +
+      '<div style="writing-mode:vertical-rl;transform:rotate(180deg);margin:auto;max-height:108px;white-space:nowrap">' + esc(emp.display_name) + '</div>' +
+    '</div>';
     th.addEventListener('click', () => openEmployeeScorecard(emp.id));
     trh.appendChild(th);
   });
@@ -2700,8 +2726,11 @@ function renderEmployeeScorecard() {
   });
   host.innerHTML =
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;flex-wrap:wrap">' +
-      '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
-      '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
+      '<div style="display:flex;align-items:center;gap:0.85rem;min-width:min(100%,420px)">' + employeeAvatarHtml(emp, 88) +
+        '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
+        '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
+        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
+      '</div>' +
       '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
     '</div>' +
     '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:1120px;width:100%;font-size:0.76rem"><thead><tr><th>Task</th><th>Observed</th><th>Self</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' +
