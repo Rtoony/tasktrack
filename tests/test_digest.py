@@ -122,3 +122,30 @@ def test_digest_old_activity_excluded(client, temp_app, with_bot_token):
     r = client.get("/api/v1/digest", headers={"X-Token": BOT_TOKEN})
     actions = {a["action"] for a in r.get_json()["recent_activity"]}
     assert "created" not in actions
+
+
+def test_monthly_requires_token(client):
+    assert client.get("/api/v1/digest/monthly").status_code == 401
+
+
+def test_monthly_throughput(client, temp_app, with_bot_token):
+    today = date.today()
+    with temp_app.app_context():
+        sess = get_session()
+        done = WorkTask(title="Done thing", status="Complete", priority="Medium")
+        sess.add(done)
+        sess.flush()
+        sess.add(WorkTask(title="Open overdue", status="In Progress", priority="High",
+                          due_date=(today - timedelta(days=3)).isoformat()))
+        sess.add(ActivityLog(table_name="work_tasks", record_id=done.id,
+                             action="created", new_value="Done thing"))
+        sess.add(ActivityLog(table_name="work_tasks", record_id=done.id,
+                             action="status_change", field_name="status",
+                             new_value="Complete", user_name="Hermes"))
+        sess.commit()
+    body = client.get("/api/v1/digest/monthly", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["throughput"]["created"] >= 1
+    assert body["throughput"]["completed"] >= 1
+    assert "Done thing" in body["completed_titles"]
+    assert body["open"]["overdue"] >= 1
+    assert body["open"]["active"] >= 1

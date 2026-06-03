@@ -15,7 +15,7 @@ and the dashboard never drift.
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, current_app, jsonify, request
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from .. import limiter
 from ..config import ALLOWED_TABLES
@@ -188,4 +188,86 @@ def digest():
         "due_today": due_today,
         "due_soon": due_soon,
         "recent_activity": recent_activity,
+    })
+
+
+@bp.route("/api/v1/digest/monthly", methods=["GET"])
+@limiter.limit("30 per minute; 300 per hour", exempt_when=_skip_limit_for_tests)
+def monthly():
+    """Month-level roll-up: throughput (created/completed from the activity log,
+    accurate — not row-capped like the daily digest's recent_activity) plus the
+    current open state and an open-work-by-project breakdown. ?days (7-92, def 30).
+    """
+    err = check_scoped_token("bot")
+    if err:
+        return err
+    days = _clamp(request.args.get("days"), 30, 7, 92)
+    today = date.today()
+    horizon = today + timedelta(days=days)
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    sess = get_session()
+
+    # Current open state across the task trackers.
+    overdue = due_soon = active = 0
+    by_project: dict[str, dict] = {}
+    for table in TASK_TABLES:
+        cfg = ALLOWED_TABLES[table]
+        Model = TABLE_MODELS[table]
+        due_field = overdue_field_for_table(cfg)
+        done = done_statuses_for_table(table)
+        for row in sess.scalars(select(Model)).all():
+            if getattr(row, "status", None) in done:
+                continue
+            active += 1
+            if due_field is None:
+                continue
+            raw = getattr(row, due_field, "") or ""
+            proj = getattr(row, "project_number", "") or "(no #)"
+            bucket = by_project.setdefault(proj, {"open": 0, "overdue": 0})
+            if is_overdue_value(raw):
+                overdue += 1
+                bucket["open"] += 1
+                bucket["overdue"] += 1
+            else:
+                d = _due_date(raw)
+                if d is not None and today <= d <= horizon:
+                    due_soon += 1
+                    bucket["open"] += 1
+
+    # Month's throughput from the activity log (accurate counts).
+    def _count(*conds):
+        stmt = select(func.count()).select_from(ActivityLog).where(
+            ActivityLog.table_name.in_(TASK_TABLES),
+            ActivityLog.created_at >= cutoff, *conds)
+        return sess.scalar(stmt) or 0
+
+    created = _count(ActivityLog.action == "created")
+    completed = _count(ActivityLog.action == "status_change",
+                       ActivityLog.new_value == "Complete")
+    comp_rows = sess.scalars(
+        select(ActivityLog).where(
+            ActivityLog.table_name.in_(TASK_TABLES),
+            ActivityLog.created_at >= cutoff,
+            ActivityLog.action == "status_change",
+            ActivityLog.new_value == "Complete",
+        ).order_by(ActivityLog.created_at.desc()).limit(12)
+    ).all()
+    completed_titles = []
+    for a in comp_rows:
+        Model = TABLE_MODELS.get(a.table_name)
+        target = sess.get(Model, a.record_id) if Model else None
+        completed_titles.append(
+            _record_title(a.table_name, to_dict(target) or {}) if target
+            else f"#{a.record_id}")
+
+    ranked = sorted(by_project.items(), key=lambda kv: (-kv[1]["overdue"], -kv[1]["open"]))
+    return jsonify({
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "period_days": days,
+        "throughput": {"created": created, "completed": completed,
+                       "net_open_change": created - completed},
+        "completed_titles": completed_titles,
+        "open": {"overdue": overdue, "due_next": due_soon, "active": active},
+        "by_project": [{"project": k, "open": v["open"], "overdue": v["overdue"]}
+                       for k, v in ranked],
     })
