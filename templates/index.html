@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{ brand_name }}</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#0f62fe">
+<link rel="icon" type="image/png" sizes="192x192" href="/pwa-icon-192.png">
+<link rel="apple-touch-icon" href="/pwa-icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
 <style>
@@ -497,6 +501,66 @@
   .intake-options-collapsible { display:none; margin-top:0.85rem; }
   .intake-options-collapsible.open { display:block; }
 
+  /* ── Mobile companion shell ──────────────── */
+  .mobile-companion-shell { display:none; }
+  .mobile-companion-top { display:flex; align-items:flex-start; justify-content:space-between; gap:0.85rem; padding:1rem 0.95rem 0.85rem; background:#161616; color:#fff; border-bottom:1px solid #393939; }
+  .mobile-companion-copy { min-width:0; }
+  .mobile-kicker { font-family:'IBM Plex Mono',monospace; font-size:0.66rem; color:#a8a8a8; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.18rem; }
+  .mobile-title { font-size:1.15rem; line-height:1.15; font-weight:700; letter-spacing:-0.03em; color:#fff; }
+  .mobile-summary { margin-top:0.32rem; font-size:0.76rem; line-height:1.35; color:#c6c6c6; }
+  .mobile-pill-row { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.55rem; }
+  .mobile-pill { display:inline-flex; align-items:center; gap:0.24rem; min-height:24px; border:1px solid #525252; border-radius:999px; padding:0.12rem 0.5rem; font-size:0.68rem; color:#e0e0e0; background:#262626; white-space:nowrap; }
+  .mobile-pill strong { color:#fff; font-family:'IBM Plex Mono',monospace; font-weight:700; }
+  .mobile-top-actions { display:flex; flex-direction:column; align-items:stretch; gap:0.4rem; flex:0 0 auto; }
+  .mobile-capture-affordance,.mobile-signout-link { min-height:34px; border:1px solid #78a9ff; border-radius:999px; padding:0.35rem 0.75rem; font:inherit; font-size:0.74rem; font-weight:700; text-decoration:none; text-align:center; white-space:nowrap; }
+  .mobile-capture-affordance { background:#78a9ff; color:#0f172a; cursor:pointer; }
+  .mobile-signout-link { background:transparent; color:#c6c6c6; border-color:#525252; }
+  .mobile-pane { display:none; padding:0.85rem 0.75rem 1.25rem; width:100%; min-width:0; }
+  .mobile-pane.active { display:block; }
+  .mobile-pane-slot { display:flex; flex-direction:column; gap:0.85rem; min-width:0; width:100%; }
+  .mobile-bottom-tabs { display:none; }
+  .mobile-quick-card { border:1px solid var(--border); background:var(--surface); padding:0.9rem; display:flex; flex-direction:column; gap:0.65rem; }
+  .mobile-quick-title { font-size:0.9rem; font-weight:700; color:var(--text); }
+  .mobile-quick-copy { font-size:0.76rem; color:var(--text-muted); line-height:1.4; }
+  .mobile-quick-textarea { width:100%; min-height:36vh; border:1px solid var(--border); background:var(--bg); color:var(--text); padding:0.72rem; font:inherit; font-size:0.96rem; line-height:1.45; resize:vertical; }
+  .mobile-quick-row { display:flex; gap:0.45rem; align-items:center; }
+  .mobile-quick-row > * { min-width:0; }
+  .mobile-quick-input,.mobile-quick-select,.mobile-quick-file { width:100%; border:1px solid var(--border); background:var(--surface); color:var(--text); padding:0.48rem 0.56rem; font:inherit; font-size:0.82rem; }
+  .mobile-quick-select { flex:0 0 7.4rem; }
+  .mobile-quick-primary,.mobile-quick-secondary { min-height:42px; border-radius:0; padding:0.5rem 0.78rem; font:inherit; font-size:0.82rem; font-weight:700; cursor:pointer; }
+  .mobile-quick-primary { border:0; background:var(--accent); color:#fff; }
+  .mobile-quick-secondary { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); }
+  .mobile-quick-primary:disabled,.mobile-quick-secondary:disabled { opacity:0.58; cursor:wait; }
+  .mobile-quick-status { min-height:1rem; font-size:0.76rem; color:var(--text-muted); }
+  .mobile-quick-status.error { color:var(--danger); }
+  .mobile-today-card { border:1px solid var(--border); background:var(--surface); padding:0.9rem; display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem; }
+  .mobile-today-title { font-size:0.9rem; font-weight:700; color:var(--text); }
+  .mobile-today-copy { font-size:0.76rem; color:var(--text-muted); line-height:1.4; }
+  .mobile-today-list { display:flex; flex-direction:column; gap:0.55rem; }
+  .mobile-today-empty { border:1px dashed var(--border); background:var(--bg); color:var(--text-muted); padding:0.8rem; font-size:0.78rem; line-height:1.35; }
+  .mobile-today-item { border:1px solid var(--border-light); background:var(--bg); padding:0.72rem; display:flex; flex-direction:column; gap:0.55rem; }
+  .mobile-today-item-title { font-size:0.86rem; font-weight:700; color:var(--text); line-height:1.25; }
+  .mobile-today-meta { display:flex; flex-wrap:wrap; gap:0.35rem; color:var(--text-muted); font-size:0.7rem; }
+  .mobile-today-actions { display:grid; grid-template-columns:1fr 1fr; gap:0.45rem; }
+  .mobile-today-actions .btn { width:100%; justify-content:center; }
+  .mobile-review-card { border:1px solid var(--border); background:var(--surface); padding:0.9rem; display:flex; flex-direction:column; gap:0.65rem; margin-bottom:0.85rem; }
+  .mobile-review-title { font-size:0.9rem; font-weight:700; color:var(--text); }
+  .mobile-review-copy { font-size:0.76rem; color:var(--text-muted); line-height:1.4; }
+  .mobile-review-list { display:flex; flex-direction:column; gap:0.55rem; }
+  .mobile-review-empty { border:1px dashed var(--border); background:var(--bg); color:var(--text-muted); padding:0.8rem; font-size:0.78rem; line-height:1.35; }
+  .mobile-review-item { border:1px solid var(--border-light); background:var(--bg); padding:0.72rem; display:flex; flex-direction:column; gap:0.55rem; }
+  .mobile-review-item-title { font-size:0.86rem; font-weight:700; color:var(--text); line-height:1.25; }
+  .mobile-review-meta { display:flex; flex-wrap:wrap; gap:0.35rem; color:var(--text-muted); font-size:0.7rem; }
+  .mobile-review-actions { display:grid; grid-template-columns:1fr 1fr; gap:0.45rem; }
+  .mobile-review-actions .btn { width:100%; justify-content:center; }
+  .mobile-tab-btn { min-width:0; min-height:58px; border:0; border-top:1px solid var(--border); background:var(--surface); color:var(--text-muted); font:inherit; font-size:0.72rem; font-weight:700; cursor:pointer; align-items:center; justify-content:center; flex-direction:column; gap:0.2rem; }
+  .mobile-tab-label { line-height:1; }
+  .mobile-tab-badge { min-width:1.4rem; max-width:3.8rem; height:1.15rem; display:inline-flex; align-items:center; justify-content:center; padding:0 0.35rem; border-radius:999px; background:var(--bg); color:var(--text-light); font-family:'IBM Plex Mono',monospace; font-size:0.62rem; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .mobile-tab-btn.active { color:#161616; background:var(--accent-light); box-shadow:inset 0 3px 0 var(--accent); }
+  .mobile-tab-btn.active .mobile-tab-badge { background:var(--surface); color:var(--accent); }
+  .mobile-tab-badge.is-danger { color:var(--danger); background:var(--danger-light); }
+  .mobile-tab-badge.is-warn { color:var(--warn); background:var(--warn-light); }
+
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
   .field label { display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
@@ -675,6 +739,50 @@
     .att-upload,.lnk-add,.comment-add { flex-direction:column; align-items:stretch; }
   }
 
+  @media (max-width:639px) {
+    html,body { max-width:100%; overflow-x:hidden; }
+    body { min-width:0; }
+    .header-inner { min-height:48px; height:48px; flex-wrap:nowrap; }
+    .header-left { min-height:48px; width:100%; }
+    .logo { width:100%; height:48px; max-width:none; border-right:none; padding:0 0.85rem; font-size:0.86rem; }
+    .logo .context-badge { display:none; }
+    .user-bar { display:none; }
+    .app-shell { display:block; min-height:calc(100dvh - 48px); }
+    .app-shell .side-nav { display:none; }
+    .container:has(.mobile-companion-shell) { width:100%; max-width:100%; padding:0 0 calc(5rem + env(safe-area-inset-bottom)); overflow-x:hidden; }
+    .container:has(.mobile-companion-shell) > .section { display:none !important; }
+    .mobile-companion-shell { display:flex; flex-direction:column; width:100%; max-width:100vw; min-height:calc(100dvh - 48px); overflow-x:hidden; background:linear-gradient(180deg,#f4f4f4 0%,#ffffff 48%,#f4f4f4 100%); }
+    .mobile-companion-shell * { max-width:100%; }
+    .mobile-companion-top { position:sticky; top:48px; z-index:75; }
+    .mobile-pane { overflow-x:hidden; }
+    .mobile-pane .dash-card,.mobile-pane .core-panel,.mobile-pane .core-loop,.mobile-pane .project-command,.mobile-pane .intake-card { width:100%; min-width:0; }
+    .mobile-pane .dash-card { margin:0 !important; overflow:visible; }
+    .mobile-pane .dash-card-header { padding:0.72rem 0.85rem; }
+    .mobile-pane .capture-body { padding:0.85rem !important; }
+    .mobile-pane .intake-layout { display:grid; grid-template-columns:1fr; gap:0.85rem; }
+    .mobile-pane .preset-panel { padding:0.75rem; }
+    .mobile-pane .core-loop { gap:0.65rem; margin-bottom:0; }
+    .mobile-pane .core-hero-main { padding:0.9rem; }
+    .mobile-pane .core-actions,.mobile-pane .intake-row { display:grid; grid-template-columns:1fr; gap:0.45rem; }
+    .mobile-pane .core-actions .btn,.mobile-pane .intake-row .btn { width:100%; justify-content:center; }
+    .mobile-pane .core-tracker-grid,.mobile-pane .core-work-grid,.mobile-pane .core-activity-grid,.mobile-pane .core-stat-strip { grid-template-columns:1fr; }
+    .mobile-pane .core-list { max-height:none; }
+    .mobile-pane .overdue-item { align-items:flex-start; flex-direction:column; gap:0.35rem; padding:0.65rem 0.85rem; }
+    .mobile-pane .overdue-date { align-self:flex-start; }
+    .mobile-pane .field-row { flex-direction:column; gap:0; }
+    .mobile-pane input,.mobile-pane select,.mobile-pane textarea,.mobile-pane button { min-width:0; }
+    .mobile-quick-row { flex-direction:column; align-items:stretch; }
+    .mobile-quick-select { flex-basis:auto; }
+    .mobile-today-actions,.mobile-review-actions { grid-template-columns:1fr; }
+    .mobile-pane textarea { max-width:100%; }
+    .mobile-bottom-tabs { position:fixed; left:0; right:0; bottom:0; z-index:110; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; max-width:100vw; padding-bottom:env(safe-area-inset-bottom); background:var(--surface); box-shadow:0 -8px 24px rgba(0,0,0,0.12); }
+    .mobile-tab-btn { display:flex; }
+    .feedback-fab { right:0.75rem; bottom:calc(4.9rem + env(safe-area-inset-bottom)); }
+    .toast { left:0.75rem; right:0.75rem; bottom:calc(4.9rem + env(safe-area-inset-bottom)); text-align:center; }
+  }
+
+
+
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
@@ -707,6 +815,7 @@
     </div>
   </div>
 </header>
+
 
 <div class="app-shell{% if standalone_tab %} app-shell-standalone{% endif %}">
   {% if not standalone_tab %}
@@ -745,6 +854,87 @@
   {% endif %}
 
   <main class="container">
+  {% if not standalone_tab %}
+  <div class="mobile-companion-shell" id="mobile-companion-shell" aria-label="TaskTrack mobile companion">
+    <div class="mobile-companion-top">
+      <div class="mobile-companion-copy">
+        <div class="mobile-kicker">TaskTrack companion</div>
+        <h1 class="mobile-title" id="mobile-pane-title">Today</h1>
+        <p class="mobile-summary" id="mobile-pane-summary">Loading TaskTrack status...</p>
+        <div class="mobile-pill-row" aria-label="Mobile status summary">
+          <span class="mobile-pill"><strong id="mobile-open-pill">0</strong> open</span>
+          <span class="mobile-pill"><strong id="mobile-overdue-pill">0</strong> overdue</span>
+          <span class="mobile-pill"><strong id="mobile-review-pill">0</strong> review</span>
+        </div>
+      </div>
+      <div class="mobile-top-actions">
+        <button class="mobile-capture-affordance" type="button" data-mobile-pane-jump="capture">Capture</button>
+        <a class="mobile-signout-link" href="/logout">Sign out</a>
+      </div>
+    </div>
+
+    <section class="mobile-pane" id="mobile-pane-capture" data-mobile-pane="capture" role="tabpanel" aria-labelledby="mobile-tab-capture">
+      <div class="mobile-quick-card" aria-label="Quick mobile capture">
+        <div>
+          <div class="mobile-quick-title">Quick capture</div>
+          <div class="mobile-quick-copy">Cheap inbox drop first. Add project context or a photo if useful; full triage can happen later.</div>
+        </div>
+        <textarea id="mobile-quick-text" class="mobile-quick-textarea" placeholder="What needs to be remembered or triaged?"></textarea>
+        <div class="mobile-quick-row">
+          <input id="mobile-quick-project" class="mobile-quick-input" type="text" inputmode="text" placeholder="Project # optional">
+          <select id="mobile-quick-priority" class="mobile-quick-select" aria-label="Priority">
+            <option value="Medium" selected>Medium</option>
+            <option value="High">High</option>
+            <option value="Low">Low</option>
+          </select>
+        </div>
+        <input id="mobile-quick-file" class="mobile-quick-file" type="file" accept="image/*,.pdf,.dwg,.dxf,.xlsx,.csv,.txt" aria-label="Optional attachment">
+        <div class="mobile-quick-row">
+          <button class="mobile-quick-primary" id="mobile-quick-submit" type="button">Save to inbox</button>
+          <button class="mobile-quick-secondary" id="mobile-quick-clear" type="button">Clear</button>
+        </div>
+        <div class="mobile-quick-status" id="mobile-quick-status"></div>
+      </div>
+      <div class="mobile-pane-slot" id="mobile-slot-capture"></div>
+    </section>
+    <section class="mobile-pane active" id="mobile-pane-today" data-mobile-pane="today" role="tabpanel" aria-labelledby="mobile-tab-today">
+      <div class="mobile-today-card" aria-label="Mobile internal queue">
+        <div>
+          <div class="mobile-today-title">Internal queue</div>
+          <div class="mobile-today-copy">Open follow-ups, meetings, office, and asset items. Mark quick wins done without opening the desktop table.</div>
+        </div>
+        <div class="mobile-today-list" id="mobile-today-list"></div>
+      </div>
+      <div class="mobile-pane-slot" id="mobile-slot-today"></div>
+    </section>
+    <section class="mobile-pane" id="mobile-pane-review" data-mobile-pane="review" role="tabpanel" aria-labelledby="mobile-tab-review">
+      <div class="mobile-review-card" aria-label="Mobile review queue">
+        <div>
+          <div class="mobile-review-title">Needs review</div>
+          <div class="mobile-review-copy">Confirm AI and intake-created tracker rows from the phone. Use Edit when the generated fields need cleanup.</div>
+        </div>
+        <div class="mobile-review-list" id="mobile-review-list"></div>
+      </div>
+      <div class="mobile-pane-slot" id="mobile-slot-review"></div>
+    </section>
+
+    <nav class="mobile-bottom-tabs" aria-label="Mobile companion sections" role="tablist">
+      <button class="mobile-tab-btn" id="mobile-tab-capture" type="button" data-mobile-pane-btn="capture" role="tab" aria-controls="mobile-pane-capture" aria-selected="false">
+        <span class="mobile-tab-label">Capture</span>
+        <span class="mobile-tab-badge" id="mobile-badge-capture">AI</span>
+      </button>
+      <button class="mobile-tab-btn active" id="mobile-tab-today" type="button" data-mobile-pane-btn="today" role="tab" aria-controls="mobile-pane-today" aria-selected="true">
+        <span class="mobile-tab-label">Today</span>
+        <span class="mobile-tab-badge" id="mobile-badge-today">0</span>
+      </button>
+      <button class="mobile-tab-btn" id="mobile-tab-review" type="button" data-mobile-pane-btn="review" role="tab" aria-controls="mobile-pane-review" aria-selected="false">
+        <span class="mobile-tab-label">Review</span>
+        <span class="mobile-tab-badge" id="mobile-badge-review">0</span>
+      </button>
+    </nav>
+  </div>
+  {% endif %}
+
   {% if standalone_tab and standalone_subtitle %}
   <section class="section active" style="display:block;margin-bottom:1rem">
     <div class="dash-card" style="overflow:visible">
@@ -2384,6 +2574,503 @@ function initFeedbackWidget() {
   });
 }
 
+/* ── Mobile companion shell ─────────────────── */
+const MOBILE_PANES = {
+  capture: { title:'Capture', summary:'Paste a field note, meeting note, OCR text, or quick follow-up for triage.' },
+  today: { title:'Today', summary:'Live daily cockpit: open work, overdue items, due-soon work, reminders, and activity.' },
+  review: { title:'Review', summary:'Confirm AI and intake captures before they disappear into the trackers.' },
+};
+const mobileCompanionState = {
+  mq: null,
+  activePane: 'today',
+  targets: {},
+  counts: { open: 0, overdue: 0, review: 0, intakeReview: 0, aiReview: 0 },
+};
+const MOBILE_WIDGETS = [
+  { key:'today-core', slot:'mobile-slot-today', getNode:() => document.getElementById('core-loop') },
+  { key:'today-upcoming', slot:'mobile-slot-today', getNode:() => document.getElementById('dash-upcoming')?.closest('.dash-card') },
+  { key:'today-reminders', slot:'mobile-slot-today', getNode:() => document.getElementById('dash-reminders')?.closest('.dash-card') },
+  { key:'review-card', slot:'mobile-slot-review', getNode:() => document.getElementById('dash-intake-review')?.closest('.dash-card') },
+];
+const MOBILE_REVIEW_TRACKERS = [
+  { tab:'work', table:'work_tasks', label:'CAD Dev' },
+  { tab:'project', table:'project_work_tasks', label:'Project Tasks' },
+  { tab:'training', table:'training_tasks', label:'Training' },
+  { tab:'personal_husband', table:'personal_items', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal_father', table:'personal_items', label:'Meetings', category:'Meetings' },
+  { tab:'personal_house', table:'personal_items', label:'Office', category:'Office' },
+  { tab:'personal_cars', table:'personal_items', label:'Assets', category:'Assets' },
+];
+const MOBILE_TODAY_INTERNAL_TABS = [
+  { tab:'personal_husband', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal_father', label:'Meetings', category:'Meetings' },
+  { tab:'personal_house', label:'Office', category:'Office' },
+  { tab:'personal_cars', label:'Assets', category:'Assets' },
+];
+
+function mobileShell() {
+  return document.getElementById('mobile-companion-shell');
+}
+
+function mobileEnabled() {
+  return Boolean(!STANDALONE_TAB && mobileShell() && mobileCompanionState.mq?.matches);
+}
+
+function mobileTargetState(spec) {
+  if (!mobileCompanionState.targets[spec.key]) mobileCompanionState.targets[spec.key] = {};
+  const state = mobileCompanionState.targets[spec.key];
+  if (!state.node) state.node = spec.getNode();
+  return state;
+}
+
+function moveWidgetToMobile(spec) {
+  const slot = document.getElementById(spec.slot);
+  const state = mobileTargetState(spec);
+  if (!slot || !state.node) return;
+  if (!state.placeholder) {
+    state.placeholder = document.createComment('mobile-companion:' + spec.key);
+    state.node.parentNode.insertBefore(state.placeholder, state.node);
+  }
+  if (state.node.parentNode !== slot) slot.appendChild(state.node);
+}
+
+function restoreMobileWidgets() {
+  Object.values(mobileCompanionState.targets).forEach(state => {
+    if (!state.node || !state.placeholder?.parentNode) return;
+    if (state.node.parentNode === state.placeholder.parentNode) return;
+    state.placeholder.parentNode.insertBefore(state.node, state.placeholder.nextSibling);
+  });
+}
+
+function syncMobileCompanionLayout() {
+  if (!mobileShell()) return;
+  if (mobileEnabled()) MOBILE_WIDGETS.forEach(moveWidgetToMobile);
+  else restoreMobileWidgets();
+}
+
+function setMobileBadge(id, value, tone) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = String(value);
+  el.classList.toggle('is-danger', tone === 'danger');
+  el.classList.toggle('is-warn', tone === 'warn');
+}
+
+function mobilePaneSummary(pane) {
+  const counts = mobileCompanionState.counts;
+  if (pane === 'today') return counts.open + ' open · ' + counts.overdue + ' overdue · ' + counts.review + ' review';
+  return MOBILE_PANES[pane]?.summary || '';
+}
+
+function renderMobilePaneChrome() {
+  const pane = mobileCompanionState.activePane;
+  const config = MOBILE_PANES[pane] || MOBILE_PANES.today;
+  const title = document.getElementById('mobile-pane-title');
+  const summary = document.getElementById('mobile-pane-summary');
+  if (title) title.textContent = config.title;
+  if (summary) summary.textContent = mobilePaneSummary(pane);
+  document.body.dataset.mobilePane = pane;
+}
+
+function updateMobileCounts(counts) {
+  if (!counts) return;
+  const intakeReview = Number(counts.intakeReview ?? mobileCompanionState.counts.intakeReview ?? 0);
+  const aiReview = Number(counts.aiReview ?? mobileCompanionState.counts.aiReview ?? 0);
+  mobileCompanionState.counts = {
+    open: Number(counts.open ?? mobileCompanionState.counts.open ?? 0),
+    overdue: Number(counts.overdue ?? mobileCompanionState.counts.overdue ?? 0),
+    review: Number(counts.review ?? (intakeReview + aiReview)),
+    intakeReview,
+    aiReview,
+  };
+  coreSetText('mobile-open-pill', mobileCompanionState.counts.open);
+  coreSetText('mobile-overdue-pill', mobileCompanionState.counts.overdue);
+  coreSetText('mobile-review-pill', mobileCompanionState.counts.review);
+  const todayTone = mobileCompanionState.counts.overdue ? 'danger' : '';
+  setMobileBadge('mobile-badge-today', mobileCompanionState.counts.overdue || mobileCompanionState.counts.open, todayTone);
+  setMobileBadge('mobile-badge-review', mobileCompanionState.counts.review, mobileCompanionState.counts.review ? 'warn' : '');
+  renderMobilePaneChrome();
+}
+
+function mobileUpdateFromDashboard(data, totals) {
+  const intakeReview = Number(totals?.intakeReview || data?.intake?.summary?.needs_review_count || 0);
+  const aiReview = mobileReviewRowsFromCache().length;
+  updateMobileCounts({
+    open: totals?.totalActive || 0,
+    overdue: totals?.totalOverdue || 0,
+    review: intakeReview + aiReview,
+    intakeReview,
+    aiReview,
+  });
+  renderMobileTodayQueue();
+  renderMobileReviewQueue();
+}
+
+function mobileTodayRowsFromCache() {
+  const rows = [];
+  MOBILE_TODAY_INTERNAL_TABS.forEach(spec => {
+    const cached = Array.isArray(tableCache[spec.tab]) ? tableCache[spec.tab] : [];
+    cached.forEach(row => {
+      if (row?.category !== spec.category) return;
+      if (['Done', 'Archived'].includes(row.status || '')) return;
+      rows.push({ ...row, _mobileTab:spec.tab, _mobileLabel:spec.label });
+    });
+  });
+  rows.sort((a, b) => {
+    const aDue = coreDateSortValue(a.due_date || a.created_at || '');
+    const bDue = coreDateSortValue(b.due_date || b.created_at || '');
+    if (aDue !== bDue) return aDue - bDue;
+    return String(b.created_at || '').localeCompare(String(a.created_at || ''));
+  });
+  return rows;
+}
+
+function mobileTodayMeta(row) {
+  const bits = [row._mobileLabel, row.priority || '', row.status || 'New'];
+  if (row.due_date) bits.push(formatDateTime(row.due_date));
+  return bits.filter(Boolean);
+}
+
+function syncPersonalItemCaches(updated) {
+  if (!updated?.id) return;
+  MOBILE_TODAY_INTERNAL_TABS.forEach(spec => {
+    const cache = tableCache[spec.tab] || [];
+    const idx = cache.findIndex(item => String(item.id) === String(updated.id));
+    if (idx >= 0) cache[idx] = { ...cache[idx], ...updated };
+  });
+}
+
+function openMobileTodayRow(row) {
+  if (!row?._mobileTab || !row.id) return;
+  editRecord(row._mobileTab, row.id);
+}
+
+async function markMobileTodayDone(row, button) {
+  if (!row?.id) return;
+  if (button) button.disabled = true;
+  const updated = await api('PUT', '/api/v1/personal_items/' + row.id, { status:'Done' });
+  if (updated && !updated.error) {
+    toast('internal item marked done');
+    syncPersonalItemCaches(updated);
+    renderMobileTodayQueue();
+    loadTable(row._mobileTab);
+    loadDashboard();
+  } else {
+    if (button) button.disabled = false;
+    toast(updated?.error || 'status update failed');
+  }
+}
+
+function renderMobileTodayQueue() {
+  const host = document.getElementById('mobile-today-list');
+  if (!host) return;
+  const rows = mobileTodayRowsFromCache().slice(0, 8);
+  host.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mobile-today-empty';
+    empty.textContent = 'No open internal items loaded yet. Due and overdue work still appears below.';
+    host.appendChild(empty);
+    return;
+  }
+  rows.forEach(row => {
+    const item = document.createElement('div');
+    item.className = 'mobile-today-item';
+    const title = document.createElement('div');
+    title.className = 'mobile-today-item-title';
+    title.textContent = row.title || '(untitled internal item)';
+    const meta = document.createElement('div');
+    meta.className = 'mobile-today-meta';
+    mobileTodayMeta(row).forEach(part => meta.appendChild(coreTag(part, coreStatusTone(part))));
+    const actions = document.createElement('div');
+    actions.className = 'mobile-today-actions';
+    const doneBtn = document.createElement('button');
+    doneBtn.type = 'button';
+    doneBtn.className = 'btn btn-primary';
+    doneBtn.textContent = 'Done';
+    doneBtn.addEventListener('click', () => markMobileTodayDone(row, doneBtn));
+    const openBtn = document.createElement('button');
+    openBtn.type = 'button';
+    openBtn.className = 'btn btn-ghost';
+    openBtn.textContent = 'Open';
+    openBtn.addEventListener('click', () => openMobileTodayRow(row));
+    actions.appendChild(doneBtn);
+    actions.appendChild(openBtn);
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.appendChild(actions);
+    host.appendChild(item);
+  });
+}
+
+function mobileReviewRowsFromCache() {
+  const reviewRows = [];
+  MOBILE_REVIEW_TRACKERS.forEach(spec => {
+    const rows = Array.isArray(tableCache[spec.tab]) ? tableCache[spec.tab] : [];
+    rows.forEach(row => {
+      if (!row?.needs_review) return;
+      if (spec.category && row.category !== spec.category) return;
+      reviewRows.push({ ...row, _mobileTab:spec.tab, _mobileTable:spec.table, _mobileLabel:spec.label });
+    });
+  });
+  reviewRows.sort((a, b) => String(b.created_at || b.updated_at || '').localeCompare(String(a.created_at || a.updated_at || '')));
+  return reviewRows;
+}
+
+function mobileReviewTitle(row) {
+  return row.title || row.project_name || row.task_description || row.training_goals || ('#' + row.id);
+}
+
+function mobileReviewMeta(row) {
+  return [row._mobileLabel, row.source || 'AI intake', row.project_number, row.priority || row.status].filter(Boolean);
+}
+
+function openMobileReviewRow(row) {
+  if (!row?._mobileTab || !row.id) return;
+  editRecord(row._mobileTab, row.id);
+}
+
+async function confirmMobileReviewRow(row, button) {
+  if (!row?._mobileTable || !row.id) return;
+  if (button) button.disabled = true;
+  const res = await api('POST', '/api/v1/' + row._mobileTable + '/' + row.id + '/confirm', {});
+  if (res && !res.error) {
+    toast('review item confirmed');
+    const cache = tableCache[row._mobileTab] || [];
+    const cached = cache.find(item => String(item.id) === String(row.id));
+    if (cached) cached.needs_review = 0;
+    renderMobileReviewQueue();
+    syncMobileReviewFromCache();
+    loadTable(row._mobileTab);
+    loadDashboard();
+  } else {
+    if (button) button.disabled = false;
+    toast(res?.error || 'review update failed');
+  }
+}
+
+function renderMobileReviewQueue() {
+  const host = document.getElementById('mobile-review-list');
+  if (!host) return;
+  const rows = mobileReviewRowsFromCache().slice(0, 8);
+  host.replaceChildren();
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mobile-review-empty';
+    empty.textContent = 'No AI-created tracker rows need confirmation. Intake review items, if any, appear below.';
+    host.appendChild(empty);
+    return;
+  }
+  rows.forEach(row => {
+    const item = document.createElement('div');
+    item.className = 'mobile-review-item';
+    const title = document.createElement('div');
+    title.className = 'mobile-review-item-title';
+    title.textContent = mobileReviewTitle(row);
+    const meta = document.createElement('div');
+    meta.className = 'mobile-review-meta';
+    mobileReviewMeta(row).forEach(part => meta.appendChild(coreTag(part, coreStatusTone(part))));
+    const actions = document.createElement('div');
+    actions.className = 'mobile-review-actions';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.className = 'btn btn-primary';
+    confirmBtn.textContent = 'Confirm';
+    confirmBtn.addEventListener('click', () => confirmMobileReviewRow(row, confirmBtn));
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn btn-ghost';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => openMobileReviewRow(row));
+    actions.appendChild(confirmBtn);
+    actions.appendChild(editBtn);
+    item.appendChild(title);
+    item.appendChild(meta);
+    item.appendChild(actions);
+    host.appendChild(item);
+  });
+}
+
+function syncMobileReviewFromCache() {
+  const aiReview = mobileReviewRowsFromCache().length;
+  const intakeReview = Number(mobileCompanionState.counts.intakeReview || 0);
+  updateMobileCounts({
+    open: mobileCompanionState.counts.open,
+    overdue: mobileCompanionState.counts.overdue,
+    review: intakeReview + aiReview,
+    intakeReview,
+    aiReview,
+  });
+}
+
+function mobileUpdateCaptureState() {
+  const input = document.getElementById('intake-input');
+  const hasDraft = Boolean(input?.value.trim() || mobileQuickDraftPresent());
+  setMobileBadge('mobile-badge-capture', hasDraft ? 'draft' : 'inbox', hasDraft ? 'warn' : '');
+}
+
+function activateMobilePane(pane, options={}) {
+  if (!MOBILE_PANES[pane]) return false;
+  mobileCompanionState.activePane = pane;
+  document.querySelectorAll('[data-mobile-pane]').forEach(el => {
+    el.classList.toggle('active', el.dataset.mobilePane === pane);
+  });
+  document.querySelectorAll('[data-mobile-pane-btn]').forEach(btn => {
+    const active = btn.dataset.mobilePaneBtn === pane;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  renderMobilePaneChrome();
+  if (mobileEnabled() && (pane === 'today' || pane === 'review')) loadDashboard();
+  if (pane === 'capture' && (options.focusCapture || mobileEnabled())) {
+    setTimeout(() => {
+      const input = mobileEnabled()
+        ? (document.getElementById('mobile-quick-text') || document.getElementById('intake-input'))
+        : document.getElementById('intake-input');
+      input?.focus({ preventScroll: true });
+      input?.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 60);
+  }
+  return true;
+}
+
+function initMobileCompanion() {
+  const shell = mobileShell();
+  if (!shell || STANDALONE_TAB) return;
+  mobileCompanionState.mq = window.matchMedia('(max-width: 639px)');
+  document.querySelectorAll('[data-mobile-pane-btn]').forEach(btn => {
+    btn.addEventListener('click', () => activateMobilePane(btn.dataset.mobilePaneBtn, { focusCapture: btn.dataset.mobilePaneBtn === 'capture' }));
+  });
+  document.querySelectorAll('[data-mobile-pane-jump]').forEach(btn => {
+    btn.addEventListener('click', () => activateMobilePane(btn.dataset.mobilePaneJump, { focusCapture: btn.dataset.mobilePaneJump === 'capture' }));
+  });
+  const input = document.getElementById('intake-input');
+  if (input) input.addEventListener('input', mobileUpdateCaptureState);
+  if (mobileCompanionState.mq.addEventListener) mobileCompanionState.mq.addEventListener('change', syncMobileCompanionLayout);
+  else mobileCompanionState.mq.addListener(syncMobileCompanionLayout);
+  syncMobileCompanionLayout();
+  renderMobilePaneChrome();
+  renderMobileTodayQueue();
+  renderMobileReviewQueue();
+  mobileUpdateCaptureState();
+}
+
+function mobileQuickStatus(message, error=false) {
+  const el = document.getElementById('mobile-quick-status');
+  if (!el) return;
+  el.textContent = message || '';
+  el.classList.toggle('error', Boolean(error));
+}
+
+function mobileQuickDraftPresent() {
+  return Boolean(
+    document.getElementById('mobile-quick-text')?.value.trim() ||
+    document.getElementById('mobile-quick-project')?.value.trim() ||
+    document.getElementById('mobile-quick-file')?.files?.length
+  );
+}
+
+function mobileQuickSourceRef() {
+  try {
+    if (window.crypto?.randomUUID) return 'web-mobile:' + window.crypto.randomUUID();
+  } catch {}
+  return 'web-mobile:' + Date.now() + ':' + Math.random().toString(16).slice(2);
+}
+
+function mobileQuickTitle(raw) {
+  const text = String(raw || '').trim();
+  const firstLine = text.split(/\r?\n/).map(line => line.trim()).find(Boolean) || text;
+  return firstLine.slice(0, 96) || 'Mobile capture';
+}
+
+function mobileQuickBody(raw, project) {
+  const chunks = [];
+  if (project) chunks.push('Project: ' + project);
+  chunks.push(String(raw || '').trim());
+  return chunks.filter(Boolean).join('\n\n');
+}
+
+async function uploadMobileQuickFile(inboxId) {
+  const input = document.getElementById('mobile-quick-file');
+  const file = input?.files?.[0];
+  if (!file || !inboxId) return;
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/v1/attachments/inbox_items/' + inboxId, {
+    method: 'POST',
+    headers: { 'X-CSRF-Token': CSRF_TOKEN },
+    body: fd,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Attachment upload failed');
+}
+
+async function submitMobileQuickCapture() {
+  const textEl = document.getElementById('mobile-quick-text');
+  const projectEl = document.getElementById('mobile-quick-project');
+  const priorityEl = document.getElementById('mobile-quick-priority');
+  const submit = document.getElementById('mobile-quick-submit');
+  const raw = textEl?.value.trim() || '';
+  const project = projectEl?.value.trim() || '';
+  if (!raw) {
+    mobileQuickStatus('Add a note before saving.', true);
+    textEl?.focus();
+    return;
+  }
+  if (submit) submit.disabled = true;
+  mobileQuickStatus('Saving to inbox...');
+  try {
+    const item = await api('POST', '/api/v1/inbox', {
+      title: mobileQuickTitle(raw),
+      body: mobileQuickBody(raw, project),
+      source: 'web-mobile',
+      source_ref: mobileQuickSourceRef(),
+      priority: priorityEl?.value || 'Medium',
+    });
+    if (!item || item.error) throw new Error(item?.error || 'Capture failed');
+    let attachmentError = '';
+    try {
+      await uploadMobileQuickFile(item.id);
+    } catch (err) {
+      attachmentError = err.message || 'attachment upload failed';
+    }
+    clearMobileQuickCapture(false);
+    if (attachmentError) mobileQuickStatus('Saved to inbox #' + item.id + ', but ' + attachmentError + '.', true);
+    else mobileQuickStatus('Saved to inbox #' + item.id + '.');
+    loadTable('triage');
+    loadDashboard();
+  } catch (err) {
+    mobileQuickStatus(err.message || 'Capture failed.', true);
+  } finally {
+    if (submit) submit.disabled = false;
+    mobileUpdateCaptureState();
+  }
+}
+
+function clearMobileQuickCapture(showStatus=true) {
+  const text = document.getElementById('mobile-quick-text');
+  const project = document.getElementById('mobile-quick-project');
+  const priority = document.getElementById('mobile-quick-priority');
+  const file = document.getElementById('mobile-quick-file');
+  if (text) text.value = '';
+  if (project) project.value = '';
+  if (priority) priority.value = 'Medium';
+  if (file) file.value = '';
+  if (showStatus) mobileQuickStatus('');
+  mobileUpdateCaptureState();
+}
+
+function initMobileQuickCapture() {
+  const submit = document.getElementById('mobile-quick-submit');
+  if (!submit) return;
+  submit.addEventListener('click', submitMobileQuickCapture);
+  document.getElementById('mobile-quick-clear')?.addEventListener('click', () => clearMobileQuickCapture());
+  ['mobile-quick-text', 'mobile-quick-project', 'mobile-quick-file'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', mobileUpdateCaptureState);
+    document.getElementById(id)?.addEventListener('change', mobileUpdateCaptureState);
+  });
+}
+
 /* ── Tabs ──────────────────────────────────── */
 function tabButtonFor(tabName) {
   return Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.dataset.tab === tabName) || null;
@@ -3601,6 +4288,7 @@ async function loadDashboard() {
   });
 
   renderCoreLoop(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
+  mobileUpdateFromDashboard(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
 
   // Overdue list
   const overdueEl = document.getElementById('dash-overdue');
@@ -4057,6 +4745,13 @@ async function loadTable(table) {
 
   // Phase-4: keep the Kanban view in sync with the same filtered set.
   if (table === 'project') renderProjectKanban(filtered);
+  if (MOBILE_TODAY_INTERNAL_TABS.some(spec => spec.tab === table)) {
+    renderMobileTodayQueue();
+  }
+  if (MOBILE_REVIEW_TRACKERS.some(spec => spec.tab === table)) {
+    renderMobileReviewQueue();
+    syncMobileReviewFromCache();
+  }
 }
 
 /* ── Calendar agenda view ────────────────────────────────────────────── */
@@ -6499,6 +7194,7 @@ async function intakeConfirm() {
     intakeSetStatus('Created ' + (INTAKE_TARGET_LABELS[target] || 'task') + ' #' + res.id + '. Needs review flag set.');
     intakePreviewState = null;
     document.getElementById('intake-input').value = '';
+    mobileUpdateCaptureState();
     document.getElementById('intake-preview-card').style.display = 'none';
     const tabKey = ({ work_tasks: 'work', project_work_tasks: 'project', training_tasks: 'training' })[target];
     if (tabKey) loadTable(tabKey);
@@ -6581,6 +7277,7 @@ function intakeBuildDirectPayload(target, presets, overrides, state) {
 
 function intakeClear() {
   document.getElementById('intake-input').value = '';
+  mobileUpdateCaptureState();
   document.getElementById('intake-preview-card').style.display = 'none';
   intakePreviewState = null;
   intakeSetStatus('');
@@ -6662,6 +7359,7 @@ function startupRouteState() {
 function applyCapturePresetRoute(state) {
   if (!state.captureSource && !state.captureTarget) return;
   applyCapturePresetValues({ source: state.captureSource, target: state.captureTarget });
+  if (mobileEnabled()) activateMobilePane('capture', { focusCapture: true });
   const input = document.getElementById('intake-input');
   if (input) {
     input.focus({ preventScroll: true });
@@ -6686,6 +7384,14 @@ initFeedbackWidget();
 loadFeedbackAppContext();
 initProjectCommand();
 initProjectTaskFilters();
+initMobileCompanion();
+initMobileQuickCapture();
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/service-worker.js", { scope: "/" }).catch(() => {});
+  });
+}
+
 if (STANDALONE_TAB) {
   activateTab(STANDALONE_TAB);
 } else {

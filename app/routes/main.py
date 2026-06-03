@@ -1,14 +1,31 @@
 """Top-level dashboard + healthcheck."""
-from datetime import datetime, UTC
+import json
 import os
-from pathlib import Path
+import struct
 import subprocess
+import zlib
+from datetime import UTC, datetime
+from functools import lru_cache
+from pathlib import Path
 
-from flask import Blueprint, current_app, g, jsonify, render_template, session
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    g,
+    jsonify,
+    render_template,
+    session,
+)
 
 from ..auth import login_required
 
 bp = Blueprint("main", __name__)
+
+PWA_THEME_COLOR = "#0f62fe"
+PWA_BACKGROUND_COLOR = "#f4f4f4"
+PWA_ICON_SIZES = (192, 512)
 
 
 @bp.route("/")
@@ -84,6 +101,113 @@ def app_context():
             "build_id": os.environ.get("TASKTRACK_BUILD_ID", ""),
         },
     })
+
+
+@bp.route("/manifest.webmanifest")
+def webmanifest():
+    brand = current_app.config.get("BRAND_NAME", "TaskTrack")
+    manifest = {
+        "id": "/",
+        "name": brand,
+        "short_name": "TaskTrack",
+        "description": "TaskTrack internal operations dashboard",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "background_color": PWA_BACKGROUND_COLOR,
+        "theme_color": PWA_THEME_COLOR,
+        "icons": [
+            {
+                "src": f"/pwa-icon-{size}.png",
+                "sizes": f"{size}x{size}",
+                "type": "image/png",
+                "purpose": "any maskable",
+            }
+            for size in PWA_ICON_SIZES
+        ],
+    }
+    response = Response(
+        json.dumps(manifest, separators=(",", ":")),
+        mimetype="application/manifest+json",
+    )
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@bp.route("/service-worker.js")
+def service_worker():
+    """Root-scoped service worker shell.
+
+    Intentionally omits a fetch handler and CacheStorage use so API and
+    HTML responses are never cached by the PWA layer.
+    """
+    source = """const SW_VERSION = "tasktrack-pwa-v1";
+
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
+"""
+    response = Response(source, mimetype="application/javascript")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@bp.route("/pwa-icon-<int:size>.png")
+def pwa_icon(size: int):
+    if size not in PWA_ICON_SIZES:
+        abort(404)
+    response = Response(_pwa_icon_png(size), mimetype="image/png")
+    response.headers["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+@lru_cache(maxsize=len(PWA_ICON_SIZES))
+def _pwa_icon_png(size: int) -> bytes:
+    """Generate a square PNG icon without adding image dependencies."""
+    raw = bytearray()
+    for y in range(size):
+        raw.append(0)
+        for x in range(size):
+            raw.extend(_pwa_icon_pixel(size, x, y))
+
+    png = bytearray(b"\x89PNG\r\n\x1a\n")
+    header = struct.pack(">IIBBBBB", size, size, 8, 6, 0, 0, 0)
+    png.extend(_png_chunk(b"IHDR", header))
+    png.extend(_png_chunk(b"IDAT", zlib.compress(bytes(raw), level=9)))
+    png.extend(_png_chunk(b"IEND", b""))
+    return bytes(png)
+
+
+def _pwa_icon_pixel(size: int, x: int, y: int) -> tuple[int, int, int, int]:
+    fx = x / size
+    fy = y / size
+
+    if fx < 0.08 or fy > 0.88:
+        return (15, 98, 254, 255)
+
+    in_first_t = (
+        (0.18 <= fx <= 0.47 and 0.20 <= fy <= 0.31)
+        or (0.29 <= fx <= 0.36 and 0.20 <= fy <= 0.68)
+    )
+    in_second_t = (
+        (0.53 <= fx <= 0.82 and 0.20 <= fy <= 0.31)
+        or (0.64 <= fx <= 0.71 and 0.20 <= fy <= 0.68)
+    )
+    if in_first_t or in_second_t:
+        return (255, 255, 255, 255)
+
+    shade = int(22 + (fx * 18) + (fy * 12))
+    return (shade, shade, shade, 255)
+
+
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    body = chunk_type + data
+    checksum = zlib.crc32(body) & 0xFFFFFFFF
+    return struct.pack(">I", len(data)) + body + struct.pack(">I", checksum)
 
 
 @bp.route("/healthz")

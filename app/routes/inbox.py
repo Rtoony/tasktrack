@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, Response, jsonify, request, session
 from sqlalchemy import select
 
 from ..auth import login_required
@@ -47,11 +47,18 @@ from ..tokens import check_scoped_token
 bp = Blueprint("inbox", __name__)
 
 
-# ── POST /api/v1/inbox  (token-scoped capture) ───────────────────────────
+# ── POST /api/v1/inbox  (session or token-scoped capture) ────────────────
+
+def _require_capture_auth():
+    """Allow browser capture through the login session plus token writers."""
+    if "user_id" in session:
+        return None
+    return check_scoped_token("inbox")
+
 
 @bp.route("/api/v1/inbox", methods=["POST"])
 def capture():
-    auth = check_scoped_token("inbox")
+    auth = _require_capture_auth()
     if auth is not None:
         return auth
 
@@ -122,7 +129,8 @@ def capture():
         source_ref=source_ref,
         priority=priority,
         due_date=due_date,
-        created_by_name=source,  # display: who captured it
+        created_by_user_id=session.get("user_id"),
+        created_by_name=session.get("user_name") or source,  # display: who captured it
     )
     sess.add(item)
     sess.flush()

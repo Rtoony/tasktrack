@@ -29,9 +29,9 @@ def _login(client):
 
 # ── POST capture ────────────────────────────────────────────────────────
 
-def test_capture_requires_token(client):
+def test_capture_rejects_unauthenticated(client):
     r = client.post("/api/v1/inbox", json={"title": "x"})
-    assert r.status_code in (401, 503)
+    assert r.status_code == 401
 
 
 def test_capture_creates_inbox_item(client, with_token):
@@ -46,6 +46,34 @@ def test_capture_creates_inbox_item(client, with_token):
     assert body["source"] == "mytrack-bot"
     assert body["status"] == "New"
     assert body["promoted_to_id"] is None
+    assert body["created_by_user_id"] is None
+    assert body["created_by_name"] == "mytrack-bot"
+
+
+def test_capture_accepts_logged_in_session(client, temp_app):
+    _login(client)
+    r = client.post(
+        "/api/v1/inbox",
+        json={
+            "title": "Mobile note",
+            "body": "Capture from phone",
+            "source": "web-mobile",
+            "priority": "Medium",
+        },
+    )
+    assert r.status_code == 201, r.data
+    body = r.get_json()
+    assert body["title"] == "Mobile note"
+    assert body["body"] == "Capture from phone"
+    assert body["source"] == "web-mobile"
+    assert body["created_by_user_id"] == 1
+    assert body["created_by_name"] == "Tester"
+    with temp_app.app_context():
+        sess = get_session()
+        item = sess.get(InboxItem, body["id"])
+        assert item is not None
+        assert item.created_by_user_id == 1
+        assert item.created_by_name == "Tester"
 
 
 def test_capture_dedupes_on_source_ref(client, with_token):
@@ -114,6 +142,31 @@ def test_capture_requires_title(client, with_token):
 def test_list_requires_login(client):
     r = client.get("/api/v1/inbox")
     assert r.status_code in (401, 302)
+
+
+def test_inbox_token_does_not_authorize_management_routes(client, with_token):
+    created = client.post(
+        "/api/v1/inbox",
+        json={"title": "token boundary", "source": "test"},
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    assert created.status_code == 201
+    item_id = created.get_json()["id"]
+    token_headers = {"X-Token": INBOX_TOKEN}
+
+    assert client.get("/api/v1/inbox", headers=token_headers).status_code == 401
+    assert client.get(f"/api/v1/inbox/{item_id}", headers=token_headers).status_code == 401
+    assert client.patch(
+        f"/api/v1/inbox/{item_id}",
+        json={"status": "Done"},
+        headers=token_headers,
+    ).status_code == 401
+    assert client.post(
+        f"/api/v1/inbox/{item_id}/promote",
+        json={"target_table": "work_tasks"},
+        headers=token_headers,
+    ).status_code == 401
+    assert client.delete(f"/api/v1/inbox/{item_id}", headers=token_headers).status_code == 401
 
 
 def test_list_returns_non_archived_by_default(client, with_token, temp_app):
