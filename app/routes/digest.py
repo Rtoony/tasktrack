@@ -12,7 +12,7 @@ Returns JSON only; rendering is the caller's job. The overdue / done-
 status semantics are reused from ``services.tickets`` so this endpoint
 and the dashboard never drift.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 from sqlalchemy import func, select
@@ -175,7 +175,7 @@ def digest():
         })
 
     return jsonify({
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z",
         "window": {"due_days": due_days, "activity_hours": activity_hours},
         "counts": {
             "overdue": len(overdue),
@@ -262,7 +262,7 @@ def monthly():
 
     ranked = sorted(by_project.items(), key=lambda kv: (-kv[1]["overdue"], -kv[1]["open"]))
     return jsonify({
-        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S") + "Z",
         "period_days": days,
         "throughput": {"created": created, "completed": completed,
                        "net_open_change": created - completed},
