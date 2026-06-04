@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
+from ..services.agenda import today_agenda
 from ..services.intake_reports import intake_report_csv, intake_source_report
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.incident_reports import (
@@ -596,6 +597,13 @@ def _today_brief_packet(sess):
         limit=intake_limit,
         needs_review=True,
     )
+    agenda = today_agenda(
+        sess,
+        days=meeting_days,
+        limit=25,
+        user_id=session.get("user_id"),
+        include_private=include_private,
+    )
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "days": meeting_days,
@@ -607,6 +615,7 @@ def _today_brief_packet(sess):
         "meetings": meetings,
         "at_risk": portfolio,
         "action_projects": portfolio.get("summary", {}).get("action_projects", []),
+        "agenda": agenda,
         "intake": intake,
         "incidents": incidents,
     }

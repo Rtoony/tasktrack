@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 from app.db import get_session
-from app.models import Project
+from app.models import Project, ProjectWorkTask, TrainingTask, WorkTask
 
 
 def _future(days=1, hour_offset=0):
@@ -210,6 +210,74 @@ def test_private_calendar_events_are_hidden_from_other_users(auth_client):
     assert "Private prep" not in titles
 
 
+def test_calendar_agenda_combines_calendar_scheduled_and_due_work(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        project = Project(project_number="4400.10", name="Pump Station")
+        sess.add(project)
+        sess.flush()
+        soon = (datetime.now().replace(microsecond=0) + timedelta(minutes=45)).isoformat(timespec="minutes")
+        tomorrow = (datetime.now().replace(microsecond=0) + timedelta(days=1)).isoformat(timespec="minutes")
+        sess.add(ProjectWorkTask(
+            title="Scheduled pump review",
+            project_name="Pump Station",
+            project_number="4400.10",
+            project_id=project.id,
+            status="In Progress",
+            priority="High",
+            scheduled_completion_at=soon,
+            due_at=tomorrow,
+            time_required_minutes=90,
+            task_description="Confirm layout before drafting continues.",
+        ))
+        sess.add(ProjectWorkTask(
+            title="Completed scheduled task",
+            project_number="4400.10",
+            status="Complete",
+            scheduled_completion_at=soon,
+        ))
+        sess.add(WorkTask(
+            title="CAD standard due today",
+            status="Not Started",
+            priority="Medium",
+            due_date=datetime.now().date().isoformat(),
+            description="Check lineweight note.",
+        ))
+        sess.add(TrainingTask(
+            title="Training due tomorrow",
+            status="Not Started",
+            priority="Low",
+            due_date=(datetime.now() + timedelta(days=1)).date().isoformat(),
+            training_goals="Review sheet setup.",
+        ))
+        sess.commit()
+
+    _create_event(auth_client, title="Agenda coordination", start_at=_future(0, 1))
+    _create_event(auth_client, title="Private owner agenda", start_at=_future(0, 2), visibility="private")
+
+    r = auth_client.get("/api/v1/calendar/agenda?days=2&limit=20&include_private=0")
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["available"] is True
+    titles = [row["title"] for row in body["items"]]
+    assert "Agenda coordination" in titles
+    assert "Scheduled pump review" in titles
+    assert "CAD standard due today" in titles
+    assert "Training due tomorrow" in titles
+    assert "Completed scheduled task" not in titles
+    assert "Private owner agenda" not in titles
+    scheduled = next(row for row in body["items"] if row["title"] == "Scheduled pump review")
+    assert scheduled["kind"] == "scheduled_project_task"
+    assert scheduled["table"] == "project_work_tasks"
+    assert scheduled["project_number"] == "4400.10"
+    assert scheduled["duration_label"] == "1.5h"
+    assert body["counts"]["scheduled_project_task"] == 1
+
+    default = auth_client.get("/api/v1/calendar/agenda?days=2&limit=20")
+    assert default.status_code == 200
+    assert "Private owner agenda" in [row["title"] for row in default.get_json()["items"]]
+
+
 def test_calendar_reminders_surface_due_visible_events(auth_client):
     visible = _create_event(
         auth_client,
@@ -351,6 +419,10 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert "Mark reviewed" in html
     assert "Reminder Queue" in html
     assert 'data-tab="calendar"' in html
+    assert "Today Plan" in html
+    assert 'id="dash-today-agenda"' in html
+    assert "loadTodayAgenda" in html
+    assert "/api/v1/calendar/agenda?days=7&limit=10" in html
     assert 'id="sec-calendar"' in html
     assert 'id="calendar-agenda-view"' in html
     assert 'id="calendar-table-view"' in html
@@ -368,4 +440,5 @@ def test_dashboard_includes_calendar_surface(auth_client):
 def test_calendar_routes_require_login(client):
     assert client.get("/api/v1/calendar/upcoming").status_code == 401
     assert client.get("/api/v1/calendar/reminders").status_code == 401
+    assert client.get("/api/v1/calendar/agenda").status_code == 401
     assert client.get("/api/v1/calendar/events").status_code == 401

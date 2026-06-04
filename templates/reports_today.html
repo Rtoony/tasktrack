@@ -31,7 +31,7 @@
   .run-order { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0.7rem; }
   .run-card { display:block; color:inherit; text-decoration:none; border:1px solid var(--border); border-radius:var(--radius); padding:0.72rem; background:rgba(17,22,29,0.35); }
   .run-card strong { display:block; margin-bottom:0.18rem; }
-  .stats { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
+  .stats { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.7rem; margin-bottom:1rem; }
   .stat { padding:0.75rem; }
   .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
   .stat-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
@@ -65,7 +65,7 @@
     .print-footer { color:#4b5563; border-color:#d1d5db; }
     .hero,.card,.stat,.run-card { border-color:#d1d5db; background:#fff; box-shadow:none; break-inside:avoid; }
     .hero,.card { padding:0.12in; margin-bottom:0.12in; }
-    .stats { grid-template-columns:repeat(5,1fr); gap:0.08in; margin-bottom:0.12in; }
+    .stats { grid-template-columns:repeat(6,1fr); gap:0.08in; margin-bottom:0.12in; }
     .stat { padding:0.08in; }
     .stat-value { font-size:14pt; color:#111827; }
     .row { padding:0.05in 0; border-color:#e5e7eb; }
@@ -91,13 +91,13 @@
   <section class="print-masthead print-only" aria-label="Printable report header">
     <div>
       <div class="print-eyebrow">TaskTrack Today Brief</div>
-      <div class="print-title">{{ packet.meetings.count }} meeting packet{{ '' if packet.meetings.count == 1 else 's' }} / {{ packet.intake.summary.needs_review_count }} intake request{{ '' if packet.intake.summary.needs_review_count == 1 else 's' }} / {{ packet.at_risk.summary.attention_project_count }} at-risk project{{ '' if packet.at_risk.summary.attention_project_count == 1 else 's' }}</div>
+      <div class="print-title">{{ packet.agenda["count"] }} agenda item{{ '' if packet.agenda["count"] == 1 else 's' }} / {{ packet.meetings.count }} meeting packet{{ '' if packet.meetings.count == 1 else 's' }} / {{ packet.intake.summary.needs_review_count }} intake request{{ '' if packet.intake.summary.needs_review_count == 1 else 's' }} / {{ packet.at_risk.summary.attention_project_count }} at-risk project{{ '' if packet.at_risk.summary.attention_project_count == 1 else 's' }}</div>
     </div>
     <div class="print-meta">Generated {{ packet.generated_at[:16] }}<br>Window: next {{ packet.days }} day{{ '' if packet.days == 1 else 's' }}</div>
   </section>
 
   <h1>Today Brief</h1>
-  <p class="sub">A compact operator packet for testing and daily use: new intake requests, upcoming event packets, and the current at-risk project action queue.</p>
+  <p class="sub">A compact operator packet for testing and daily use: today agenda, new intake requests, upcoming event packets, and the current at-risk project action queue.</p>
 
   <section class="hero">
     <div>
@@ -124,6 +124,7 @@
   </section>
 
   <section class="stats">
+    <div class="stat"><div class="stat-label">Agenda</div><div class="stat-value{% if packet.agenda["count"] %} danger{% endif %}">{{ packet.agenda["count"] }}</div></div>
     <div class="stat"><div class="stat-label">Meetings</div><div class="stat-value">{{ packet.meetings.count }}</div></div>
     <div class="stat"><div class="stat-label">Matched Events</div><div class="stat-value">{{ packet.meetings.matched_count }}</div></div>
     <div class="stat"><div class="stat-label">Intake Review</div><div class="stat-value{% if packet.intake.summary.needs_review_count %} danger{% endif %}">{{ packet.intake.summary.needs_review_count }}</div></div>
@@ -134,18 +135,45 @@
   <section class="card">
     <h2>Run Order</h2>
     <div class="run-order">
+      <a class="run-card" href="/?tab=calendar">
+        <strong>1. Work the today plan</strong>
+        <span class="meta">{{ packet.agenda["count"] }} agenda item{{ '' if packet.agenda["count"] == 1 else 's' }} combine calendar events, scheduled project work, and due tasks.</span>
+      </a>
       <a class="run-card" href="/intake/review?needs_review=1&days={{ packet.intake_days }}&limit={{ packet.intake_limit }}">
-        <strong>1. Clear intake review</strong>
+        <strong>2. Clear intake review</strong>
         <span class="meta">{{ packet.intake.summary.needs_review_count }} request{{ '' if packet.intake.summary.needs_review_count == 1 else 's' }} need operator review.</span>
       </a>
       <a class="run-card" href="/reports/meetings?days={{ packet.days }}&limit={{ packet.meeting_limit }}">
-        <strong>2. Prep meetings</strong>
+        <strong>3. Prep meetings</strong>
         <span class="meta">{{ packet.meetings.count }} visible event packet{{ '' if packet.meetings.count == 1 else 's' }} in the current window.</span>
       </a>
       <a class="run-card" href="/reports/projects?attention_level=at_risk&limit={{ packet.project_limit }}">
-        <strong>3. Review at-risk projects</strong>
+        <strong>4. Review at-risk projects</strong>
         <span class="meta">{{ packet.at_risk.summary.attention_project_count }} project{{ '' if packet.at_risk.summary.attention_project_count == 1 else 's' }} need management attention.</span>
       </a>
+    </div>
+  </section>
+
+
+  <section class="card">
+    <h2>Today Plan</h2>
+    <div class="meta" style="margin-bottom:0.5rem">Calendar events, scheduled Project Tasks, and due tracker work for the current {{ packet.days }} day{{ '' if packet.days == 1 else 's' }}. Overdue work stays pinned until rescheduled or completed.</div>
+    {% if packet.agenda["items"] %}
+      {% for row in packet.agenda["items"] %}
+        <div class="row">
+          <div>
+            <div class="row-title"><a href="{{ row.url or '/?tab=' ~ row.table }}" style="color:inherit;text-decoration:none">{{ row.title or '(untitled agenda item)' }}</a></div>
+            <div class="meta">{{ row.label }} / {{ row.status or 'open' }}{% if row.project_number %} / {{ row.project_number }}{% endif %}{% if row.priority %} / {{ row.priority }}{% endif %}{% if row.duration_label %} / est {{ row.duration_label }}{% endif %}</div>
+            {% if row.detail %}<div class="detail">{{ row.detail }}</div>{% endif %}
+          </div>
+          <div class="when{% if row.is_overdue %} danger{% endif %}">{% if row.is_overdue %}Overdue / {% endif %}{{ row.when[:16] }}</div>
+        </div>
+      {% endfor %}
+    {% else %}<div class="empty">No calendar events, scheduled project work, or due tasks are visible for this packet window.</div>{% endif %}
+    <div class="actions" style="margin-top:0.75rem;justify-content:flex-start">
+      <a class="btn secondary" href="/?tab=calendar">Open Calendar</a>
+      <a class="btn secondary" href="/api/v1/calendar/agenda?days={{ packet.days }}&include_private={{ 1 if packet.include_private else 0 }}">Agenda JSON</a>
+      <a class="btn secondary" href="/?tab=project">Project Tasks</a>
     </div>
   </section>
 

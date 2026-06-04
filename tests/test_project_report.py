@@ -646,6 +646,17 @@ def test_today_brief_json_and_html(auth_client, temp_app):
             visibility="private",
             created_by_user_id=1,
         ))
+        sess.add(ProjectWorkTask(
+            title="Today scheduled drafting",
+            project_name=proj.name,
+            project_number="8800.10",
+            project_id=proj.id,
+            status="In Progress",
+            priority="High",
+            scheduled_completion_at=today,
+            time_required_minutes=90,
+            task_description="Finish sheet edits before the sync.",
+        ))
         sess.add(WorkTask(
             title="Review web form request",
             source="web-form",
@@ -669,6 +680,10 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert body["intake"]["rows"][0]["requester"] == "Operations"
     assert body["intake"]["rows"][0]["detail"] == "Manager submitted a browser request."
     assert any(packet["event"]["title"] == "Today project sync" for packet in body["meetings"]["packets"])
+    assert any(row["title"] == "Today scheduled drafting" for row in body["agenda"]["items"])
+    scheduled = next(row for row in body["agenda"]["items"] if row["title"] == "Today scheduled drafting")
+    assert scheduled["kind"] == "scheduled_project_task"
+    assert scheduled["duration_label"] == "1.5h"
     assert any(row["project_number"] == "8800.10" for row in body["action_projects"])
     assert "Private today prep" not in str(body)
 
@@ -678,6 +693,9 @@ def test_today_brief_json_and_html(auth_client, temp_app):
     assert "Today Brief" in html
     assert "TaskTrack Today Brief" in html
     assert "Today project sync" in html
+    assert "Today Plan" in html
+    assert "Today scheduled drafting" in html
+    assert "est 1.5h" in html
     assert "New Intake Requests" in html
     assert "Review web form request" in html
     assert "Manager submitted a browser request." in html

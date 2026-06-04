@@ -9,11 +9,13 @@ from sqlalchemy import select
 from ..auth import login_required
 from ..db import get_session
 from ..models import CalendarEvent
+from ..services.agenda import today_agenda
 from ..services.tickets import record_visible_to_user
 
 bp = Blueprint("calendar", __name__)
 
 _DONE_STATUSES = {"done", "cancelled"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
 
 
 def _clamp_int(raw: str | None, default: int, minimum: int, maximum: int) -> int:
@@ -22,6 +24,10 @@ def _clamp_int(raw: str | None, default: int, minimum: int, maximum: int) -> int
     except (TypeError, ValueError):
         value = default
     return max(minimum, min(value, maximum))
+
+
+def _bool_arg_default_true(raw: str | None) -> bool:
+    return str(raw or "").strip().lower() not in _FALSE_VALUES
 
 
 def _parse_iso_datetime(raw: str | None) -> datetime | None:
@@ -147,6 +153,23 @@ def reminder_events():
         data["reminder_at"] = row.reminder_date or reminder.isoformat(timespec="minutes")
         payload.append(data)
     return jsonify({"available": True, "events": payload})
+
+
+@bp.route("/api/v1/calendar/agenda")
+@login_required
+def agenda_items():
+    days = _clamp_int(request.args.get("days"), 1, 1, 30)
+    limit = _clamp_int(request.args.get("limit"), 25, 1, 100)
+    include_private = _bool_arg_default_true(request.args.get("include_private"))
+    include_overdue = _bool_arg_default_true(request.args.get("include_overdue"))
+    return jsonify(today_agenda(
+        get_session(),
+        days=days,
+        limit=limit,
+        user_id=session.get("user_id"),
+        include_private=include_private,
+        include_overdue=include_overdue,
+    ))
 
 
 @bp.route("/api/v1/calendar/events")

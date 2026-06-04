@@ -1211,6 +1211,16 @@
     </div>
     <div class="dash-card" style="margin:1.25rem 0;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+        <span>Today Plan</span>
+        <span style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <a class="btn btn-sm btn-export" href="/reports/today">Today Brief</a>
+          <button class="btn btn-sm btn-export" type="button" onclick="document.querySelector('.tab-btn[data-tab=&quot;calendar&quot;]')?.click()">Calendar</button>
+        </span>
+      </div>
+      <div class="dash-card-body" id="dash-today-agenda"><div class="empty-card">No agenda items due today</div></div>
+    </div>
+    <div class="dash-card" style="margin:1.25rem 0;">
+      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Upcoming Operations</span>
         <button class="btn btn-sm btn-export" type="button" onclick="openModal('calendar')">+ Add Event</button>
       </div>
@@ -4368,6 +4378,7 @@ async function loadDashboard() {
     });
   }
   renderDashboardIntake(data.intake);
+  loadTodayAgenda();
   loadUpcomingOperations();
   loadCalendarReminders();
   loadProjectSyncStatus();
@@ -4480,6 +4491,49 @@ async function loadProjectSyncStatus() {
   txt.textContent = syncStatusSummary(data);
   div.appendChild(time); div.appendChild(txt);
   host.appendChild(div);
+}
+
+function agendaTabForTable(table) {
+  return {
+    calendar_events: 'calendar',
+    project_work_tasks: 'project',
+    work_tasks: 'work',
+    training_tasks: 'training',
+    personal_items: 'personal_husband',
+  }[table] || '';
+}
+
+function openAgendaItem(row) {
+  const tab = agendaTabForTable(row.table);
+  if (!tab || !row.id) return;
+  document.querySelector('.tab-btn[data-tab="' + tab + '"]')?.click();
+  setTimeout(() => editRecord(tab, row.id), 150);
+}
+
+async function loadTodayAgenda() {
+  const host = document.getElementById('dash-today-agenda');
+  if (!host) return;
+  const data = await api('GET','/api/v1/calendar/agenda?days=7&limit=10');
+  if (!data) return;
+  const rows = Array.isArray(data.items) ? data.items : [];
+  host.replaceChildren();
+  if (!rows.length) { host.innerHTML='<div class="empty-card">No agenda items due today</div>'; return; }
+  rows.forEach(r => {
+    const div = document.createElement('div');
+    div.className = 'overdue-item';
+    if (r.is_overdue) div.classList.add('overdue');
+    const left = document.createElement('div');
+    const title = document.createElement('span'); title.className='overdue-title'; title.textContent = r.title || '';
+    const meta = document.createElement('span'); meta.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem';
+    const bits = [r.label || '', r.status || '', r.project_number || '', r.duration_label ? 'est ' + r.duration_label : ''].filter(Boolean);
+    meta.textContent = bits.join(' · ');
+    left.appendChild(title); left.appendChild(meta);
+    const when = document.createElement('span'); when.className='overdue-date';
+    when.textContent = (r.is_overdue ? 'Overdue · ' : '') + formatDateTime(r.when || '');
+    div.appendChild(left); div.appendChild(when);
+    div.addEventListener('click', () => openAgendaItem(r));
+    host.appendChild(div);
+  });
 }
 
 async function loadUpcomingOperations() {
