@@ -41,6 +41,8 @@ def _seed_report_project(sess):
         project_id=proj.id,
         status="In Progress",
         due_at=yesterday + "T17:00",
+        scheduled_completion_at=yesterday + "T15:00",
+        time_required_minutes=90,
     ))
     sess.add(WorkTask(
         title="CAD standards check",
@@ -102,8 +104,12 @@ def test_project_report_json_summary_and_privacy(auth_client, temp_app):
     assert body["management_brief"]["attention_level"] == "at_risk"
     assert body["management_brief"]["overdue_count"] == 1
     assert body["management_brief"]["top_overdue"][0]["title"] == "Late exhibit"
+    assert body["overdue_items"][0]["scheduled_completion_at"]
+    assert body["overdue_items"][0]["time_required_minutes"] == 90
     assert body["action_queue"][0]["priority"] == "high"
     assert body["action_queue"][0]["title"] == "Resolve overdue Project Tasks: Late exhibit"
+    assert "scheduled:" in body["action_queue"][0]["detail"]
+    assert "est: 1.5h" in body["action_queue"][0]["detail"]
     assert any(action["title"] == "Management note" for action in body["action_queue"])
     assert body["operator_overlay"]["operator_status"] == "Needs PM review"
     assert body["operator_overlay"]["priority"] == "High"

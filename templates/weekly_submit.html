@@ -115,7 +115,7 @@
             <input id="week_of" name="week_of" type="date" value="{{ week_of }}" required>
           </div>
         </div>
-        <div class="muted-note">Optional fields like Billing Phase, Engineer, and Needed By can be left blank if you do not know them yet.</div>
+        <div class="muted-note">Optional fields like Billing Phase, Engineer, Needed By, Scheduled Completion, and Time Required can be left blank if you do not know them yet.</div>
 
         <div class="tasks" id="task-list">
           {% for row in rows %}
@@ -151,9 +151,19 @@
                 <input name="engineer[]" type="text" value="{{ row.engineer }}" placeholder="Assigned engineer">
               </div>
             </div>
+            <div class="task-grid-wide">
+              <div class="field">
+                <label>Needed By</label>
+                <input name="due_at[]" type="datetime-local" value="{{ row.due_at }}" step="900">
+              </div>
+              <div class="field">
+                <label>Scheduled Completion</label>
+                <input name="scheduled_completion_at[]" type="datetime-local" value="{{ row.scheduled_completion_at }}" step="900">
+              </div>
+            </div>
             <div class="field">
-              <label>Needed By</label>
-              <input name="due_at[]" type="datetime-local" value="{{ row.due_at }}">
+              <label>Time Required (minutes)</label>
+              <input name="time_required_minutes[]" type="number" value="{{ row.time_required_minutes }}" min="0" step="30" placeholder="30">
             </div>
           </section>
           {% endfor %}
@@ -205,9 +215,19 @@
           <input name="engineer[]" type="text" placeholder="Assigned engineer">
         </div>
       </div>
+      <div class="task-grid-wide">
+        <div class="field">
+          <label>Needed By</label>
+          <input name="due_at[]" type="datetime-local" step="900">
+        </div>
+        <div class="field">
+          <label>Scheduled Completion</label>
+          <input name="scheduled_completion_at[]" type="datetime-local" step="900">
+        </div>
+      </div>
       <div class="field">
-        <label>Needed By</label>
-        <input name="due_at[]" type="datetime-local">
+        <label>Time Required (minutes)</label>
+        <input name="time_required_minutes[]" type="number" min="0" step="30" placeholder="30">
       </div>
     </section>
   </template>

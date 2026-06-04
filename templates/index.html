@@ -83,6 +83,7 @@
   .kanban-card:hover { border-color:var(--accent); transform:translateY(-1px); }
   .kanban-card-title { font-size:0.82rem; font-weight:500; color:var(--text); line-height:1.3; }
   .kanban-card-meta { margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.35rem; font-size:0.68rem; color:var(--text-muted); }
+  .kanban-card-desc { margin-top:0.45rem; color:var(--text-muted); font-size:0.72rem; line-height:1.35; }
   .kanban-card-tag { display:inline-flex; align-items:center; padding:0.05rem 0.4rem; border-radius:3px; background:var(--surface); border:1px solid var(--border); }
   .kanban-card-tag.high     { color:#f87171; border-color:rgba(248,113,113,0.4); }
   .kanban-card-tag.medium   { color:#fbbf24; border-color:rgba(251,191,36,0.4); }
@@ -1106,7 +1107,7 @@
                   </div>
                   <div class="field" id="preset-due-at-wrap" style="display:none">
                     <label>Due Date &amp; Time</label>
-                    <input type="datetime-local" id="preset-due-at">
+                    <input type="datetime-local" id="preset-due-at" step="900">
                   </div>
                 </div>
 
@@ -1477,7 +1478,7 @@
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
         <option value="">All Statuses</option>
         <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option>
-        <option value="On Hold">On Hold</option><option value="Complete">Complete</option>
+        <option value="Pending Confirmation">Pending Confirmation</option><option value="Complete">Complete</option>
       </select>
       <select class="filter-select" id="filter-project-priority" onchange="loadTable('project')">
         <option value="">All Priorities</option>
@@ -1504,6 +1505,8 @@
         <th data-col="priority" data-table="project">Priority <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="project">Status <span class="sort-arrow">&#9650;</span></th>
         <th data-col="due_at" data-table="project">Due <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="scheduled_completion_at" data-table="project">Scheduled <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="time_required_minutes" data-table="project">Est. <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-project"></tbody></table>
       <div class="empty-state" id="empty-project" style="display:none">
@@ -1840,6 +1843,7 @@
         <div class="drawer-eyebrow" id="modal-eyebrow">Record</div>
         <div class="drawer-title-row">
           <h3 id="modal-title">Add Record</h3>
+          <button class="btn btn-sm btn-export record-feedback-btn" type="button" id="record-feedback-btn" onclick="openFeedbackForCurrentRecord()" style="display:none;">Feedback</button>
         </div>
         <div class="drawer-meta" id="modal-meta"></div>
       </div>
@@ -2081,7 +2085,7 @@ const CORE_TABLE_TO_TAB = {
 };
 const TRACKER_STATUS_FLOW = {
   work:['Not Started','In Progress','On Hold','Complete'],
-  project:['Not Started','In Progress','On Hold','Complete'],
+  project:['Not Started','In Progress','Pending Confirmation','Complete'],
   training:['Not Started','In Progress','On Hold','Complete'],
   personnel:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed'],
   triage:['New','In Progress','Done','Archived'],
@@ -2417,6 +2421,8 @@ function collectFeedbackBrowserState() {
   };
 }
 
+let feedbackTargetContext = null;
+
 function feedbackContextPayload() {
   const activeSection = document.querySelector('.section.active')?.id?.replace(/^sec-/, '') || currentTab || '';
   const activeTitle = document.getElementById('shell-context')?.textContent || '';
@@ -2439,6 +2445,7 @@ function feedbackContextPayload() {
     },
     browser: collectFeedbackBrowserState(),
     ui_state: collectFeedbackUiState(),
+    target_context: feedbackTargetContext,
     active_element: elementSummary(document.activeElement),
     last_click: feedbackLastClick,
     local_storage: collectFeedbackLocalStorage(),
@@ -2446,7 +2453,38 @@ function feedbackContextPayload() {
   };
 }
 
-function openFeedbackModal(componentLabel='') {
+function normalizeFeedbackTargetContext(target) {
+  if (!target) return null;
+  if (typeof target === 'string') return target ? { component_label: target } : null;
+  return target;
+}
+
+function feedbackRecordContext(table, row = {}) {
+  const apiTable = API_MAP[table] || table;
+  const label = TABLE_LABELS[apiTable] || table || 'Record';
+  const title = row && row.id ? dashboardRowTitle(row) : '';
+  return {
+    component_label: [label, row.id ? '#' + row.id : '', title].filter(Boolean).join(' · '),
+    table: apiTable,
+    tab: table || '',
+    record_id: row.id || '',
+    record_title: title,
+    project_number: row.project_number || '',
+  };
+}
+
+function openFeedbackForRecord(table, row = {}) {
+  openFeedbackModal(feedbackRecordContext(table, row));
+}
+
+function openFeedbackForCurrentRecord() {
+  if (!editingTable) { openFeedbackModal('record drawer'); return; }
+  openFeedbackForRecord(editingTable, window.__currentModalData || { id: editingId });
+}
+
+function openFeedbackModal(target='') {
+  feedbackTargetContext = normalizeFeedbackTargetContext(target);
+  const componentLabel = feedbackTargetContext?.component_label || '';
   const context = feedbackContextPayload();
   loadFeedbackAppContext().then(() => {
     const preview = document.getElementById('feedback-context-preview');
@@ -2489,6 +2527,7 @@ function closeFeedbackModal(options={}) {
     }
   }
   overlay.classList.remove('open');
+  feedbackTargetContext = null;
 }
 
 function setFeedbackFiles(files) {
@@ -2546,7 +2585,7 @@ async function submitFeedback() {
     const row = await api('POST', '/api/v1/feedback_items', payload);
     if (!row || row.error) throw new Error(row?.error || 'Feedback save failed');
     await uploadFeedbackAttachment(row.id);
-    closeFeedbackModal();
+    closeFeedbackModal({force:true});
     toast('Feedback saved #' + row.id);
   } catch (err) {
     document.getElementById('feedback-status').textContent = err.message;
@@ -4691,6 +4730,8 @@ async function loadTable(table) {
       tr.appendChild(makeStatusBadge(r.priority));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_at));
+      tr.appendChild(makeDateCell(r.scheduled_completion_at));
+      tr.appendChild(makeDurationCell(r.time_required_minutes));
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='training') {
       if (r.needs_review) tr.classList.add('ai-review');
@@ -4943,7 +4984,7 @@ function makeCalendarAgendaCard(r) {
    round trip. Click a card to open the existing edit modal. Status
    changes still go through the modal (no drag-drop yet). */
 let projectViewMode = 'table';
-const PROJECT_LANES = ['Not Started', 'In Progress', 'On Hold', 'Complete'];
+const PROJECT_LANES = ['Not Started', 'In Progress', 'Pending Confirmation', 'Complete'];
 const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
 
 function projectTaskFilterProjectNumber() {
@@ -5078,11 +5119,32 @@ function makeKanbanCard(r) {
     due.textContent = 'Due ' + String(r.due_at).slice(0, 10);
     meta.appendChild(due);
   }
+  if (r.scheduled_completion_at) {
+    const scheduled = document.createElement('span');
+    scheduled.className = 'kanban-card-tag';
+    scheduled.textContent = 'Scheduled ' + String(r.scheduled_completion_at).slice(0, 10);
+    meta.appendChild(scheduled);
+  }
+  const duration = formatDurationMinutes(r.time_required_minutes);
+  if (duration) {
+    const estimate = document.createElement('span');
+    estimate.className = 'kanban-card-tag';
+    estimate.textContent = 'Est ' + duration;
+    meta.appendChild(estimate);
+  }
   card.appendChild(meta);
 
+  const phaseNote = projectPhaseNote(r);
+  if (phaseNote) {
+    const note = document.createElement('div');
+    note.className = 'kanban-card-desc';
+    note.textContent = descriptionPreview(phaseNote);
+    card.appendChild(note);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'kanban-card-actions';
   if (r.project_number || r.project_id) {
-    const actions = document.createElement('div');
-    actions.className = 'kanban-card-actions';
     const workspace = document.createElement('button');
     workspace.type = 'button';
     workspace.className = 'kanban-card-action';
@@ -5102,8 +5164,18 @@ function makeKanbanCard(r) {
       openProjectReportSmart(r.project_id, r.project_number);
     });
     actions.appendChild(workspace); actions.appendChild(report);
-    card.appendChild(actions);
   }
+  const feedback = document.createElement('button');
+  feedback.type = 'button';
+  feedback.className = 'kanban-card-action';
+  feedback.textContent = 'Feedback';
+  feedback.title = 'Capture feedback for this project task';
+  feedback.addEventListener('click', ev => {
+    ev.stopPropagation();
+    openFeedbackForRecord('project', r);
+  });
+  actions.appendChild(feedback);
+  card.appendChild(actions);
   return card;
 }
 
@@ -5209,6 +5281,29 @@ function makeDateCell(d) {
   return td;
 }
 
+function formatDurationMinutes(value) {
+  const minutes = Number(value || 0);
+  if (!Number.isFinite(minutes) || minutes <= 0) return '';
+  const hours = minutes / 60;
+  return (minutes % 60 === 0 ? String(hours) : hours.toFixed(1)) + 'h';
+}
+
+function makeDurationCell(value) {
+  const td = document.createElement('td');
+  const label = formatDurationMinutes(value);
+  if (!label) { td.innerHTML='<span style="color:var(--text-light)">\u2014</span>'; return td; }
+  td.textContent = label;
+  return td;
+}
+
+function projectPhaseNote(r) {
+  const status = String(r?.status || '');
+  if (status === 'Complete') return r.completion_notes || '';
+  if (status === 'Pending Confirmation') return r.confirmation_notes || '';
+  if (status === 'In Progress') return r.progress_notes || '';
+  return r.scope_notes || '';
+}
+
 function makeCalendarDateCell(r, field) {
   const td = document.createElement('td');
   const val = formatCalendarDateTime(r, field);
@@ -5312,6 +5407,9 @@ function makeTriageRouteCell(r) {
 
 function makeTriageActions(r) {
   const td = document.createElement('td'); td.className='cell-actions';
+  const feedback = document.createElement('button'); feedback.className='btn btn-ghost'; feedback.type='button'; feedback.textContent='Feedback';
+  feedback.addEventListener('click', ev => { ev.stopPropagation(); openFeedbackForRecord('triage', r); });
+  td.appendChild(feedback);
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.textContent='Edit';
   edit.addEventListener('click',()=>editRecord('triage',r.id));
   td.appendChild(edit);
@@ -5407,6 +5505,9 @@ function makeActions(table, id, label, row = {}) {
     });
     td.appendChild(workspace); td.appendChild(report);
   }
+  const feedback = document.createElement('button'); feedback.className='btn btn-ghost'; feedback.type='button'; feedback.textContent='Feedback';
+  feedback.addEventListener('click', ev => { ev.stopPropagation(); openFeedbackForRecord(table, row); });
+  td.appendChild(feedback);
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.type='button'; edit.textContent='Edit';
   edit.addEventListener('click', ev => { ev.stopPropagation(); editRecord(table,id); });
   const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
@@ -5529,6 +5630,11 @@ function workspaceRowMeta(sectionKey, row) {
   if (row.event_type) bits.push(formatEventType(row.event_type));
   const due = row.due_at || row.due_date || row.start_at || row.reported_date || '';
   if (due) bits.push(formatDateTime(due));
+  if (sectionKey === 'project_work_tasks') {
+    if (row.scheduled_completion_at) bits.push('scheduled ' + formatDateTime(row.scheduled_completion_at));
+    const duration = formatDurationMinutes(row.time_required_minutes);
+    if (duration) bits.push('est ' + duration);
+  }
   return bits.join(' · ');
 }
 
@@ -5954,15 +6060,20 @@ const FORMS = {
     {key:'links',label:'Links',type:'links'},
   ],
   project:[
-    {key:'project_name',label:'Project Name',type:'text',required:true},
+    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
+    {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,placeholder:'Pick or type project #'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
-    {key:'due_at',label:'Due Date And Time',type:'datetime-local'},
-    {key:'notes',label:'Notes',type:'textarea'},
+    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
+    {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local'},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local'}]},
+    {key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'},
+    {key:'scope_notes',label:'Planning / Scope Notes',type:'textarea',placeholder:'Not Started phase: scope, setup, prerequisites, or assignment context.'},
+    {key:'progress_notes',label:'Progress Notes',type:'textarea',placeholder:'In Progress phase: current work, blockers, or next production step.'},
+    {key:'confirmation_notes',label:'Confirmation Notes',type:'textarea',placeholder:'Pending Confirmation phase: what needs review, approval, or sign-off.'},
+    {key:'completion_notes',label:'Completion Notes',type:'textarea',placeholder:'Complete phase: what was delivered, where it landed, and final caveats.'},
+    {key:'notes',label:'General Notes',type:'textarea'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -6078,6 +6189,10 @@ function projectOptionLabel(project) {
   return [project.project_number, project.name, project.client].filter(Boolean).join(' · ');
 }
 
+function projectRegistryDisplayName(project) {
+  return (project.name || project.client || project.project_number || '').trim();
+}
+
 function findProjectByNumber(projects, projectNumber) {
   const pn = String(projectNumber || '').trim().toLowerCase();
   if (!pn) return null;
@@ -6113,9 +6228,22 @@ function renderField(f,value) {
     const hint=document.createElement('div');
     hint.className='fk-hint';
     hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
-    hint.textContent='Pick a registry project to link workspace/map context, or type a project number manually.';
+    hint.textContent = f.requireRegistry
+      ? 'Pick a registry project; manual project names are disabled for Project Tasks.'
+      : 'Pick a registry project to link workspace/map context, or type a project number manually.';
 
     let projects=[];
+    const syncProjectName = (match) => {
+      const projectNameEl = document.getElementById('f-' + (f.syncNameKey || 'project_name'));
+      if (!projectNameEl) return;
+      if (match) {
+        projectNameEl.value = projectRegistryDisplayName(match);
+        projectNameEl.readOnly = true;
+        projectNameEl.dataset.registryLocked = '1';
+      } else if (f.requireRegistry && !editingId) {
+        projectNameEl.value = '';
+      }
+    };
     const sync = () => {
       const normalized = normalizeProjectNumberCandidate(input.value);
       if (normalized !== input.value && document.activeElement !== input) input.value = normalized;
@@ -6123,9 +6251,8 @@ function renderField(f,value) {
       hidden.value = match ? match.id : '';
       hint.textContent = match
         ? 'Linked to registry: ' + projectOptionLabel(match)
-        : 'Manual project number; no registry link yet.';
-      const projectNameEl = document.getElementById('f-project_name');
-      if (match && projectNameEl && !projectNameEl.value.trim()) projectNameEl.value = match.name || '';
+        : (f.requireRegistry ? 'No registry match. Pick a project from the list before saving.' : 'Manual project number; no registry link yet.');
+      syncProjectName(match);
       renderProjectMiniMap();
     };
 
@@ -6243,7 +6370,7 @@ function renderField(f,value) {
       return wrap;
     }
   } else if (f.type==='textarea') {
-    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true;
+    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder;
   } else if (f.type==='placeholder-panel') {
     const panel=document.createElement('div'); panel.className='placeholder-panel';
     const title=document.createElement('div'); title.className='placeholder-title'; title.textContent=f.label;
@@ -6294,9 +6421,13 @@ function renderField(f,value) {
     if(f.max!=null)input.max=f.max;
     if(f.step!=null)input.step=f.step;
   } else if (f.type==='datetime-local') {
-    input=document.createElement('input'); input.type='datetime-local'; input.id='f-'+f.key; input.value=value?String(value).slice(0,16):'';
+    input=document.createElement('input'); input.type='datetime-local'; input.id='f-'+f.key; input.value=value?String(value).slice(0,16):''; input.step=f.step || 900;
   } else {
     input=document.createElement('input'); input.type='text'; input.id='f-'+f.key; input.value=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder;
+    if (f.lockedByProject) {
+      input.readOnly = true;
+      input.dataset.lockedByProject = '1';
+    }
     if (f.key==='project_number') {
       input.inputMode='numeric';
       input.maxLength=7;
@@ -6321,7 +6452,14 @@ function renderField(f,value) {
       });
     }
   }
-  wrap.appendChild(input); return wrap;
+  wrap.appendChild(input);
+  if (f.hint) {
+    const hint=document.createElement('div'); hint.className='fk-hint';
+    hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
+    hint.textContent=f.hint;
+    wrap.appendChild(hint);
+  }
+  return wrap;
 }
 
 const AI_REVIEW_TABLES = {
@@ -6552,9 +6690,21 @@ function validateForm(table, data) {
     toast('Project is required');
     return false;
   }
+  const projectIdEl = document.getElementById('f-project_id');
+  if (!projectIdEl || !projectIdEl.value) {
+    toast('Pick a project from the registry before saving');
+    return false;
+  }
   if (data.billing_phase && !/^\d{2}$/.test(data.billing_phase)) {
     toast('Project Billing Phase must use ##');
     return false;
+  }
+  if (String(data.time_required_minutes || '').trim()) {
+    const minutes = Number(data.time_required_minutes);
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes % 30 !== 0) {
+      toast('Time Required must use 30-minute increments');
+      return false;
+    }
   }
   return true;
 }
@@ -6762,8 +6912,10 @@ function renderModalHeader(table, data, labels) {
   const eyebrow = document.getElementById('modal-eyebrow');
   const title = document.getElementById('modal-title');
   const meta = document.getElementById('modal-meta');
+  const feedbackBtn = document.getElementById('record-feedback-btn');
   if (eyebrow) eyebrow.textContent = (data && data.id ? 'Edit' : 'Create') + ' / ' + label;
   if (title) title.textContent = modalTitleForRecord(table, data, label);
+  if (feedbackBtn) feedbackBtn.style.display = data && data.id ? 'inline-flex' : 'none';
   if (!meta) return;
   meta.replaceChildren();
   meta.appendChild(coreTag(API_MAP[table] || table, 'gray'));
@@ -6920,6 +7072,8 @@ async function doPromote() {
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   renderMeetingPacketButton('', {});
+  const feedbackBtn = document.getElementById('record-feedback-btn');
+  if (feedbackBtn) feedbackBtn.style.display = 'none';
   document.getElementById('modal-meta')?.replaceChildren();
   window.__currentModalData = {};
   editingId=null; editingTable=null;

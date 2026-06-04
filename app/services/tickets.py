@@ -299,6 +299,25 @@ def _validate_iso_datetime_field(data, key: str, label: str, *, required: bool =
     return None, parsed
 
 
+def _validate_time_required_minutes(data) -> str | None:
+    if "time_required_minutes" not in data:
+        return None
+    raw = data.get("time_required_minutes")
+    if raw in (None, ""):
+        data["time_required_minutes"] = 0
+        return None
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        return "Time Required must be minutes in 30-minute increments"
+    if minutes < 0:
+        return "Time Required cannot be negative"
+    if minutes % 30 != 0:
+        return "Time Required must use 30-minute increments"
+    data["time_required_minutes"] = minutes
+    return None
+
+
 def _validate_calendar_event(data, creating=False):
     if creating or "title" in data:
         title = str(data.get("title") or "").strip()
@@ -363,7 +382,46 @@ def _validate_calendar_event(data, creating=False):
         data["related_table"] = related_table
     return None
 
-def validate_record_data(table, data, creating=False):
+def _registry_project_name(project: Project) -> str:
+    return (
+        (project.name or "").strip()
+        or (project.client or "").strip()
+        or (project.project_number or "").strip()
+    )
+
+
+def _sync_project_work_registry_fields(sess: Session | None, data: dict) -> str | None:
+    """When a Project Task points at the registry, keep display fields canonical."""
+    if sess is None:
+        return None
+
+    project = None
+    project_id = data.get("project_id")
+    project_number = str(data.get("project_number") or "").strip()
+
+    if project_id:
+        project = sess.get(Project, project_id)
+        if project is None:
+            return "Selected project was not found"
+        if project_number and project.project_number != project_number:
+            return "Selected project does not match Project Number"
+    elif project_number:
+        project = sess.scalar(
+            select(Project)
+            .where(func.lower(Project.project_number) == project_number.lower())
+            .limit(1)
+        )
+
+    if project is None:
+        return None
+
+    data["project_id"] = project.id
+    data["project_number"] = project.project_number
+    data["project_name"] = _registry_project_name(project)
+    return None
+
+
+def validate_record_data(table, data, creating=False, sess: Session | None = None):
     # Phase-0: normalize FK columns regardless of table.
     _coerce_fk_columns(data)
 
@@ -408,16 +466,11 @@ def validate_record_data(table, data, creating=False):
         return None
 
     project_number = (data.get("project_number") or "").strip()
-    project_name = (data.get("project_name") or "").strip()
     billing_phase = (data.get("billing_phase") or "").strip()
     engineer = (data.get("engineer") or "").strip()
     task_description = (data.get("task_description") or "").strip()
     due_at = (data.get("due_at") or "").strip()
-
-    if creating or "project_name" in data:
-        if not project_name:
-            return "'project_name' is required"
-        data["project_name"] = project_name
+    scheduled_completion_at = (data.get("scheduled_completion_at") or "").strip()
 
     if creating or "project_number" in data:
         if not project_number:
@@ -425,6 +478,16 @@ def validate_record_data(table, data, creating=False):
         if not re.fullmatch(r"\d{4}\.\d{2}", project_number):
             return "Project Number must match ####.##"
         data["project_number"] = project_number
+
+    registry_error = _sync_project_work_registry_fields(sess, data)
+    if registry_error:
+        return registry_error
+
+    project_name = (data.get("project_name") or "").strip()
+    if creating or "project_name" in data:
+        if not project_name:
+            return "'project_name' is required"
+        data["project_name"] = project_name
 
     if billing_phase:
         if not re.fullmatch(r"\d{2}", billing_phase):
@@ -445,6 +508,21 @@ def validate_record_data(table, data, creating=False):
         except ValueError:
             return "Due date and time must be a valid datetime"
         data["due_at"] = due_at
+
+    if scheduled_completion_at:
+        try:
+            datetime.fromisoformat(scheduled_completion_at)
+        except ValueError:
+            return "Scheduled completion must be a valid datetime"
+        data["scheduled_completion_at"] = scheduled_completion_at
+
+    minutes_error = _validate_time_required_minutes(data)
+    if minutes_error:
+        return minutes_error
+
+    for key in ("notes", "scope_notes", "progress_notes", "confirmation_notes", "completion_notes"):
+        if key in data:
+            data[key] = str(data.get(key) or "").strip()
 
     return None
 
@@ -468,6 +546,8 @@ def build_weekly_submission_rows(form=None, min_rows=4):
         "billing_phase[]",
         "engineer[]",
         "due_at[]",
+        "scheduled_completion_at[]",
+        "time_required_minutes[]",
     ]
     if not form:
         return [{} for _ in range(min_rows)]
@@ -485,6 +565,8 @@ def build_weekly_submission_rows(form=None, min_rows=4):
             "billing_phase": (values["billing_phase[]"][idx] if idx < len(values["billing_phase[]"]) else "").strip(),
             "engineer": (values["engineer[]"][idx] if idx < len(values["engineer[]"]) else "").strip(),
             "due_at": (values["due_at[]"][idx] if idx < len(values["due_at[]"]) else "").strip(),
+            "scheduled_completion_at": (values["scheduled_completion_at[]"][idx] if idx < len(values["scheduled_completion_at[]"]) else "").strip(),
+            "time_required_minutes": (values["time_required_minutes[]"][idx] if idx < len(values["time_required_minutes[]"]) else "").strip(),
         })
     return rows
 
@@ -496,7 +578,7 @@ def create_direct_record(sess: Session, table, payload, source_name,
     Returns (record_id, error_string_or_None). Caller commits or rolls
     back the session.
     """
-    error = validate_record_data(table, payload, creating=True)
+    error = validate_record_data(table, payload, creating=True, sess=sess)
     if error:
         return None, error
 

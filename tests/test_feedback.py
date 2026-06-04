@@ -91,6 +91,10 @@ def test_shell_includes_feedback_widget_and_left_nav(auth_client):
     assert "collectFeedbackUiState" in html
     assert "loadFeedbackAppContext" in html
     assert "/api/v1/app-context" in html
+    assert "target_context" in html
+    assert "openFeedbackForRecord" in html
+    assert "record-feedback-btn" in html
+    assert "closeFeedbackModal({force:true})" in html
 
 
 def test_feedback_api_create_and_update(auth_client, temp_app):

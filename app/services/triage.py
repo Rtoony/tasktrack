@@ -77,7 +77,13 @@ TRIAGE_PRESET_KEYS = (
     "request_reference",
     "due_date",
     "due_at",
+    "scheduled_completion_at",
+    "time_required_minutes",
     "notes",
+    "scope_notes",
+    "progress_notes",
+    "confirmation_notes",
+    "completion_notes",
     "project_number",
     "project_name",
     "billing_phase",
@@ -296,7 +302,12 @@ def triage_plan_to_payload(plan, raw_text, model, target, presets):
             "priority": priority,
             "status": "Not Started",
         }
-        for key in ("billing_phase", "engineer", "due_at", "notes"):
+        for key in (
+            "billing_phase", "engineer", "due_at",
+            "scheduled_completion_at", "time_required_minutes",
+            "notes", "scope_notes", "progress_notes",
+            "confirmation_notes", "completion_notes",
+        ):
             val = _triage_preset_str(presets, key)
             if val:
                 payload[key] = val

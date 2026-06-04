@@ -22,6 +22,16 @@ def test_dashboard_includes_kanban_markup(auth_client):
     assert 'kanban-card-action' in html
     assert 'openProjectWorkspaceSmart(r.project_id, r.project_number)' in html
     assert 'openProjectReportSmart(r.project_id, r.project_number)' in html
+    assert 'Pending Confirmation' in html
+    assert 'Scheduled <span class="sort-arrow">' in html
+    assert 'Time Required (minutes)' in html
+    assert 'scheduled_completion_at' in html
+    assert 'time_required_minutes' in html
+    assert 'Planning / Scope Notes' in html
+    assert 'Confirmation Notes' in html
+    assert 'kanban-card-desc' in html
+    assert 'formatDurationMinutes' in html
+    assert "openFeedbackForRecord('project', r)" in html
 
 
 def test_dashboard_includes_paper_ocr_capture_affordance(auth_client):

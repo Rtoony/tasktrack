@@ -10,7 +10,7 @@ Verifies:
 """
 from app.db import get_session
 from app.models import Employee, PersonnelIssue, Project, ProjectWorkTask
-from app.services.tickets import _coerce_fk_columns, enrich_with_fks
+from app.services.tickets import _coerce_fk_columns, enrich_with_fks, validate_record_data
 
 # ── Coercion helper ──────────────────────────────────────────────────────
 
@@ -164,7 +164,84 @@ def test_create_record_via_api_enriches_fk(auth_client, temp_app):
     r2 = auth_client.get(f"/api/v1/project_work_tasks/{rec_id}")
     body = r2.get_json()
     assert body["project_number"] == "0042.00"
+    assert body["project_name"] == "Bridge"
     assert body["engineer"] == "Pat Person"
     # FK columns are populated by enrich_with_fks.
     assert body["project_id"] is not None
     assert body["engineer_id"] is not None
+
+
+def test_project_task_registry_syncs_name_on_create_and_update(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Project(project_number="0042.00", name="Bridge"))
+        sess.add(Project(project_number="0043.00", name="Library"))
+        sess.commit()
+
+    created = auth_client.post("/api/v1/project_work_tasks", json={
+        "title": "Survey check",
+        "project_number": "0042.00",
+        "task_description": "Verify the survey baseline",
+    })
+    assert created.status_code == 201, created.get_json()
+    body = created.get_json()
+    assert body["project_name"] == "Bridge"
+    assert body["project_id"] is not None
+
+    updated = auth_client.put(f"/api/v1/project_work_tasks/{body['id']}", json={
+        "project_number": "0043.00",
+    })
+    assert updated.status_code == 200, updated.get_json()
+    body = updated.get_json()
+    assert body["project_number"] == "0043.00"
+    assert body["project_name"] == "Library"
+    assert body["project_id"] is not None
+
+
+def test_project_task_execution_fields_roundtrip_and_validation(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Project(project_number="0044.00", name="Pump Station"))
+        sess.commit()
+
+    created = auth_client.post("/api/v1/project_work_tasks", json={
+        "title": "Draft exhibit",
+        "project_number": "0044.00",
+        "task_description": "Prepare the exhibit package",
+        "due_at": "2026-06-08T17:00",
+        "scheduled_completion_at": "2026-06-08T14:30",
+        "time_required_minutes": "90",
+        "scope_notes": "Confirm exhibit scope before starting.",
+        "progress_notes": "Base file is ready.",
+        "confirmation_notes": "PM needs to confirm sheet list.",
+        "completion_notes": "Deliverable goes to the agency folder.",
+    })
+    assert created.status_code == 201, created.get_json()
+    body = created.get_json()
+    assert body["project_name"] == "Pump Station"
+    assert body["scheduled_completion_at"] == "2026-06-08T14:30"
+    assert body["time_required_minutes"] == 90
+    assert body["scope_notes"] == "Confirm exhibit scope before starting."
+
+    updated = auth_client.put(f"/api/v1/project_work_tasks/{body['id']}", json={
+        "status": "Pending Confirmation",
+        "confirmation_notes": "Engineer review requested.",
+        "time_required_minutes": 120,
+    })
+    assert updated.status_code == 200, updated.get_json()
+    updated_body = updated.get_json()
+    assert updated_body["status"] == "Pending Confirmation"
+    assert updated_body["confirmation_notes"] == "Engineer review requested."
+    assert updated_body["time_required_minutes"] == 120
+
+    bad_minutes = validate_record_data(
+        "project_work_tasks",
+        {"time_required_minutes": "45"},
+    )
+    assert bad_minutes == "Time Required must use 30-minute increments"
+
+    bad_schedule = validate_record_data(
+        "project_work_tasks",
+        {"scheduled_completion_at": "not-a-date"},
+    )
+    assert bad_schedule == "Scheduled completion must be a valid datetime"

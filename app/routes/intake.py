@@ -144,6 +144,8 @@ def _title_and_body(
     for key in (
         "project",
         "phase",
+        "scheduled_completion_at",
+        "time_required_minutes",
         "skill",
         "software",
         "who",

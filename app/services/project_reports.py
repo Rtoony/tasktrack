@@ -69,6 +69,27 @@ def _record_when(table: str, row: dict) -> str:
     return row.get("due_at") or row.get("due_date") or row.get("follow_up_date") or ""
 
 
+def _duration_label(minutes) -> str:
+    try:
+        value = int(minutes or 0)
+    except (TypeError, ValueError):
+        return ""
+    if value <= 0:
+        return ""
+    hours = value / 60
+    return f"{int(hours) if value % 60 == 0 else hours:.1f}".rstrip("0").rstrip(".") + "h"
+
+
+def _project_task_detail(row: dict) -> str:
+    bits = [f"Status: {_status(row) or 'open'}"]
+    if row.get("scheduled_completion_at"):
+        bits.append(f"scheduled: {str(row.get('scheduled_completion_at'))[:16]}")
+    duration = _duration_label(row.get("time_required_minutes"))
+    if duration:
+        bits.append(f"est: {duration}")
+    return " · ".join(bits)
+
+
 def _status(row: dict) -> str:
     return str(row.get("status") or "")
 
@@ -83,7 +104,7 @@ def _overdue_item(table: str, row: dict) -> dict | None:
     due_field = overdue_field_for_table({"fields": row.keys()})
     if not due_field or not is_overdue_value(row.get(due_field)):
         return None
-    return {
+    payload = {
         "table": table,
         "label": REPORT_TABLES.get(table, table),
         "id": row.get("id"),
@@ -91,6 +112,10 @@ def _overdue_item(table: str, row: dict) -> dict | None:
         "status": _status(row),
         "due": row.get(due_field) or "",
     }
+    if table == "project_work_tasks":
+        payload["scheduled_completion_at"] = row.get("scheduled_completion_at") or ""
+        payload["time_required_minutes"] = row.get("time_required_minutes") or 0
+    return payload
 
 
 def _upcoming_calendar(rows: list[dict], now: datetime) -> list[dict]:
@@ -191,7 +216,7 @@ def _project_action_queue(report: dict) -> list[dict]:
         actions.append({
             "priority": "high",
             "title": f"Resolve overdue {item.get('label') or 'item'}: {item.get('title') or 'Untitled'}",
-            "detail": f"Status: {item.get('status') or 'unknown'}",
+            "detail": _project_task_detail(item) if item.get("table") == "project_work_tasks" else f"Status: {item.get('status') or 'unknown'}",
             "source": item.get("label") or item.get("table") or "Linked record",
             "due": item.get("due") or "",
         })
@@ -220,7 +245,7 @@ def _project_action_queue(report: dict) -> list[dict]:
             actions.append({
                 "priority": "next",
                 "title": f"Advance {source.lower()}: {_record_title(table, row)}",
-                "detail": f"Status: {_status(row) or 'open'}",
+                "detail": _project_task_detail(row) if table == "project_work_tasks" else f"Status: {_status(row) or 'open'}",
                 "source": source,
                 "due": _record_when(table, row),
             })

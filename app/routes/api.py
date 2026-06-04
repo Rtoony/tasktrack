@@ -240,7 +240,9 @@ _SEARCH_SQLS = (
         "task_description as detail, priority, status, due_at as due_date "
         "FROM project_work_tasks "
         "WHERE project_name LIKE :p OR title LIKE :p OR project_number LIKE :p "
-        "OR engineer LIKE :p OR task_description LIKE :p OR notes LIKE :p"
+        "OR engineer LIKE :p OR task_description LIKE :p OR notes LIKE :p "
+        "OR scope_notes LIKE :p OR progress_notes LIKE :p "
+        "OR confirmation_notes LIKE :p OR completion_notes LIKE :p"
     ),
     text(
         "SELECT id, 'training_tasks' as source, title as label, "
@@ -490,17 +492,17 @@ def create_record(table):
         return jsonify({"error": "Invalid table"}), 400
     data = request.json or {}
     cfg = ALLOWED_TABLES[table]
+    sess = get_session()
     data.update(extra_create_fields(table, data))
-    error = validate_record_data(table, data, creating=True)
+    error = validate_record_data(table, data, creating=True, sess=sess)
     if error:
         return jsonify({"error": error}), 400
     for req in cfg["required"]:
-        if not data.get(req, "").strip():
+        if not str(data.get(req, "")).strip():
             return jsonify({"error": f"'{req}' is required"}), 400
     Model = TABLE_MODELS[table]
     valid_cols = {c.name for c in Model.__table__.columns}
     kwargs = {k: v for k, v in data.items() if k in valid_cols}
-    sess = get_session()
     record = Model(**kwargs)
     if table == "feedback_items" and kwargs.get("status") in done_statuses_for_table("feedback_items"):
         record.completed_at = datetime.utcnow()
@@ -548,12 +550,16 @@ def update_record(table, record_id):
         validation_data.setdefault("start_at", getattr(row, "start_at", "") or "")
         validation_data.setdefault("end_at", getattr(row, "end_at", "") or "")
 
-    error = validate_record_data(table, validation_data)
+    error = validate_record_data(table, validation_data, sess=sess)
     if error:
         return jsonify({"error": error}), 400
     for key in list(data.keys()):
         if key in validation_data:
             data[key] = validation_data[key]
+    if table == "project_work_tasks":
+        for key in ("project_id", "project_number", "project_name"):
+            if key in validation_data:
+                data[key] = validation_data[key]
 
     fields = [f for f in cfg["fields"] if f in data]
     if not fields:

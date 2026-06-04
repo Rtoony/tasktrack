@@ -15,6 +15,8 @@ def _submit_project_work(auth_client):
             "summary": "Revise grading exhibit",
             "project": "2301.04",
             "phase": "200 - Prelim Design",
+            "scheduled_completion_at": "2026-06-05T14:30",
+            "time_required_minutes": "90",
             "details": "Update the grading exhibit before the agency meeting.",
         },
         "priority": "High",
@@ -264,6 +266,8 @@ def test_unified_submit_creates_reviewable_inbox_item(auth_client, temp_app):
         assert item.created_by_name == "Tester"
         assert "suggested_target" in item.body
         assert "project_work_tasks" in item.body
+        assert "scheduled_completion_at: 2026-06-05T14:30" in item.body
+        assert "time_required_minutes: 90" in item.body
 
     report = auth_client.get("/api/v1/reports/intake?needs_review=1")
     assert report.status_code == 200

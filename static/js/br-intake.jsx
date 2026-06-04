@@ -248,10 +248,18 @@ function IntakeForm(){
           <Field label="Task summary" req error={errors.summary}>
             <input className={"input"+(errors.summary?' bad':'')} value={f.summary||''} onChange={e=>set('summary',e.target.value)} placeholder="e.g. “Reservoir site grading exhibit”"/>
           </Field>
-          <Field label="Billing phase" hint="optional">
-            <select className="select" value={f.phase||''} onChange={e=>set('phase',e.target.value)}>
-              <option value="">— Select phase —</option>{PHASES.map(p=><option key={p}>{p}</option>)}
-            </select>
+          <div className="row">
+            <Field label="Billing phase" hint="optional">
+              <select className="select" value={f.phase||''} onChange={e=>set('phase',e.target.value)}>
+                <option value="">— Select phase —</option>{PHASES.map(p=><option key={p}>{p}</option>)}
+              </select>
+            </Field>
+            <Field label="Time required" hint="30-min increments">
+              <input className="input mono" type="number" min="0" step="30" value={f.time_required_minutes||''} onChange={e=>set('time_required_minutes',e.target.value)} placeholder="30"/>
+            </Field>
+          </div>
+          <Field label="Scheduled completion" hint="optional">
+            <input className="input mono" type="datetime-local" step="900" value={f.scheduled_completion_at||''} onChange={e=>set('scheduled_completion_at',e.target.value)}/>
           </Field>
           <Field label="Details"><textarea className="textarea" value={f.details||''} onChange={e=>set('details',e.target.value)} placeholder="Deliverable, scope, anything the engineer should know."/></Field>
         </>}

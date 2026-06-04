@@ -73,7 +73,10 @@ CSV_FIELDS = [
 
 DETAIL_FIELDS = {
     "work_tasks": ["description", "clarifications_needed", "starter_note", "notes"],
-    "project_work_tasks": ["task_description", "notes"],
+    "project_work_tasks": [
+        "task_description", "scope_notes", "progress_notes",
+        "confirmation_notes", "completion_notes", "notes",
+    ],
     "training_tasks": ["training_goals", "additional_context", "notes"],
     "personal_items": ["body", "source_ref"],
     "inbox_items": ["body", "source_ref"],
