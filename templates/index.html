@@ -2602,9 +2602,27 @@ async function submitFeedback() {
   }
 }
 
+function populateFeedbackTypeOptions() {
+  const select = document.getElementById('feedback-type');
+  if (!select) return;
+  const current = select.value || 'Bug';
+  loadFkOptions('/api/v1/options/feedback_type').then(rows => {
+    if (!Array.isArray(rows) || !rows.length) return;
+    select.replaceChildren();
+    rows.forEach(row => {
+      const opt = document.createElement('option');
+      opt.value = row.value || row.label || '';
+      opt.textContent = row.label || row.value || '';
+      if (String(current).toLowerCase() === String(opt.value).toLowerCase()) opt.selected = true;
+      select.appendChild(opt);
+    });
+  });
+}
+
 function initFeedbackWidget() {
   const overlay = document.getElementById('feedback-overlay');
   if (!overlay) return;
+  populateFeedbackTypeOptions();
   overlay.addEventListener('click', e => { if (e.target === e.currentTarget) closeFeedbackModal(); });
   overlay.addEventListener('paste', e => {
     const files = Array.from(e.clipboardData?.files || []);
@@ -6099,7 +6117,7 @@ function workspaceAddCalendarEvent() {
 const FORMS = {
   work:[
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/skills/categories',valueKey:'name',displayKey:'name',emptyLabel:'— choose CAD skill area —',hint:'Controlled list from the active competency rubric.'},
+    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose CAD skill area —',hint:'Admin-managed list from Admin Home → Managed Dropdowns.'},
     {key:'description',label:'Requested Change',type:'textarea'},
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
     {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
@@ -6114,7 +6132,7 @@ const FORMS = {
     {key:'links',label:'Links',type:'links'},
   ],
   project:[
-    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'text',placeholder:'01'}]},
+    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —'}]},
     {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
@@ -6136,7 +6154,7 @@ const FORMS = {
     {key:'title',label:'Title',type:'text',required:true},
     {key:'trainees',label:'Staff Members',type:'employee-multi-name-select',idsKey:'trainee_ids',placeholder:'Pick one or more employees'},
     {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this'},
-    {key:'skill_area',label:'Skill Area',type:'text',placeholder:'Modeling, detailing, standards, markup workflow, etc.'},
+    {key:'skill_area',label:'Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/training_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose skill area —',hint:'Admin-managed training vocabulary.'},
     {key:'training_goals',label:'Training Goals',type:'textarea'},
     {key:'additional_context',label:'Additional Context',type:'textarea'},
     {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
@@ -6151,7 +6169,7 @@ const FORMS = {
     {key:'person_name',label:'People Involved (comma-separated, optional)',type:'text',placeholder:'Alice Smith, Bob Jones \u2014 or leave blank for 0-person incidents'},
     {key:'person_ids',label:'People (registry FK \u00b7 multi-select)',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional. Pick one or more employees. The People text field above is also parsed for matching names \u2014 either path works.'},
     {key:'observed_by',label:'Reported By',type:'employee-name-select',placeholder:'Pick the reporter'},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/skills/categories',valueKey:'name',displayKey:'name',emptyLabel:'— choose CAD skill area —',syncIdKey:'skill_category_id',hint:'Controlled list from the active competency rubric. Selecting an area also links the Skill Category field below.'},
+    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',syncIdSource:'skill_category_id',emptyLabel:'— choose CAD skill area —',syncIdKey:'skill_category_id',hint:'Admin-managed CAD vocabulary. Matching rubric categories also link the Skill Category field below.'},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
     {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
     {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
@@ -6169,12 +6187,7 @@ const FORMS = {
     {key:'title',label:'Event Title',type:'text',required:true,placeholder:'Management check-in, submittal deadline, project review…'},
     {key:'description',label:'Notes / Prep',type:'textarea',placeholder:'Agenda, decisions needed, report context, or follow-up notes.'},
     {key:'_row',fields:[
-      {key:'event_type',label:'Type',type:'select',options:[
-        {value:'meeting',label:'Meeting'}, {value:'milestone',label:'Milestone'},
-        {value:'deadline',label:'Deadline'}, {value:'review',label:'Review'},
-        {value:'task_due',label:'Task Due'}, {value:'prep',label:'Prep'},
-        {value:'reminder',label:'Reminder'}, {value:'other',label:'Other'},
-      ]},
+      {key:'event_type',label:'Type',type:'endpoint-select',endpoint:'/api/v1/options/calendar_event_type',valueKey:'value',displayKey:'label',emptyLabel:'— choose type —'},
       {key:'status',label:'Status',type:'select',options:[
         {value:'scheduled',label:'Scheduled'}, {value:'tentative',label:'Tentative'},
         {value:'done',label:'Done'}, {value:'cancelled',label:'Cancelled'},
@@ -6183,9 +6196,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'start_at',label:'Start',type:'datetime-local',required:true},{key:'end_at',label:'End',type:'datetime-local'}]},
     {key:'_row',fields:[
       {key:'all_day',label:'All Day',type:'select',options:[{value:'0',label:'No'},{value:'1',label:'Yes'}]},
-      {key:'visibility',label:'Visibility',type:'select',options:[
-        {value:'internal',label:'Internal'}, {value:'private',label:'Private'}, {value:'shared',label:'Shared'},
-      ]},
+      {key:'visibility',label:'Visibility',type:'endpoint-select',endpoint:'/api/v1/options/calendar_visibility',valueKey:'value',displayKey:'label',emptyLabel:'— choose visibility —'},
     ]},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'_row',fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
@@ -6195,7 +6206,7 @@ const FORMS = {
   triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
-    {key:'_row',fields:[{key:'source',label:'Source',type:'text',placeholder:'manual, voice, telegram, paperless, remarkable-ocr…'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
+    {key:'_row',fields:[{key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -6383,7 +6394,7 @@ function renderField(f,value) {
         const opt=document.createElement('option');
         const optValue = f.valueKey ? (r[f.valueKey] || '') : r.id;
         opt.value=optValue;
-        opt.dataset.id=r.id || '';
+        opt.dataset.id=(f.syncIdSource ? (r[f.syncIdSource] || '') : (r.id || ''));
         opt.textContent=f.displayKey ? (r[f.displayKey] || optValue) : (r.name || r.display_name || ('#'+r.id));
         if (String(currentValue).trim().toLowerCase()===String(optValue).trim().toLowerCase()) {
           opt.selected=true;

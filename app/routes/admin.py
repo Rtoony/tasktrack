@@ -13,10 +13,30 @@ from flask import (
 from sqlalchemy import select
 from werkzeug.security import generate_password_hash
 
-from ..auth import admin_required
+from ..auth import admin_required, login_required
 from ..config import ADMIN_WORKFLOW_VIEWS
 from ..db import get_session
-from ..models import ApprovedEmail, AppSetting, Employee, Project, TelegramChatAccess, User
+from ..models import (
+    ApprovedEmail,
+    AppSetting,
+    Employee,
+    ManagedOption,
+    ManagedOptionSet,
+    Project,
+    TelegramChatAccess,
+    User,
+)
+from ..services.managed_options import (
+    create_option,
+    create_set,
+    get_set,
+    list_sets,
+    option_payload,
+    options_payload,
+    set_payload,
+    update_option,
+    update_set,
+)
 
 bp = Blueprint("admin", __name__)
 
@@ -120,6 +140,124 @@ def admin_workflow_view(workflow):
         standalone_title=meta["title"],
         standalone_subtitle=meta["subtitle"],
     )
+
+
+@bp.route("/api/v1/options/<set_key>", methods=["GET"])
+@login_required
+def list_managed_option_values(set_key):
+    sess = get_session()
+    include_inactive = (
+        session.get("user_role") == "admin"
+        and request.args.get("include_inactive") in ("1", "true", "yes")
+    )
+    row = get_set(sess, set_key, include_inactive=include_inactive)
+    if row is None:
+        return jsonify({"error": "option set not found"}), 404
+    payload = options_payload(sess, row.key, include_inactive=include_inactive)
+    sess.commit()
+    return jsonify(payload)
+
+
+@bp.route("/api/v1/admin/options/sets", methods=["GET"])
+@admin_required
+def admin_list_option_sets():
+    sess = get_session()
+    include_inactive = request.args.get("include_inactive", "1") not in ("0", "false", "no")
+    rows = [
+        set_payload(sess, row, include_options=True, include_inactive_options=True)
+        for row in list_sets(sess, include_inactive=include_inactive)
+    ]
+    sess.commit()
+    return jsonify(rows)
+
+
+@bp.route("/api/v1/admin/options/sets", methods=["POST"])
+@admin_required
+def admin_create_option_set():
+    sess = get_session()
+    result = create_set(sess, request.get_json(silent=True) or {})
+    if isinstance(result, tuple):
+        return jsonify({"error": result[1]}), 400
+    sess.commit()
+    return jsonify(set_payload(sess, result, include_options=True)), 201
+
+
+@bp.route("/api/v1/admin/options/sets/<set_key>", methods=["PATCH"])
+@admin_required
+def admin_update_option_set(set_key):
+    sess = get_session()
+    row = get_set(sess, set_key, include_inactive=True)
+    if row is None:
+        return jsonify({"error": "option set not found"}), 404
+    error = update_set(row, request.get_json(silent=True) or {})
+    if error:
+        return jsonify({"error": error}), 400
+    sess.commit()
+    return jsonify(set_payload(sess, row, include_options=True))
+
+
+@bp.route("/api/v1/admin/options/sets/<set_key>", methods=["DELETE"])
+@admin_required
+def admin_delete_option_set(set_key):
+    sess = get_session()
+    row = get_set(sess, set_key, include_inactive=True)
+    if row is None:
+        return jsonify({"deleted": set_key})
+    if row.is_system:
+        return jsonify({"error": "system option sets can be deactivated, not deleted"}), 400
+    row.active = 0
+    sess.commit()
+    return jsonify({"deleted": row.key})
+
+
+@bp.route("/api/v1/admin/options/sets/<set_key>/options", methods=["POST"])
+@admin_required
+def admin_create_option(set_key):
+    sess = get_session()
+    set_row = get_set(sess, set_key, include_inactive=True)
+    if set_row is None:
+        return jsonify({"error": "option set not found"}), 404
+    result = create_option(sess, set_row, request.get_json(silent=True) or {})
+    if isinstance(result, tuple):
+        return jsonify({"error": result[1]}), 400
+    sess.commit()
+    return jsonify(option_payload(result, set_key=set_row.key)), 201
+
+
+@bp.route("/api/v1/admin/options/options/<int:option_id>", methods=["PATCH"])
+@admin_required
+def admin_update_option(option_id):
+    sess = get_session()
+    row = sess.get(ManagedOption, option_id)
+    if row is None:
+        return jsonify({"error": "option not found"}), 404
+    data = request.get_json(silent=True) or {}
+    if "value" in data:
+        value = str(data.get("value") or "").strip()
+        dupe = sess.scalar(select(ManagedOption).where(
+            ManagedOption.set_id == row.set_id,
+            ManagedOption.value == value,
+            ManagedOption.id != row.id,
+        ))
+        if dupe is not None:
+            return jsonify({"error": "option value already exists in this set"}), 400
+    error = update_option(row, data)
+    if error:
+        return jsonify({"error": error}), 400
+    set_row = sess.get(ManagedOptionSet, row.set_id)
+    sess.commit()
+    return jsonify(option_payload(row, set_key=set_row.key if set_row else ""))
+
+
+@bp.route("/api/v1/admin/options/options/<int:option_id>", methods=["DELETE"])
+@admin_required
+def admin_delete_option(option_id):
+    sess = get_session()
+    row = sess.get(ManagedOption, option_id)
+    if row is not None:
+        row.active = 0
+        sess.commit()
+    return jsonify({"deleted": option_id})
 
 
 @bp.route("/api/v1/admin/approved-emails", methods=["POST"])

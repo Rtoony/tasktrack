@@ -82,8 +82,9 @@ def test_dashboard_uses_controlled_cad_skill_area_dropdown(auth_client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert html.count("key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select'") == 2
-    assert "endpoint:'/api/v1/skills/categories'" in html
+    assert "endpoint:'/api/v1/options/cad_skill_area'" in html
     assert "syncIdKey:'skill_category_id'" in html
+    assert "syncIdSource:'skill_category_id'" in html
     assert "f.type==='endpoint-select'" in html
     assert "Current value: " in html
 

@@ -11,7 +11,7 @@ All endpoints are exercised through the Flask test client (TESTING=True so
 CSRF and rate limits are bypassed).
 """
 from app.db import get_session
-from app.models import ApprovedEmail, TelegramChatAccess, User
+from app.models import ApprovedEmail, ManagedOption, ManagedOptionSet, TelegramChatAccess, User
 
 # ── Auth gating ───────────────────────────────────────────────────────────
 
@@ -77,6 +77,70 @@ def test_admin_api_endpoint_returns_401_for_anonymous(client):
 def test_admin_api_endpoint_returns_403_for_regular_user(auth_client):
     r = auth_client.post("/api/v1/admin/approved-emails", json={"email": "x@y.com"})
     assert r.status_code == 403
+
+
+# ── Managed option registry ──────────────────────────────────────────────
+
+def test_option_values_require_login(client):
+    r = client.get("/api/v1/options/cad_skill_area")
+    assert r.status_code == 401
+
+
+def test_option_values_seed_defaults(auth_client):
+    r = auth_client.get("/api/v1/options/cad_skill_area")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert any(row["label"] == "AutoCAD Core" for row in rows)
+    assert any(row.get("skill_category_id") for row in rows)
+
+
+def test_managed_option_admin_routes_are_admin_only(auth_client):
+    r = auth_client.get("/api/v1/admin/options/sets")
+    assert r.status_code == 403
+
+
+def test_admin_managed_option_crud(admin_client, temp_app):
+    created = admin_client.post("/api/v1/admin/options/sets", json={
+        "key": "office_terms",
+        "label": "Office Terms",
+        "surface": "Test",
+    })
+    assert created.status_code == 201
+    assert created.get_json()["key"] == "office_terms"
+
+    option = admin_client.post("/api/v1/admin/options/sets/office_terms/options", json={
+        "value": "alpha",
+        "label": "Alpha",
+        "display_order": 10,
+    })
+    assert option.status_code == 201
+    option_id = option.get_json()["id"]
+
+    patched = admin_client.patch(f"/api/v1/admin/options/options/{option_id}", json={
+        "value": "beta",
+        "label": "Beta",
+        "active": False,
+    })
+    assert patched.status_code == 200
+    assert patched.get_json()["value"] == "beta"
+    assert patched.get_json()["active"] == 0
+
+    listed = admin_client.get("/api/v1/admin/options/sets?include_inactive=1")
+    assert listed.status_code == 200
+    office = next(row for row in listed.get_json() if row["key"] == "office_terms")
+    assert office["options"][0]["value"] == "beta"
+    assert office["options"][0]["active"] == 0
+
+    visible = admin_client.get("/api/v1/options/office_terms")
+    assert visible.status_code == 200
+    assert visible.get_json() == []
+
+    with temp_app.app_context():
+        sess = get_session()
+        option_set = sess.get(ManagedOptionSet, created.get_json()["id"])
+        option_row = sess.get(ManagedOption, option_id)
+        assert option_set.label == "Office Terms"
+        assert option_row.value == "beta"
 
 
 # ── Approved emails ──────────────────────────────────────────────────────

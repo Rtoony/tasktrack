@@ -19,6 +19,30 @@ const Stroke = ({d,size=22,w=1.75}) => (
 
 const SKILL_AREAS = ['Surfaces','Corridors','Pipe Networks','Sheet Sets','LISP / Automation','Plan Production','Labels & Styles','Data Exchange','Dynamic Blocks','Templates','Other'];
 const PHASES = ['100 - Survey','200 - Prelim Design','300 - Const Docs','400 - Bid Support','500 - Const Admin'];
+const SUGGESTION_CATEGORIES = ['Standards','Workflow','Templates','Blocks','Onboarding','UI','Other'];
+
+function fallbackOptions(values){
+  return values.map(v => (typeof v === 'object' ? v : {value:v, label:v}));
+}
+function useOptionSet(key, fallback){
+  const [options, setOptions] = useState(() => fallbackOptions(fallback));
+  useEffect(() => {
+    let alive = true;
+    const url = CFG.optionUrls && CFG.optionUrls[key];
+    if(!url) return () => { alive = false; };
+    (async () => {
+      try{
+        const res = await fetch(url, {headers:{'Accept':'application/json'}});
+        if(!res.ok) return;
+        const rows = await res.json();
+        if(!alive || !Array.isArray(rows) || !rows.length) return;
+        setOptions(rows.map(row => ({value:row.value || row.label || '', label:row.label || row.value || ''})).filter(row => row.value));
+      }catch(_){ /* keep fallback options */ }
+    })();
+    return () => { alive = false; };
+  }, [key]);
+  return options;
+}
 const TYPES = [
   { key:'general', icon:I.general, label:'General request', desc:"Not sure where it fits — we'll route it.", route:'Routed to the right team' },
   { key:'project_work', icon:I.project, label:'Project work', desc:'Billable work on a project number.', route:'Project work queue' },
@@ -120,6 +144,16 @@ function IntakeForm(){
   const set = (k,v) => setF(s=>({...s,[k]:v}));
   const cfg = TYPES.find(t=>t.key===type);
   const openIntake = !CFG.user.signedIn;
+  const cadSkillAreas = useOptionSet('cadSkillArea', SKILL_AREAS);
+  const trainingSkillAreas = useOptionSet('trainingSkillArea', SKILL_AREAS);
+  const billingPhases = useOptionSet('projectBillingPhase', PHASES);
+  const suggestionCategories = useOptionSet('suggestionCategory', SUGGESTION_CATEGORIES);
+  const problemAreas = [
+    ...cadSkillAreas.filter(o => !['other','workflow','software'].includes(String(o.value).toLowerCase())),
+    {value:'Workflow', label:'Workflow'},
+    {value:'Software', label:'Software'},
+    {value:'Other', label:'Other'},
+  ];
 
   const reset = ()=>{ setType('general'); setF({project:'',software:'Either',severity:'Medium',priority:'Medium',who:'Just me'});
     setFiles([]); setErrors({}); setDone(null); setBanner(''); window.scrollTo(0,0); };
@@ -251,7 +285,7 @@ function IntakeForm(){
           <div className="row">
             <Field label="Billing phase" hint="optional">
               <select className="select" value={f.phase||''} onChange={e=>set('phase',e.target.value)}>
-                <option value="">— Select phase —</option>{PHASES.map(p=><option key={p}>{p}</option>)}
+                <option value="">— Select phase —</option>{billingPhases.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}
               </select>
             </Field>
             <Field label="Time required" hint="30-min increments">
@@ -271,7 +305,7 @@ function IntakeForm(){
           <div className="row">
             <Field label="Skill area">
               <select className="select" value={f.skill||''} onChange={e=>set('skill',e.target.value)}>
-                <option value="">— Select —</option>{SKILL_AREAS.map(s=><option key={s}>{s}</option>)}
+                <option value="">— Select —</option>{cadSkillAreas.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </Field>
             <Field label="Software">
@@ -284,7 +318,9 @@ function IntakeForm(){
 
         {type==='training' && <>
           <Field label="Skill or topic" req error={errors.topic}>
-            <input className={"input"+(errors.topic?' bad':'')} value={f.topic||''} onChange={e=>set('topic',e.target.value)} placeholder="e.g. “Civil 3D corridor modeling”"/>
+            <select className={"select"+(errors.topic?' bad':'')} value={f.topic||''} onChange={e=>set('topic',e.target.value)}>
+              <option value="">— Select training topic —</option>{trainingSkillAreas.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
           </Field>
           <Field label="Who's it for?">
             <div className="seg">{['Just me','My team','Someone specific'].map(s=>(<button key={s} className={f.who===s?'on':''} onClick={()=>set('who',s)}>{s}</button>))}</div>
@@ -301,7 +337,7 @@ function IntakeForm(){
           </Field>
           <Field label="Category">
             <select className="select" value={f.category||''} onChange={e=>set('category',e.target.value)}>
-              <option value="">— Select —</option>{['Standards','Workflow','Templates','Blocks','Onboarding','UI','Other'].map(c=><option key={c}>{c}</option>)}
+              <option value="">— Select —</option>{suggestionCategories.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}
             </select>
           </Field>
           <Field label="Your idea" req error={errors.body}>
@@ -317,7 +353,7 @@ function IntakeForm(){
           <div className="row">
             <Field label="Area">
               <select className="select" value={f.skill||''} onChange={e=>set('skill',e.target.value)}>
-                <option value="">— Select —</option>{[...SKILL_AREAS.slice(0,-1),'Workflow','Software','Other'].map(s=><option key={s}>{s}</option>)}
+                <option value="">— Select —</option>{problemAreas.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </Field>
             <Field label="Severity">

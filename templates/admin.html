@@ -34,6 +34,23 @@
   .workflow-link-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .workflow-link-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 0.25rem; }
   .workflow-link-copy { font-size: 0.78rem; color: var(--text-muted); }
+  .option-layout { display:grid; grid-template-columns: 260px minmax(0,1fr); gap:1rem; align-items:start; }
+  .option-list { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:#fff; }
+  .option-set-btn { width:100%; border:0; border-bottom:1px solid var(--border-light); background:#fff; text-align:left; padding:0.7rem 0.8rem; cursor:pointer; font-family:inherit; }
+  .option-set-btn:last-child { border-bottom:0; }
+  .option-set-btn:hover, .option-set-btn.active { background:var(--accent-light); }
+  .option-set-btn strong { display:block; font-size:0.82rem; color:var(--text); }
+  .option-set-btn span { display:block; margin-top:0.12rem; font-size:0.7rem; color:var(--text-muted); }
+  .option-editor { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem; background:linear-gradient(180deg,#fbfcfe 0%,#fff 100%); }
+  .option-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.7rem; margin-bottom:0.8rem; }
+  .option-field label { display:block; font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.2rem; }
+  .option-field input, .option-field textarea { width:100%; padding:0.45rem 0.55rem; font-family:inherit; font-size:0.8rem; border:1px solid var(--border); border-radius:var(--radius); background:#fff; color:var(--text); }
+  .option-field textarea { min-height:4.4rem; resize:vertical; }
+  .option-field.full { grid-column:1 / -1; }
+  .option-row-input { width:100%; min-width:5rem; padding:0.35rem 0.45rem; font-family:inherit; font-size:0.78rem; border:1px solid var(--border); border-radius:6px; }
+  .option-order-input { width:4.4rem; }
+  .option-check { display:flex; align-items:center; justify-content:center; }
+  .hidden { display:none !important; }
   .info-grid { display:grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; align-items:start; }
   .info-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem 1rem; background:linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); }
   .info-label { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.3rem; }
@@ -184,6 +201,46 @@
     </div>
   </div>
 
+  <h2>Managed Dropdowns</h2>
+  <div class="card" id="managed-options-card">
+    <div class="table-note">Admin-managed terminology for dropdown fields. Phase 1 includes category/vocabulary fields; workflow statuses and priorities stay code-controlled until their backend validation is made dynamic.</div>
+    <div class="option-layout">
+      <div>
+        <div class="option-list" id="option-set-list"><div style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem;">Loading option sets…</div></div>
+        <div style="margin-top:0.8rem;border-top:1px solid var(--border);padding-top:0.8rem;">
+          <div class="option-field"><label for="new-option-set-key">New Set Key</label><input id="new-option-set-key" placeholder="office_category"></div>
+          <div class="option-field" style="margin-top:0.45rem;"><label for="new-option-set-label">Label</label><input id="new-option-set-label" placeholder="Office Categories"></div>
+          <button class="btn btn-primary btn-sm" style="margin-top:0.55rem;" onclick="addOptionSet()">Add Set</button>
+        </div>
+      </div>
+      <div class="option-editor">
+        <div id="option-editor-empty" class="table-note" style="margin:0;">Choose an option set to edit its labels, values, order, and active state.</div>
+        <div id="option-editor-body" class="hidden">
+          <div class="option-form-grid">
+            <div class="option-field"><label for="option-set-label">Set Label</label><input id="option-set-label"></div>
+            <div class="option-field"><label for="option-set-surface">Used On</label><input id="option-set-surface"></div>
+            <div class="option-field full"><label for="option-set-description">Description</label><textarea id="option-set-description"></textarea></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;">
+            <label style="font-size:0.78rem;color:var(--text-muted);"><input type="checkbox" id="option-set-active" style="vertical-align:middle;margin-right:0.3rem;"> Set active</label>
+            <button class="btn btn-primary btn-sm" onclick="saveOptionSet()">Save Set</button>
+          </div>
+          <table>
+            <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
+            <tbody id="managed-option-list"></tbody>
+          </table>
+          <div class="table-note" style="margin-top:0.7rem;">Value is what gets stored on records. Label is what users see. Deactivate old choices instead of removing historical values.</div>
+          <div class="option-form-grid" style="margin-top:0.7rem;">
+            <div class="option-field"><label for="new-option-value">New Value</label><input id="new-option-value" placeholder="Stored value"></div>
+            <div class="option-field"><label for="new-option-label">New Label</label><input id="new-option-label" placeholder="Shown label"></div>
+            <div class="option-field"><label for="new-option-order">Order</label><input id="new-option-order" type="number" value="0"></div>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="addManagedOption()">Add Option</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <h2>Telegram Bot Access</h2>
   <div class="card">
     <div class="info-grid" style="margin-bottom:1rem;">
@@ -291,11 +348,146 @@ async function api(method, path, body) {
   return res.json();
 }
 
+let managedOptionSets = [];
+let selectedOptionSetKey = '';
+
+function htmlesc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
+
+async function loadManagedOptions() {
+  const rows = await api('GET', '/api/v1/admin/options/sets?include_inactive=1');
+  managedOptionSets = Array.isArray(rows) ? rows : [];
+  if (!selectedOptionSetKey && managedOptionSets.length) selectedOptionSetKey = managedOptionSets[0].key;
+  renderOptionSetList();
+  renderOptionEditor();
+}
+
+function currentOptionSet() {
+  return managedOptionSets.find(s => s.key === selectedOptionSetKey) || null;
+}
+
+function renderOptionSetList() {
+  const list = document.getElementById('option-set-list');
+  if (!list) return;
+  if (!managedOptionSets.length) {
+    list.innerHTML = '<div style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem;">No option sets yet.</div>';
+    return;
+  }
+  list.innerHTML = managedOptionSets.map(set => `
+    <button class="option-set-btn ${set.key === selectedOptionSetKey ? 'active' : ''}" onclick="selectOptionSet('${htmlesc(set.key)}')">
+      <strong>${htmlesc(set.label)}${set.active ? '' : ' (inactive)'}</strong>
+      <span>${htmlesc(set.surface || set.key)}</span>
+    </button>
+  `).join('');
+}
+
+function selectOptionSet(key) {
+  selectedOptionSetKey = key;
+  renderOptionSetList();
+  renderOptionEditor();
+}
+
+function renderOptionEditor() {
+  const set = currentOptionSet();
+  const empty = document.getElementById('option-editor-empty');
+  const body = document.getElementById('option-editor-body');
+  if (!set || !empty || !body) return;
+  empty.classList.add('hidden');
+  body.classList.remove('hidden');
+  document.getElementById('option-set-label').value = set.label || '';
+  document.getElementById('option-set-surface').value = set.surface || '';
+  document.getElementById('option-set-description').value = set.description || '';
+  document.getElementById('option-set-active').checked = !!set.active;
+  const rows = Array.isArray(set.options) ? set.options : [];
+  document.getElementById('managed-option-list').innerHTML = rows.map(opt => `
+    <tr data-option-id="${opt.id}">
+      <td><input class="option-row-input" data-field="value" value="${htmlesc(opt.value)}"></td>
+      <td><input class="option-row-input" data-field="label" value="${htmlesc(opt.label)}"></td>
+      <td><input class="option-row-input option-order-input" data-field="display_order" type="number" value="${Number(opt.display_order || 0)}"></td>
+      <td class="option-check"><input type="checkbox" data-field="active" ${opt.active ? 'checked' : ''}></td>
+      <td class="option-check"><input type="checkbox" data-field="is_placeholder" ${opt.is_placeholder ? 'checked' : ''}></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn btn-sm btn-ghost" onclick="saveManagedOption(${opt.id})">Save</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteManagedOption(${opt.id})">Deactivate</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function addOptionSet() {
+  const key = document.getElementById('new-option-set-key').value.trim();
+  const label = document.getElementById('new-option-set-label').value.trim();
+  if (!key || !label) { toast('Set key and label are required'); return; }
+  const res = await api('POST', '/api/v1/admin/options/sets', { key, label });
+  if (res && res.error) { toast(res.error); return; }
+  document.getElementById('new-option-set-key').value = '';
+  document.getElementById('new-option-set-label').value = '';
+  selectedOptionSetKey = res.key;
+  await loadManagedOptions();
+  toast('Option set added');
+}
+
+async function saveOptionSet() {
+  const set = currentOptionSet();
+  if (!set) return;
+  const payload = {
+    label: document.getElementById('option-set-label').value.trim(),
+    surface: document.getElementById('option-set-surface').value.trim(),
+    description: document.getElementById('option-set-description').value.trim(),
+    active: document.getElementById('option-set-active').checked,
+  };
+  const res = await api('PATCH', '/api/v1/admin/options/sets/' + encodeURIComponent(set.key), payload);
+  if (res && res.error) { toast(res.error); return; }
+  await loadManagedOptions();
+  toast('Option set saved');
+}
+
+async function addManagedOption() {
+  const set = currentOptionSet();
+  if (!set) return;
+  const value = document.getElementById('new-option-value').value.trim();
+  const label = document.getElementById('new-option-label').value.trim() || value;
+  const order = parseInt(document.getElementById('new-option-order').value || '0', 10);
+  if (!value || !label) { toast('Option value and label are required'); return; }
+  const res = await api('POST', '/api/v1/admin/options/sets/' + encodeURIComponent(set.key) + '/options', { value, label, display_order: order });
+  if (res && res.error) { toast(res.error); return; }
+  document.getElementById('new-option-value').value = '';
+  document.getElementById('new-option-label').value = '';
+  document.getElementById('new-option-order').value = '0';
+  await loadManagedOptions();
+  toast('Option added');
+}
+
+async function saveManagedOption(id) {
+  const tr = document.querySelector('tr[data-option-id="' + id + '"]');
+  if (!tr) return;
+  const payload = {};
+  tr.querySelectorAll('[data-field]').forEach(input => {
+    const field = input.dataset.field;
+    if (input.type === 'checkbox') payload[field] = input.checked;
+    else if (field === 'display_order') payload[field] = parseInt(input.value || '0', 10);
+    else payload[field] = input.value.trim();
+  });
+  const res = await api('PATCH', '/api/v1/admin/options/options/' + id, payload);
+  if (res && res.error) { toast(res.error); return; }
+  await loadManagedOptions();
+  toast('Option saved');
+}
+
+async function deleteManagedOption(id) {
+  if (!confirm('Deactivate this option? Existing records keep their stored value.')) return;
+  const res = await api('DELETE', '/api/v1/admin/options/options/' + id);
+  if (res && res.error) { toast(res.error); return; }
+  await loadManagedOptions();
+  toast('Option deactivated');
+}
+
 async function addEmail() {
   const input = document.getElementById('new-email');
   const email = input.value.trim();
   if (!email) return;
-  await api('POST', '/api/admin/approved-emails', { email });
+  await api('POST', '/api/v1/admin/approved-emails', { email });
   input.value = '';
   toast('Added ' + email);
   location.reload();
@@ -303,7 +495,7 @@ async function addEmail() {
 
 async function removeEmail(email, btn) {
   if (!confirm('Remove ' + email + ' from the approved list? They will no longer be able to register.')) return;
-  await api('DELETE', '/api/admin/approved-emails/' + encodeURIComponent(email));
+  await api('DELETE', '/api/v1/admin/approved-emails/' + encodeURIComponent(email));
   btn.closest('tr').remove();
   toast('Removed ' + email);
 }
@@ -311,14 +503,14 @@ async function removeEmail(email, btn) {
 async function toggleRole(uid, current) {
   const newRole = current === 'admin' ? 'user' : 'admin';
   if (!confirm('Change role to ' + newRole + '?')) return;
-  await api('PUT', '/api/admin/users/' + uid + '/role', { role: newRole });
+  await api('PUT', '/api/v1/admin/users/' + uid + '/role', { role: newRole });
   toast('Role updated');
   location.reload();
 }
 
 async function deleteUser(uid, name) {
   if (!confirm('Delete user ' + name + '?')) return;
-  const res = await api('DELETE', '/api/admin/users/' + uid);
+  const res = await api('DELETE', '/api/v1/admin/users/' + uid);
   if (res && res.error) { toast(res.error); return; }
   document.querySelector('tr[data-uid="' + uid + '"]').remove();
   toast('Deleted ' + name);
@@ -327,13 +519,13 @@ async function deleteUser(uid, name) {
 async function promptResetPassword(uid, name) {
   const pw = prompt('New password for ' + name + ' (min 6 chars):');
   if (!pw || pw.length < 6) { if (pw !== null) toast('Password too short'); return; }
-  await api('PUT', '/api/admin/users/' + uid + '/reset-password', { password: pw });
+  await api('PUT', '/api/v1/admin/users/' + uid + '/reset-password', { password: pw });
   toast('Password reset for ' + name);
 }
 
 async function regenerateTelegramCode() {
   if (!confirm('Regenerate the Telegram pairing code? Any pending pair attempts using the old code will fail.')) return;
-  const res = await api('PUT', '/api/admin/telegram/link-code/regenerate');
+  const res = await api('PUT', '/api/v1/admin/telegram/link-code/regenerate');
   if (res && res.telegram_link_code) {
     document.getElementById('telegram-link-code').textContent = res.telegram_link_code;
     toast('Telegram pairing code regenerated');
@@ -342,7 +534,7 @@ async function regenerateTelegramCode() {
 
 async function removeTelegramChat(chatId) {
   if (!confirm('Remove Telegram access for chat ' + chatId + '?')) return;
-  const res = await api('DELETE', '/api/admin/telegram/chats/' + chatId);
+  const res = await api('DELETE', '/api/v1/admin/telegram/chats/' + chatId);
   if (res && !res.error) {
     document.querySelector('tr[data-chat-id="' + chatId + '"]')?.remove();
     toast('Telegram chat removed');
@@ -350,6 +542,7 @@ async function removeTelegramChat(chatId) {
 }
 
 document.getElementById('new-email').addEventListener('keydown', e => { if (e.key === 'Enter') addEmail(); });
+loadManagedOptions();
 </script>
 </body>
 </html>

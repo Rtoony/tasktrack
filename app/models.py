@@ -66,6 +66,49 @@ class AppSetting(Base):
     value: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class ManagedOptionSet(Base):
+    """Admin-managed vocabulary bucket for dropdown/category choices."""
+    __tablename__ = "managed_option_sets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    surface: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    is_system: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_managed_option_sets_key", "key", unique=True),
+        Index("idx_managed_option_sets_active", "active"),
+    )
+
+
+class ManagedOption(Base):
+    """One editable option in a managed dropdown/category set."""
+    __tablename__ = "managed_options"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    set_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    is_placeholder: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    metadata_json: Mapped[str] = mapped_column(Text, server_default=text("'{}'"))
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_managed_options_set_value", "set_id", "value", unique=True),
+        Index("idx_managed_options_set_order", "set_id", "display_order"),
+        Index("idx_managed_options_active", "active"),
+    )
+
+
 # ── Trackers (Project Tasks / CAD Dev / Training / Capabilities / Internal) ─
 
 class WorkTask(Base):
@@ -681,6 +724,7 @@ def to_dict(obj) -> dict | None:
 __all__ = [
     "Base",
     "User", "ApprovedEmail", "AppSetting",
+    "ManagedOptionSet", "ManagedOption",
     "WorkTask", "ProjectWorkTask", "TrainingTask",
     "PersonnelIssue", "PersonalItem", "InboxItem", "CalendarEvent",
     "ActivityLog", "Comment", "TelegramChatAccess",

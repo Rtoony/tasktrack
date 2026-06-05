@@ -138,6 +138,12 @@
     submitUrl:        "{{ submit_url|default('/api/v1/intake/submit') }}",
     projectSearchUrl: "{{ project_search_url|default('/api/v1/projects/search') }}",
     attachUrlBase:    "{{ attach_url_base|default('/api/v1/attachments/inbox_items/') }}",
+    optionUrls: {
+      cadSkillArea:        "/api/v1/options/cad_skill_area",
+      trainingSkillArea:   "/api/v1/options/training_skill_area",
+      projectBillingPhase: "/api/v1/options/project_billing_phase",
+      suggestionCategory:  "/api/v1/options/intake_suggestion_category",
+    },
     csrfToken:        "{{ csrf_token|default('') }}",
     user: { name: "{{ user_name|default('') }}", initials: "{{ user_initials|default('') }}",
             signedIn: {{ 'true' if user_name else 'false' }} },
