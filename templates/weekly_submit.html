@@ -139,7 +139,7 @@
             </div>
             <div class="field">
               <label>Task Description</label>
-              <textarea name="task_description[]" placeholder="Describe the work needed next week.">{{ row.task_description }}</textarea>
+              <textarea name="task_description[]" placeholder="Describe the work needed next week." {% if loop.first %}required{% endif %}>{{ row.task_description }}</textarea>
             </div>
             <div class="task-grid-wide">
               <div class="field">
