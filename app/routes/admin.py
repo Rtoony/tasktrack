@@ -88,158 +88,16 @@ ADMIN_SECTIONS = [
         "key": "system",
         "title": "System",
         "href": "/admin/system",
-        "subtitle": "Operational health, audit inventory, and next admin-control phases.",
+        "subtitle": "Operational health, configuration coverage, and admin-control roadmap.",
     },
 ]
 
-ADMIN_REPORT_LINKS = [
-    {
-        "title": "Full Tracker",
-        "href": "/",
-        "subtitle": "Dashboard, triage, map, calendar, and task queues.",
-    },
-    {
-        "title": "Project Map",
-        "href": "/?tab=map",
-        "subtitle": "Map pins, workspace drawer, reports, and map focus actions.",
-    },
-    {
-        "title": "Calendar",
-        "href": "/?tab=calendar",
-        "subtitle": "Internal meetings, prep blocks, deadlines, and project-linked events.",
-    },
-    {
-        "title": "Report Center",
-        "href": "/reports",
-        "subtitle": "Central report surface for packets, briefs, and review flows.",
-    },
-    {
-        "title": "Today Brief",
-        "href": "/reports/today",
-        "subtitle": "Compact daily operator packet with upcoming meetings and project actions.",
-    },
-    {
-        "title": "Management Packet",
-        "href": "/reports/management",
-        "subtitle": "Print-ready portfolio, action, intake, meeting, and incident summary.",
-    },
-    {
-        "title": "Portfolio Reports",
-        "href": "/reports/projects",
-        "subtitle": "Management-ready project packets with filters, presets, and print layout.",
-    },
-    {
-        "title": "At-Risk Queue",
-        "href": "/reports/projects?attention_level=at_risk&limit=25",
-        "subtitle": "Portfolio report filtered to projects needing attention first.",
-    },
-    {
-        "title": "Incident Reports",
-        "href": "/reports/incidents?open_only=1",
-        "subtitle": "Admin-only incident reports with full narratives, JSON, and CSV.",
-    },
-    {
-        "title": "High Severity Incidents",
-        "href": "/reports/incidents?severity=High&open_only=1",
-        "subtitle": "Open high-severity capability incidents for management review.",
-    },
-    {
-        "title": "Incident CSV",
-        "href": "/api/v1/reports/incidents.csv?open_only=1",
-        "subtitle": "Download the current open incident report as CSV.",
-    },
-    {
-        "title": "At-Risk CSV",
-        "href": "/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25",
-        "subtitle": "Download the current management action queue as CSV.",
-    },
-    {
-        "title": "Project One-Pager",
-        "href": "/reports/project",
-        "subtitle": "Single-project status packet with workspace data and activity.",
-    },
-    {
-        "title": "Meeting Packet Batch",
-        "href": "/reports/meetings?days=14&limit=12",
-        "subtitle": "Printable batch of upcoming visible event packets.",
-    },
-    {
-        "title": "Weekly Review",
-        "href": "/weekly?days=7",
-        "subtitle": "Seven-day operational digest for check-ins and review meetings.",
-    },
-    {
-        "title": "Submission Forms",
-        "href": "/intake",
-        "subtitle": "Authenticated intake forms for triage and operational capture.",
-    },
-    {
-        "title": "Printable Intake Packet",
-        "href": "/intake/printable",
-        "subtitle": "Browser PDF and reMarkable-ready request forms.",
-    },
-    {
-        "title": "Intake Review Queue",
-        "href": "/intake/review?needs_review=1",
-        "subtitle": "Operator queue for web, paper, and OCR-created requests.",
-    },
-    {
-        "title": "Intake Source Report",
-        "href": "/reports/intake",
-        "subtitle": "Review and export paper, OCR, and source-tagged capture records.",
-    },
-]
+ADMIN_REPORT_SHORTCUT_SET_KEY = "admin_report_shortcut"
+REPORT_QUICK_ACTION_SET_KEY = "report_console_quick_action"
 
-ADMIN_CONTROL_INVENTORY = [
-    {
-        "area": "Managed dropdowns",
-        "status": "Admin-managed now",
-        "scope": "CAD skills, training skills, billing phases, calendar types, intake sources, suggestion categories, feedback types.",
-        "next_step": "Keep expanding simple vocabulary fields here.",
-    },
-    {
-        "area": "People registry",
-        "status": "Admin-managed now",
-        "scope": "Employees, active state, and competency tracking participation.",
-        "next_step": "Add office/team/discipline fields once workflow terminology is settled.",
-    },
-    {
-        "area": "Project registry",
-        "status": "Admin-managed now",
-        "scope": "Projects are editable, and display statuses come from the managed Project Display Statuses option set.",
-        "next_step": "Add map color/legend controls after status semantics are settled.",
-    },
-    {
-        "area": "Workflow states and priorities",
-        "status": "Code-controlled",
-        "scope": "Task statuses, feedback statuses, severity, and priority validation.",
-        "next_step": "Make backend validation dynamic before exposing CRUD controls.",
-    },
-    {
-        "area": "Intake presets and form copy",
-        "status": "Partially code-controlled",
-        "scope": "Preset labels, default targets, source defaults, and paper/OCR form copy.",
-        "next_step": "Promote capture presets to Admin > Intake after the shell consolidation.",
-    },
-    {
-        "area": "Report shortcuts and defaults",
-        "status": "Code-controlled",
-        "scope": "Admin/report shortcut cards, default filters, and export links.",
-        "next_step": "Add saved admin report shortcuts and configurable default filters.",
-    },
-    {
-        "area": "Map and visual status legends",
-        "status": "Code-controlled",
-        "scope": "Project pin colors, status colors, and map legend labels.",
-        "next_step": "Expose presentation controls after project statuses are made dynamic.",
-    },
-    {
-        "area": "Competency rubric",
-        "status": "Partially admin-managed",
-        "scope": "Skill categories are editable; dimensions and rating levels remain static.",
-        "next_step": "Treat full rubric editing as a separate larger phase.",
-    },
-]
+
+ADMIN_CONTROL_INVENTORY_SET_KEY = "admin_control_inventory"
+
 
 PROJECT_DISPLAY_STATUSES = ("active", "dormant")
 PROJECT_DISPLAY_STATUS_SET_KEY = "project_display_status"
@@ -270,6 +128,51 @@ def _admin_counts(sess) -> dict:
         "option_sets": sess.scalar(select(func.count()).select_from(ManagedOptionSet)) or 0,
         "open_feedback": open_feedback,
     }
+
+
+def _metadata_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _managed_shortcuts(sess, set_key: str, *, include_inactive: bool = False,
+                       is_admin: bool = True) -> list[dict]:
+    links = []
+    for row in options_payload(sess, set_key, include_inactive=include_inactive):
+        metadata = row.get("metadata") or {}
+        admin_only = _metadata_bool(metadata.get("admin_only"))
+        if admin_only and not is_admin:
+            continue
+        href = str(metadata.get("href") or row.get("value") or "#").strip() or "#"
+        links.append({
+            "id": row.get("id"),
+            "key": row.get("value") or "",
+            "title": row.get("label") or row.get("value") or "Untitled",
+            "href": href,
+            "subtitle": row.get("description") or "",
+            "display_order": row.get("display_order") or 0,
+            "active": bool(row.get("active")),
+            "admin_only": admin_only,
+        })
+    return links
+
+
+def _configuration_coverage(sess, *, include_inactive: bool = True) -> list[dict]:
+    rows = []
+    for row in options_payload(sess, ADMIN_CONTROL_INVENTORY_SET_KEY, include_inactive=include_inactive):
+        metadata = row.get("metadata") or {}
+        rows.append({
+            "id": row.get("id"),
+            "key": row.get("value") or "",
+            "area": row.get("label") or row.get("value") or "Untitled",
+            "status": str(metadata.get("status") or "Code-controlled"),
+            "scope": row.get("description") or "",
+            "next_step": str(metadata.get("next_step") or ""),
+            "display_order": row.get("display_order") or 0,
+            "active": bool(row.get("active")),
+        })
+    return rows
 
 
 def _render_admin(section: str):
@@ -321,6 +224,20 @@ def _render_admin(section: str):
         }
         for key, meta in ADMIN_WORKFLOW_VIEWS.items()
     ]
+    report_links = _managed_shortcuts(
+        sess, ADMIN_REPORT_SHORTCUT_SET_KEY, include_inactive=False, is_admin=True,
+    )
+    report_shortcuts = _managed_shortcuts(
+        sess, ADMIN_REPORT_SHORTCUT_SET_KEY, include_inactive=True, is_admin=True,
+    )
+    report_quick_actions = _managed_shortcuts(
+        sess, REPORT_QUICK_ACTION_SET_KEY, include_inactive=True, is_admin=True,
+    )
+    control_inventory = _configuration_coverage(sess, include_inactive=True)
+    project_display_statuses = options_payload(sess, PROJECT_DISPLAY_STATUS_SET_KEY) or [
+        {"value": value, "label": value.title()} for value in PROJECT_DISPLAY_STATUSES
+    ]
+    sess.commit()
     return render_template(
         "admin.html",
         active_section=section,
@@ -332,11 +249,11 @@ def _render_admin(section: str):
         projects=projects,
         user_name=session.get("user_name", ""),
         workflow_links=workflow_links,
-        report_links=ADMIN_REPORT_LINKS,
-        control_inventory=ADMIN_CONTROL_INVENTORY,
-        project_display_statuses=options_payload(sess, PROJECT_DISPLAY_STATUS_SET_KEY) or [
-            {"value": value, "label": value.title()} for value in PROJECT_DISPLAY_STATUSES
-        ],
+        report_links=report_links,
+        report_shortcuts=report_shortcuts,
+        report_quick_actions=report_quick_actions,
+        control_inventory=control_inventory,
+        project_display_statuses=project_display_statuses,
         admin_counts=_admin_counts(sess),
         telegram_link_code=telegram_link_code,
         telegram_chats=telegram_chats,

@@ -33,11 +33,13 @@ from ..services.project_reports import (
 
 bp = Blueprint("reports", __name__)
 
+REPORT_QUICK_ACTION_SET_KEY = "report_console_quick_action"
+
 REPORT_SECTIONS = [
     {
         "key": "overview",
         "title": "Overview",
-        "subtitle": "Launchpad and saved presets.",
+        "subtitle": "Quick actions and saved presets.",
         "href": "/reports",
     },
     {
@@ -163,6 +165,29 @@ _MANAGEMENT_FILTER_KEYS = _MANAGEMENT_BOOL_FILTER_KEYS | _MANAGEMENT_LIMIT_FILTE
 _COMPETENCY_TEXT_FILTER_KEYS = {"q", "role", "status"}
 _COMPETENCY_BOOL_FILTER_KEYS = {"include_untracked"}
 _COMPETENCY_FILTER_KEYS = _COMPETENCY_TEXT_FILTER_KEYS | _COMPETENCY_BOOL_FILTER_KEYS
+
+
+def _metadata_bool(value) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _managed_links(sess, set_key: str, *, is_admin: bool) -> list[dict]:
+    links = []
+    for row in options_payload(sess, set_key):
+        metadata = row.get("metadata") or {}
+        if _metadata_bool(metadata.get("admin_only")) and not is_admin:
+            continue
+        href = str(metadata.get("href") or row.get("value") or "#").strip() or "#"
+        links.append({
+            "key": row.get("value") or "",
+            "title": row.get("label") or row.get("value") or "Untitled",
+            "href": href,
+            "subtitle": row.get("description") or "",
+            "admin_only": _metadata_bool(metadata.get("admin_only")),
+        })
+    return links
 
 
 def _bool_arg(name: str) -> bool:
@@ -659,6 +684,8 @@ def reports_home():
         incident_presets = sess.scalars(_visible_presets_stmt(
             "incidents", user_id=session.get("user_id"), is_admin=True,
         )).all()
+    quick_actions = _managed_links(sess, REPORT_QUICK_ACTION_SET_KEY, is_admin=is_admin)
+    sess.commit()
     return render_template(
         "reports_home.html",
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
@@ -666,6 +693,7 @@ def reports_home():
         meeting_presets=[_preset_to_dict(row, include_filters=False) for row in meeting_presets],
         incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
         competency_presets=[_preset_to_dict(row, include_filters=False) for row in competency_presets],
+        quick_actions=quick_actions,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )

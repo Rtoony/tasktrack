@@ -94,6 +94,23 @@
   .status-managed { color:var(--ok); }
   .status-partial { color:var(--warn); }
   .status-code { color:var(--danger); }
+
+  .shortcut-table, .coverage-table { min-width:1180px; table-layout:fixed; }
+  .shortcut-table th:nth-child(1), .shortcut-table td:nth-child(1) { width:17%; }
+  .shortcut-table th:nth-child(2), .shortcut-table td:nth-child(2) { width:24%; }
+  .shortcut-table th:nth-child(3), .shortcut-table td:nth-child(3) { width:28%; }
+  .shortcut-table th:nth-child(4), .shortcut-table td:nth-child(4) { width:7%; }
+  .shortcut-table th:nth-child(5), .shortcut-table td:nth-child(5), .shortcut-table th:nth-child(6), .shortcut-table td:nth-child(6) { width:7%; text-align:center; }
+  .shortcut-table th:nth-child(7), .shortcut-table td:nth-child(7) { width:10%; }
+  .coverage-table th:nth-child(1), .coverage-table td:nth-child(1) { width:17%; }
+  .coverage-table th:nth-child(2), .coverage-table td:nth-child(2) { width:16%; }
+  .coverage-table th:nth-child(3), .coverage-table td:nth-child(3), .coverage-table th:nth-child(4), .coverage-table td:nth-child(4) { width:25%; }
+  .coverage-table th:nth-child(5), .coverage-table td:nth-child(5) { width:7%; }
+  .coverage-table th:nth-child(6), .coverage-table td:nth-child(6) { width:5%; text-align:center; }
+  .coverage-table th:nth-child(7), .coverage-table td:nth-child(7) { width:10%; }
+  .inline-table-input, .inline-table-textarea { width:100%; min-width:7rem; padding:0.36rem 0.45rem; font-size:0.78rem; border-radius:7px; }
+  .inline-table-textarea { min-height:2.4rem; resize:vertical; }
+  .admin-editor-add { display:grid; grid-template-columns:1.1fr 1.5fr 1.8fr 0.55fr auto; gap:0.65rem; align-items:end; margin-top:0.9rem; padding-top:0.9rem; border-top:1px solid var(--border-light); }
   .option-layout { display:grid; grid-template-columns:minmax(300px,360px) minmax(0,1fr); gap:1rem; align-items:start; }
   .option-list { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:#fff; }
   .option-set-btn { width:100%; border:0; border-bottom:1px solid var(--border-light); background:#fff; text-align:left; padding:0.72rem 0.8rem; cursor:pointer; font-family:inherit; }
@@ -137,6 +154,7 @@
     .sidebar { position:relative; top:auto; }
     .admin-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
     .option-layout { grid-template-columns:1fr; }
+    .admin-editor-add { grid-template-columns:1fr; }
   }
   @media (max-width:640px) {
     .metric-grid, .form-grid, .option-form-grid, .admin-nav { grid-template-columns:1fr; }
@@ -175,7 +193,7 @@
       {% endfor %}
     </nav>
     <div class="sidebar-foot">
-      Dropdowns are editable now. Workflow states and priorities remain code-controlled until validation becomes dynamic.
+      Dropdowns, priorities, shortcuts, and report actions are editable now. Workflow states remain code-controlled until validation becomes dynamic.
     </div>
   </aside>
 
@@ -188,7 +206,7 @@
       </div>
       <div class="head-actions">
         <a class="btn btn-soft" href="/admin/dropdowns">Edit Dropdowns</a>
-        <a class="btn btn-soft" href="/admin/system">Control Inventory</a>
+        <a class="btn btn-soft" href="/admin/system">Configuration Coverage</a>
       </div>
     </div>
 
@@ -216,17 +234,17 @@
 
     <section class="two-grid">
       <div class="card">
-        <h2>Current Upgrade Focus</h2>
-        <p class="table-note">This Admin redesign separates operational controls from report shortcuts and makes future workflow terminology changes visible instead of hidden in code.</p>
+        <h2>Operations Control Surface</h2>
+        <p class="table-note">Use these sections to manage the terminology, registries, shortcuts, access, and report surfaces that change during day-to-day rollout.</p>
         <div class="grid" style="margin-top:0.8rem;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
           <a class="link-card" href="/admin/dropdowns"><div class="link-title">Managed Dropdowns</div><div class="link-copy">Edit local terminology without code changes.</div></a>
-          <a class="link-card" href="/admin/people"><div class="link-title">People Registry</div><div class="link-copy">Same controls, now in the light Admin shell.</div></a>
+          <a class="link-card" href="/admin/people"><div class="link-title">People Registry</div><div class="link-copy">Manage employees, active state, and competency participation.</div></a>
           <a class="link-card" href="/admin/projects"><div class="link-title">Project Registry</div><div class="link-copy">Projects, sync preflight, map/report links.</div></a>
-          <a class="link-card" href="/admin/system"><div class="link-title">Control Inventory</div><div class="link-copy">Admin-managed versus code-controlled checklist.</div></a>
+          <a class="link-card" href="/admin/system"><div class="link-title">Configuration Coverage</div><div class="link-copy">See what is configurable now and what still needs backend semantics.</div></a>
         </div>
       </div>
       <div class="card">
-        <h2>Next Control Candidates</h2>
+        <h2>Configuration Coverage</h2>
         <div class="table-wrap">
           <table>
             <thead><tr><th>Area</th><th>Status</th></tr></thead>
@@ -244,7 +262,7 @@
     {% if active_section == 'dropdowns' %}
     <section class="card" id="managed-options-card">
       <h2>Managed Dropdowns</h2>
-      <div class="table-note">Admin-managed terminology for dropdown fields. Category/vocabulary fields are editable here; workflow statuses and priorities stay code-controlled until their backend validation is made dynamic.</div>
+      <div class="table-note">Admin-managed terminology for dropdown fields. Category/vocabulary fields, priorities, and severities are editable here; workflow statuses remain code-controlled until their backend validation is made dynamic.</div>
       <div class="option-layout" style="margin-top:0.85rem;">
         <div>
           <div class="option-list" id="option-set-list"><div style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem;">Loading option sets...</div></div>
@@ -518,6 +536,72 @@
     </section>
 
     <section class="card">
+      <h2>Report Shortcut Editor</h2>
+      <p class="table-note">These cards appear in Admin > Reports. Edit titles, URLs, descriptions, order, and active state without touching code.</p>
+      <div class="table-wrap" style="margin-top:0.8rem;">
+        <table class="shortcut-table">
+          <thead><tr><th>Title</th><th>URL</th><th>Description</th><th>Order</th><th>Admin</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for link in report_shortcuts %}
+            <tr class="{{ 'inactive' if not link.active else '' }}" data-shortcut-id="{{ link.id }}">
+              <td><input class="inline-table-input" data-shortcut-field="label" value="{{ link.title }}"></td>
+              <td><input class="inline-table-input" data-shortcut-meta="href" value="{{ link.href }}"></td>
+              <td><textarea class="inline-table-textarea" data-shortcut-field="description">{{ link.subtitle }}</textarea></td>
+              <td><input class="inline-table-input" data-shortcut-field="display_order" type="number" value="{{ link.display_order }}"></td>
+              <td class="option-check"><input type="checkbox" data-shortcut-meta="admin_only" {% if link.admin_only %}checked{% endif %}></td>
+              <td class="option-check"><input type="checkbox" data-shortcut-field="active" {% if link.active %}checked{% endif %}></td>
+              <td class="action-cell">
+                <button class="btn btn-sm btn-ghost" onclick="saveReportShortcut({{ link.id }})">Save</button>
+                <button class="btn btn-sm btn-danger" onclick="deactivateOptionAndReload({{ link.id }})">Deactivate</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="admin-editor-add">
+        <div class="field"><label for="new-report-shortcut-title">New Title</label><input id="new-report-shortcut-title" placeholder="Report Card"></div>
+        <div class="field"><label for="new-report-shortcut-href">URL</label><input id="new-report-shortcut-href" placeholder="/reports/example"></div>
+        <div class="field"><label for="new-report-shortcut-description">Description</label><input id="new-report-shortcut-description" placeholder="What this shortcut opens"></div>
+        <div class="field"><label for="new-report-shortcut-order">Order</label><input id="new-report-shortcut-order" type="number" value="200"></div>
+        <button class="btn btn-primary" type="button" onclick="addReportShortcut()">Add Shortcut</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Report Console Quick Actions</h2>
+      <p class="table-note">These buttons appear in the Report Console quick-action panel. Use this to hide rollout tools or add your own daily report links.</p>
+      <div class="table-wrap" style="margin-top:0.8rem;">
+        <table class="shortcut-table">
+          <thead><tr><th>Title</th><th>URL</th><th>Description</th><th>Order</th><th>Admin</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for link in report_quick_actions %}
+            <tr class="{{ 'inactive' if not link.active else '' }}" data-quick-action-id="{{ link.id }}">
+              <td><input class="inline-table-input" data-quick-field="label" value="{{ link.title }}"></td>
+              <td><input class="inline-table-input" data-quick-meta="href" value="{{ link.href }}"></td>
+              <td><textarea class="inline-table-textarea" data-quick-field="description">{{ link.subtitle }}</textarea></td>
+              <td><input class="inline-table-input" data-quick-field="display_order" type="number" value="{{ link.display_order }}"></td>
+              <td class="option-check"><input type="checkbox" data-quick-meta="admin_only" {% if link.admin_only %}checked{% endif %}></td>
+              <td class="option-check"><input type="checkbox" data-quick-field="active" {% if link.active %}checked{% endif %}></td>
+              <td class="action-cell">
+                <button class="btn btn-sm btn-ghost" onclick="saveReportQuickAction({{ link.id }})">Save</button>
+                <button class="btn btn-sm btn-danger" onclick="deactivateOptionAndReload({{ link.id }})">Deactivate</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="admin-editor-add">
+        <div class="field"><label for="new-quick-action-title">New Title</label><input id="new-quick-action-title" placeholder="Daily Report"></div>
+        <div class="field"><label for="new-quick-action-href">URL</label><input id="new-quick-action-href" placeholder="/reports/example"></div>
+        <div class="field"><label for="new-quick-action-description">Description</label><input id="new-quick-action-description" placeholder="What this action opens"></div>
+        <div class="field"><label for="new-quick-action-order">Order</label><input id="new-quick-action-order" type="number" value="130"></div>
+        <button class="btn btn-primary" type="button" onclick="addReportQuickAction()">Add Action</button>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>Pages & Reports</h2>
       <div class="grid">
         {% for link in report_links %}
@@ -541,23 +625,39 @@
     </section>
 
     <section class="card">
-      <h2>Admin Control Inventory</h2>
-      <p class="table-note">This is the working audit of placeholder, boilerplate, or hardcoded areas that should eventually be controlled from Admin.</p>
+      <h2>Configuration Coverage</h2>
+      <p class="table-note">This operational map shows what you can control from Admin now and what still needs backend semantics before it is safe to expose.</p>
       <div class="table-wrap" style="margin-top:0.8rem;">
-        <table>
-          <thead><tr><th>Area</th><th>Status</th><th>Current Scope</th><th>Next Step</th></tr></thead>
+        <table class="coverage-table">
+          <thead><tr><th>Area</th><th>Status</th><th>Current Scope</th><th>Next Step</th><th>Order</th><th>Active</th><th></th></tr></thead>
           <tbody>
             {% for item in control_inventory %}
-            {% set status_class = 'status-managed' if item.status == 'Admin-managed now' else ('status-partial' if 'Partially' in item.status else 'status-code') %}
-            <tr>
-              <td style="font-weight:650;">{{ item.area }}</td>
-              <td class="{{ status_class }}" style="font-weight:650;">{{ item.status }}</td>
-              <td class="muted">{{ item.scope }}</td>
-              <td class="muted">{{ item.next_step }}</td>
+            <tr class="{{ 'inactive' if not item.active else '' }}" data-inventory-id="{{ item.id }}">
+              <td><input class="inline-table-input" data-inventory-field="label" value="{{ item.area }}"></td>
+              <td><input class="inline-table-input" data-inventory-meta="status" value="{{ item.status }}"></td>
+              <td><textarea class="inline-table-textarea" data-inventory-field="description">{{ item.scope }}</textarea></td>
+              <td><textarea class="inline-table-textarea" data-inventory-meta="next_step">{{ item.next_step }}</textarea></td>
+              <td><input class="inline-table-input" data-inventory-field="display_order" type="number" value="{{ item.display_order }}"></td>
+              <td class="option-check"><input type="checkbox" data-inventory-field="active" {% if item.active %}checked{% endif %}></td>
+              <td class="action-cell">
+                <button class="btn btn-sm btn-ghost" onclick="saveCoverageItem({{ item.id }})">Save</button>
+                <button class="btn btn-sm btn-danger" onclick="deactivateOptionAndReload({{ item.id }})">Deactivate</button>
+              </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+      </div>
+      <div class="admin-editor-add">
+        <div class="field"><label for="new-coverage-area">New Area</label><input id="new-coverage-area" placeholder="Office terminology"></div>
+        <div class="field"><label for="new-coverage-status">Status</label><input id="new-coverage-status" placeholder="Admin-managed now"></div>
+        <div class="field"><label for="new-coverage-scope">Current Scope</label><input id="new-coverage-scope" placeholder="What this controls today"></div>
+        <div class="field"><label for="new-coverage-order">Order</label><input id="new-coverage-order" type="number" value="100"></div>
+        <button class="btn btn-primary" type="button" onclick="addCoverageItem()">Add Item</button>
+      </div>
+      <div class="field" style="margin-top:0.65rem;max-width:680px;">
+        <label for="new-coverage-next">New Item Next Step</label>
+        <input id="new-coverage-next" placeholder="What should happen next">
       </div>
     </section>
     {% endif %}
@@ -568,6 +668,130 @@
 
 <script>
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+
+const ADMIN_REPORT_SHORTCUT_SET_KEY = 'admin_report_shortcut';
+const REPORT_QUICK_ACTION_SET_KEY = 'report_console_quick_action';
+const ADMIN_CONTROL_INVENTORY_SET_KEY = 'admin_control_inventory';
+
+function slugifyAdminValue(value) {
+  return String(value || 'item')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'item';
+}
+
+function optionPatchFromRow(tr, fieldAttr, metaAttr) {
+  const payload = { metadata: {} };
+  tr.querySelectorAll('[' + fieldAttr + ']').forEach(input => {
+    const field = input.getAttribute(fieldAttr);
+    if (input.type === 'checkbox') payload[field] = input.checked;
+    else if (field === 'display_order') payload[field] = parseInt(input.value || '0', 10);
+    else payload[field] = input.value.trim();
+  });
+  tr.querySelectorAll('[' + metaAttr + ']').forEach(input => {
+    const field = input.getAttribute(metaAttr);
+    payload.metadata[field] = input.type === 'checkbox' ? input.checked : input.value.trim();
+  });
+  return payload;
+}
+
+async function patchManagedOption(id, payload) {
+  const res = await api('PATCH', '/api/v1/admin/options/options/' + id, payload);
+  if (res && res.error) { toast(res.error); return false; }
+  return true;
+}
+
+async function createManagedOption(setKey, payload) {
+  const res = await api('POST', '/api/v1/admin/options/sets/' + encodeURIComponent(setKey) + '/options', payload);
+  if (res && res.error) { toast(res.error); return false; }
+  return true;
+}
+
+async function deactivateOptionAndReload(id) {
+  if (!confirm('Deactivate this item? It can be reactivated from this editor.')) return;
+  const res = await api('DELETE', '/api/v1/admin/options/options/' + id);
+  if (res && res.error) { toast(res.error); return; }
+  toast('Item deactivated');
+  location.reload();
+}
+
+async function saveReportShortcut(id) {
+  const tr = document.querySelector('tr[data-shortcut-id="' + id + '"]');
+  if (!tr) return;
+  if (await patchManagedOption(id, optionPatchFromRow(tr, 'data-shortcut-field', 'data-shortcut-meta'))) {
+    toast('Report shortcut saved');
+    location.reload();
+  }
+}
+
+async function addReportShortcut() {
+  const title = document.getElementById('new-report-shortcut-title')?.value.trim() || '';
+  const href = document.getElementById('new-report-shortcut-href')?.value.trim() || '';
+  const description = document.getElementById('new-report-shortcut-description')?.value.trim() || '';
+  const order = parseInt(document.getElementById('new-report-shortcut-order')?.value || '200', 10);
+  if (!title || !href) { toast('Title and URL are required'); return; }
+  const ok = await createManagedOption(ADMIN_REPORT_SHORTCUT_SET_KEY, {
+    value: slugifyAdminValue(title),
+    label: title,
+    description,
+    display_order: order,
+    metadata: { href, admin_only: false, tone: 'neutral' },
+  });
+  if (ok) { toast('Report shortcut added'); location.reload(); }
+}
+
+async function saveReportQuickAction(id) {
+  const tr = document.querySelector('tr[data-quick-action-id="' + id + '"]');
+  if (!tr) return;
+  if (await patchManagedOption(id, optionPatchFromRow(tr, 'data-quick-field', 'data-quick-meta'))) {
+    toast('Quick action saved');
+    location.reload();
+  }
+}
+
+async function addReportQuickAction() {
+  const title = document.getElementById('new-quick-action-title')?.value.trim() || '';
+  const href = document.getElementById('new-quick-action-href')?.value.trim() || '';
+  const description = document.getElementById('new-quick-action-description')?.value.trim() || '';
+  const order = parseInt(document.getElementById('new-quick-action-order')?.value || '130', 10);
+  if (!title || !href) { toast('Title and URL are required'); return; }
+  const ok = await createManagedOption(REPORT_QUICK_ACTION_SET_KEY, {
+    value: slugifyAdminValue(title),
+    label: title,
+    description,
+    display_order: order,
+    metadata: { href, admin_only: false, tone: 'neutral' },
+  });
+  if (ok) { toast('Quick action added'); location.reload(); }
+}
+
+async function saveCoverageItem(id) {
+  const tr = document.querySelector('tr[data-inventory-id="' + id + '"]');
+  if (!tr) return;
+  if (await patchManagedOption(id, optionPatchFromRow(tr, 'data-inventory-field', 'data-inventory-meta'))) {
+    toast('Configuration coverage saved');
+    location.reload();
+  }
+}
+
+async function addCoverageItem() {
+  const area = document.getElementById('new-coverage-area')?.value.trim() || '';
+  const status = document.getElementById('new-coverage-status')?.value.trim() || '';
+  const scope = document.getElementById('new-coverage-scope')?.value.trim() || '';
+  const nextStep = document.getElementById('new-coverage-next')?.value.trim() || '';
+  const order = parseInt(document.getElementById('new-coverage-order')?.value || '100', 10);
+  if (!area || !status) { toast('Area and status are required'); return; }
+  const ok = await createManagedOption(ADMIN_CONTROL_INVENTORY_SET_KEY, {
+    value: slugifyAdminValue(area),
+    label: area,
+    description: scope,
+    display_order: order,
+    metadata: { status, next_step: nextStep, tone: 'neutral' },
+  });
+  if (ok) { toast('Configuration coverage item added'); location.reload(); }
+}
 
 function toast(msg) {
   const t = document.getElementById('toast');

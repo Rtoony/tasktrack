@@ -125,6 +125,24 @@ def _option(value: str, label: str | None = None, order: int = 0,
     }
 
 
+def _link_option(value: str, title: str, href: str, subtitle: str,
+                 order: int = 0, *, admin_only: bool = False) -> dict[str, Any]:
+    return _option(value, title, order, subtitle, metadata={
+        "href": href,
+        "admin_only": admin_only,
+        "tone": "neutral",
+    })
+
+
+def _inventory_option(value: str, area: str, status: str, scope: str,
+                      next_step: str, order: int = 0) -> dict[str, Any]:
+    return _option(value, area, order, scope, metadata={
+        "status": status,
+        "next_step": next_step,
+        "tone": "success" if status.startswith("Admin-managed") else ("warning" if "Partially" in status else "danger"),
+    })
+
+
 DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
     {
         "key": "cad_skill_area",
@@ -229,7 +247,7 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "key": "feedback_type",
         "label": "Feedback Types",
         "surface": "Feedback",
-        "description": "Categories available in the beta feedback capture tool.",
+        "description": "Categories available in the in-app feedback capture tool.",
         "options": [
             _option("Bug", order=10),
             _option("Copy", order=20),
@@ -270,6 +288,69 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "options": [
             _option("active", "Active", 10, metadata={"is_default": True, "counts_as_open": True, "tone": "success"}),
             _option("dormant", "Dormant", 20, metadata={"is_terminal": True, "counts_as_open": False, "tone": "muted"}),
+        ],
+    },
+    {
+        "key": "admin_report_shortcut",
+        "label": "Admin Report Shortcuts",
+        "surface": "Admin Reports",
+        "description": "Shortcut cards shown in Admin > Reports. Edit titles, URLs, order, and active state here.",
+        "options": [
+            _link_option("full_tracker", "Full Tracker", "/", "Dashboard, triage, map, calendar, and task queues.", 10),
+            _link_option("project_map", "Project Map", "/?tab=map", "Map pins, workspace drawer, reports, and map focus actions.", 20),
+            _link_option("calendar", "Calendar", "/?tab=calendar", "Internal meetings, prep blocks, deadlines, and project-linked events.", 30),
+            _link_option("report_center", "Report Center", "/reports", "Central report surface for packets, briefs, and review flows.", 40),
+            _link_option("today_brief", "Today Brief", "/reports/today", "Compact daily operator packet with upcoming meetings and project actions.", 50),
+            _link_option("management_packet", "Management Packet", "/reports/management", "Print-ready portfolio, action, intake, meeting, and incident summary.", 60),
+            _link_option("portfolio_reports", "Portfolio Reports", "/reports/projects", "Management-ready project packets with filters, presets, and print layout.", 70),
+            _link_option("at_risk_queue", "At-Risk Queue", "/reports/projects?attention_level=at_risk&limit=25", "Portfolio report filtered to projects needing attention first.", 80),
+            _link_option("incident_reports", "Incident Reports", "/reports/incidents?open_only=1", "Admin-only incident reports with full narratives, JSON, and CSV.", 90, admin_only=True),
+            _link_option("high_severity_incidents", "High Severity Incidents", "/reports/incidents?severity=High&open_only=1", "Open high-severity capability incidents for management review.", 100, admin_only=True),
+            _link_option("incident_csv", "Incident CSV", "/api/v1/reports/incidents.csv?open_only=1", "Download the current open incident report as CSV.", 110, admin_only=True),
+            _link_option("at_risk_csv", "At-Risk CSV", "/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25", "Download the current management action queue as CSV.", 120),
+            _link_option("project_one_pager", "Project One-Pager", "/reports/project", "Single-project status packet with workspace data and activity.", 130),
+            _link_option("meeting_packet_batch", "Meeting Packet Batch", "/reports/meetings?days=14&limit=12", "Printable batch of upcoming visible event packets.", 140),
+            _link_option("weekly_review", "Weekly Review", "/weekly?days=7", "Seven-day operational digest for check-ins and review meetings.", 150),
+            _link_option("submission_forms", "Submission Forms", "/intake", "Authenticated intake forms for triage and operational capture.", 160),
+            _link_option("printable_intake_packet", "Printable Intake Packet", "/intake/printable", "Browser PDF and reMarkable-ready request forms.", 170),
+            _link_option("intake_review_queue", "Intake Review Queue", "/intake/review?needs_review=1", "Operator queue for web, paper, and OCR-created requests.", 180),
+            _link_option("intake_source_report", "Intake Source Report", "/reports/intake", "Review and export paper, OCR, and source-tagged capture records.", 190),
+        ],
+    },
+    {
+        "key": "report_console_quick_action",
+        "label": "Report Console Quick Actions",
+        "surface": "Report Console",
+        "description": "Buttons shown in the Report Console quick-action panel.",
+        "options": [
+            _link_option("today_brief", "Today Brief", "/reports/today", "Daily packet.", 10),
+            _link_option("management_packet", "Management Packet", "/reports/management", "Management-ready packet.", 20),
+            _link_option("ocr_intake", "OCR Intake", "/capture/ocr", "Open OCR intake workflow.", 30),
+            _link_option("intake_review_queue", "Intake Review Queue", "/intake/review?needs_review=1", "Review web, paper, and OCR-created requests.", 40),
+            _link_option("intake_source_report", "Intake Source Report", "/reports/intake", "Audit source-tagged capture records.", 50),
+            _link_option("quick_ocr_capture", "Quick OCR Capture", "/?capture_source=remarkable-ocr", "Start a source-tagged OCR capture.", 60),
+            _link_option("rollout_checklist", "Rollout Checklist", "/testing", "Open the current validation checklist.", 70),
+            _link_option("printable_forms", "Printable Forms", "/intake/printable", "Browser PDF and reMarkable-ready forms.", 80),
+            _link_option("triage_inbox", "Triage Inbox", "/?tab=triage", "Open review and triage queue.", 90),
+            _link_option("calendar", "Calendar", "/?tab=calendar", "Open internal calendar.", 100),
+            _link_option("at_risk_projects", "At-Risk Projects", "/reports/projects?attention_level=at_risk&limit=25", "Open the current at-risk project queue.", 110),
+            _link_option("open_incidents", "Open Incidents", "/reports/incidents?open_only=1", "Open admin incident report queue.", 120, admin_only=True),
+        ],
+    },
+    {
+        "key": "admin_control_inventory",
+        "label": "Configuration Coverage",
+        "surface": "Admin System",
+        "description": "Admin-visible map of what is configurable now and what remains code-controlled.",
+        "options": [
+            _inventory_option("managed_dropdowns", "Managed dropdowns", "Admin-managed now", "CAD skills, training skills, billing phases, calendar types, intake sources, suggestion categories, feedback types, priorities, and severities.", "Keep expanding simple vocabulary fields here.", 10),
+            _inventory_option("people_registry", "People registry", "Admin-managed now", "Employees, active state, and competency tracking participation.", "Add office/team/discipline fields once workflow terminology is settled.", 20),
+            _inventory_option("project_registry", "Project registry", "Admin-managed now", "Projects are editable, and display statuses come from the managed Project Display Statuses option set.", "Add map color/legend controls after status semantics are settled.", 30),
+            _inventory_option("report_shortcuts", "Report shortcuts and quick actions", "Admin-managed now", "Admin report cards and Report Console quick-action buttons are editable from Admin.", "Add default filter controls for recurring report surfaces.", 40),
+            _inventory_option("workflow_states", "Workflow states", "Code-controlled", "Task, feedback, calendar, and incident status semantics still drive done/open counts and kanban lanes.", "Make backend validation and terminal/open semantics dynamic before exposing full CRUD.", 50),
+            _inventory_option("intake_presets", "Intake presets and form copy", "Partially code-controlled", "Source labels and priorities are editable; preset labels, default targets, OCR labels, and form copy remain static.", "Promote capture presets and public form copy to Admin > Intake.", 60),
+            _inventory_option("map_legends", "Map and visual status legends", "Code-controlled", "Project pin colors, status colors, and map legend labels.", "Expose presentation controls after project statuses are made dynamic.", 70),
+            _inventory_option("competency_rubric", "Competency rubric", "Partially admin-managed", "Skill categories are editable; dimensions and rating levels remain static.", "Treat full rubric editing as a separate larger phase.", 80),
         ],
     },
 ]

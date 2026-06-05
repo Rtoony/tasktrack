@@ -101,7 +101,7 @@
       <div class="sidebar-subtitle">Fast paths, packets, presets, and exports.</div>
     </div>
     <nav class="side-nav">
-      <a class="primary" href="#launchpad"><span class="nav-title">Overview</span><span class="nav-copy">Testing launchpad and daily paths.</span></a>
+      <a class="primary" href="#launchpad"><span class="nav-title">Overview</span><span class="nav-copy">Quick actions and daily paths.</span></a>
       <a href="#management"><span class="nav-title">Management</span><span class="nav-copy">Print-ready combined packet.</span></a>
       <a href="#project-one"><span class="nav-title">Single Project</span><span class="nav-copy">Focused one-pager lookup.</span></a>
       <a href="#portfolio"><span class="nav-title">Portfolio</span><span class="nav-copy">Saved portfolio packets.</span></a>
@@ -138,21 +138,12 @@
     </section>
 
     <section class="card" id="launchpad">
-      <h2>Testing Launchpad</h2>
-      <p>Fast paths for today's shakedown: capture a real note, check the daily packet, open the calendar, and print/export the reports that matter.</p>
+      <h2>Quick Actions</h2>
+      <p>Fast paths for daily operation: capture notes, check packets, open the calendar, and print or export the reports that matter.</p>
       <div class="actions">
-        <a class="btn" href="/reports/today">Today Brief</a>
-        <a class="btn secondary" href="/reports/management">Management Packet</a>
-        <a class="btn secondary" href="/capture/ocr">OCR Landing Page</a>
-        <a class="btn secondary" href="/intake/review?needs_review=1">Intake Review Queue</a>
-        <a class="btn secondary" href="/reports/intake">Intake Source Report</a>
-        <a class="btn secondary" href="/?capture_source=remarkable-ocr">Quick OCR Capture</a>
-        <a class="btn secondary" href="/testing">Testing Checklist</a>
-        <a class="btn secondary" href="/intake/printable">Printable Forms</a>
-        <a class="btn secondary" href="/?tab=triage">Triage Inbox</a>
-        <a class="btn secondary" href="/?tab=calendar">Calendar</a>
-        <a class="btn secondary" href="/reports/projects?attention_level=at_risk&limit=25">At-Risk Projects</a>
-        {% if user_role == 'admin' %}<a class="btn secondary" href="/reports/incidents?open_only=1">Open Incidents</a>{% endif %}
+        {% for action in quick_actions %}
+        <a class="btn {{ 'secondary' if not loop.first else '' }}" href="{{ action.href }}" title="{{ action.subtitle }}">{{ action.title }}</a>
+        {% endfor %}
       </div>
     </section>
 

@@ -39,11 +39,13 @@ def test_admin_panel_serves_admin(admin_client):
     assert "/admin/projects" in html
     assert "/admin/access" in html
     assert "/admin/reports" in html
-    assert "Control Inventory" in html
+    assert "Configuration Coverage" in html
 
     reports = admin_client.get("/admin/reports")
     assert reports.status_code == 200
     report_html = reports.get_data(as_text=True)
+    assert "Report Shortcut Editor" in report_html
+    assert "Report Console Quick Actions" in report_html
     assert "Pages & Reports" in report_html
     assert "Report Center" in report_html
     assert "Today Brief" in report_html
@@ -70,7 +72,7 @@ def test_admin_section_routes_use_control_center_shell(admin_client):
         ("/admin/access", "Telegram Bot Access"),
         ("/admin/intake", "Intake Controls"),
         ("/admin/reports", "Pages & Reports"),
-        ("/admin/system", "Admin Control Inventory"),
+        ("/admin/system", "Configuration Coverage"),
     ]:
         r = admin_client.get(path)
         assert r.status_code == 200
@@ -78,6 +80,34 @@ def test_admin_section_routes_use_control_center_shell(admin_client):
         assert "Admin Control Center" in html
         assert expected in html
         assert "Admin ·" not in html
+
+
+def test_admin_shortcuts_and_coverage_are_managed_options(admin_client, temp_app):
+    rows = admin_client.get("/api/v1/admin/options/sets?include_inactive=1").get_json()
+    by_key = {row["key"]: row for row in rows}
+    assert "admin_report_shortcut" in by_key
+    assert "report_console_quick_action" in by_key
+    assert "admin_control_inventory" in by_key
+    report_center = next(
+        opt for opt in by_key["admin_report_shortcut"]["options"]
+        if opt["value"] == "report_center"
+    )
+    assert report_center["metadata"]["href"] == "/reports"
+
+    created = admin_client.post(
+        "/api/v1/admin/options/sets/admin_report_shortcut/options",
+        json={
+            "value": "custom_packet",
+            "label": "Custom Packet",
+            "description": "Office-specific recurring packet.",
+            "display_order": 210,
+            "metadata": {"href": "/reports/custom", "admin_only": False},
+        },
+    )
+    assert created.status_code == 201
+    html = admin_client.get("/admin/reports").get_data(as_text=True)
+    assert "Custom Packet" in html
+    assert "/reports/custom" in html
 
 
 def test_admin_workflow_project_uses_standalone_shell(admin_client):

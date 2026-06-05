@@ -941,14 +941,14 @@ def test_reports_home_renders_command_center(client, auth_client):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Report Center" in html
-    assert "Testing Launchpad" in html
+    assert "Quick Actions" in html
     assert "Management Packet" in html
     assert "/reports/management" in html
     assert "/api/v1/reports/management" in html
     assert "Triage Inbox" in html
-    assert "OCR Landing Page" in html
+    assert "OCR Intake" in html
     assert "Quick OCR Capture" in html
-    assert "Testing Checklist" in html
+    assert "Rollout Checklist" in html
     assert "Printable Forms" in html
     assert "/intake/printable" in html
     assert "/capture/ocr" in html
@@ -975,3 +975,42 @@ def test_reports_home_renders_command_center(client, auth_client):
     with client.session_transaction() as s:
         s.clear()
     assert client.get("/reports").status_code == 302
+
+
+def test_reports_home_quick_actions_use_managed_options(auth_client):
+    created = auth_client.post(
+        "/api/v1/admin/options/sets/report_console_quick_action/options",
+        json={
+            "value": "custom_daily_link",
+            "label": "Custom Daily Link",
+            "description": "Office-specific report path.",
+            "display_order": 130,
+            "metadata": {"href": "/reports/custom-daily", "admin_only": False},
+        },
+    )
+    assert created.status_code == 403
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    created = auth_client.post(
+        "/api/v1/admin/options/sets/report_console_quick_action/options",
+        json={
+            "value": "custom_daily_link",
+            "label": "Custom Daily Link",
+            "description": "Office-specific report path.",
+            "display_order": 130,
+            "metadata": {"href": "/reports/custom-daily", "admin_only": False},
+        },
+    )
+    assert created.status_code == 201
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 1
+        s["user_name"] = "Tester"
+        s["user_role"] = "user"
+    html = auth_client.get("/reports").get_data(as_text=True)
+    assert "Custom Daily Link" in html
+    assert "/reports/custom-daily" in html
+    assert "Open Incidents" not in html
