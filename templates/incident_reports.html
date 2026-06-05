@@ -132,7 +132,7 @@
     </div>
     <div class="filters">
       <div><label for="q">Search</label><input id="q" name="q" value="{{ packet.filters.q }}" placeholder="narrative, person, project"></div>
-      <div><label for="severity">Severity</label><select id="severity" name="severity"><option value="" {% if not packet.filters.severity %}selected{% endif %}>Any</option>{% for value in ['Critical','High','Medium','Low'] %}<option value="{{ value }}" {% if packet.filters.severity == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>
+      <div><label for="severity">Severity</label><select id="severity" name="severity"><option value="" {% if not packet.filters.severity %}selected{% endif %}>Any</option>{% for severity in incident_severities %}<option value="{{ severity.value }}" {% if packet.filters.severity == severity.value %}selected{% endif %}>{{ severity.label }}</option>{% endfor %}</select></div>
       <div><label for="status">Status</label><input id="status" name="status" value="{{ packet.filters.status }}" placeholder="Observed, Resolved..."></div>
       <div><label for="project_number">Project #</label><input id="project_number" name="project_number" value="{{ packet.filters.project_number }}" placeholder="optional"></div>
       <div><label for="person">Person</label><input id="person" name="person" value="{{ packet.filters.person }}" placeholder="optional"></div>

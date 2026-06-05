@@ -10,6 +10,8 @@ Covers:
 All endpoints are exercised through the Flask test client (TESTING=True so
 CSRF and rate limits are bypassed).
 """
+import json
+
 from app.db import get_session
 from app.models import ApprovedEmail, ManagedOption, ManagedOptionSet, TelegramChatAccess, User
 
@@ -126,6 +128,117 @@ def test_option_values_seed_defaults(auth_client):
 def test_managed_option_admin_routes_are_admin_only(auth_client):
     r = auth_client.get("/api/v1/admin/options/sets")
     assert r.status_code == 403
+
+
+def test_managed_option_defaults_include_metadata(auth_client):
+    priorities = auth_client.get("/api/v1/options/task_priority")
+    assert priorities.status_code == 200
+    priority_rows = priorities.get_json()
+    assert [row["value"] for row in priority_rows] == ["Low", "Medium", "High"]
+    medium = next(row for row in priority_rows if row["value"] == "Medium")
+    high = next(row for row in priority_rows if row["value"] == "High")
+    assert medium["is_default"] is True
+    assert medium["tone"] == "warning"
+    assert medium["metadata"]["rank"] == 20
+    assert high["metadata"]["rank"] == 10
+
+    severities = auth_client.get("/api/v1/options/incident_severity")
+    assert severities.status_code == 200
+    severity_rows = severities.get_json()
+    assert [row["value"] for row in severity_rows] == ["Low", "Medium", "High", "Critical"]
+    critical = next(row for row in severity_rows if row["value"] == "Critical")
+    assert critical["tone"] == "danger"
+    assert critical["metadata"]["is_high_severity"] is True
+
+    statuses = auth_client.get("/api/v1/options/project_display_status")
+    assert statuses.status_code == 200
+    status_rows = statuses.get_json()
+    active = next(row for row in status_rows if row["value"] == "active")
+    dormant = next(row for row in status_rows if row["value"] == "dormant")
+    assert active["is_default"] is True
+    assert dormant["is_terminal"] is True
+    assert dormant["counts_as_open"] is False
+
+
+def test_managed_option_seed_backfills_missing_metadata(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        option_set = ManagedOptionSet(
+            key="task_priority",
+            label="Task Priorities",
+            surface="Tasks",
+            is_system=1,
+            active=1,
+        )
+        sess.add(option_set)
+        sess.flush()
+        for order, value in enumerate(["Low", "Medium", "High"], start=1):
+            sess.add(ManagedOption(
+                set_id=option_set.id,
+                value=value,
+                label=value,
+                display_order=order * 10,
+                metadata_json="{}",
+            ))
+        sess.commit()
+
+    rows = auth_client.get("/api/v1/options/task_priority").get_json()
+    medium = next(row for row in rows if row["value"] == "Medium")
+    high = next(row for row in rows if row["value"] == "High")
+    assert medium["is_default"] is True
+    assert medium["metadata"]["rank"] == 20
+    assert high["metadata"]["rank"] == 10
+
+
+def test_admin_managed_option_metadata_roundtrip(admin_client, temp_app):
+    created = admin_client.post("/api/v1/admin/options/sets/task_priority/options", json={
+        "value": "Escalated",
+        "label": "Escalated",
+        "display_order": 5,
+        "metadata": {
+            "is_default": True,
+            "rank": 0,
+            "tone": "danger",
+            "counts_as_open": True,
+        },
+    })
+    assert created.status_code == 201
+    body = created.get_json()
+    option_id = body["id"]
+    assert body["is_default"] is True
+    assert body["tone"] == "danger"
+    assert body["metadata"]["rank"] == 0
+
+    public_rows = admin_client.get("/api/v1/options/task_priority").get_json()
+    escalated = next(row for row in public_rows if row["value"] == "Escalated")
+    medium = next(row for row in public_rows if row["value"] == "Medium")
+    assert escalated["is_default"] is True
+    assert medium["is_default"] is False
+
+    patched = admin_client.patch(f"/api/v1/admin/options/options/{option_id}", json={
+        "metadata": {
+            "is_default": False,
+            "is_terminal": True,
+            "counts_as_open": False,
+            "rank": 1,
+            "tone": "warning",
+        },
+    })
+    assert patched.status_code == 200
+    patched_body = patched.get_json()
+    assert patched_body["is_default"] is False
+    assert patched_body["is_terminal"] is True
+    assert patched_body["counts_as_open"] is False
+    assert patched_body["tone"] == "warning"
+    assert patched_body["metadata"]["rank"] == 1
+
+    with temp_app.app_context():
+        sess = get_session()
+        option_row = sess.get(ManagedOption, option_id)
+        metadata = json.loads(option_row.metadata_json)
+        assert metadata["is_terminal"] is True
+        assert metadata["counts_as_open"] is False
+        assert metadata["rank"] == 1
 
 
 def test_admin_managed_option_crud(admin_client, temp_app):

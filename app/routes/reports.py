@@ -974,6 +974,12 @@ def incident_report_page():
         "incident_reports.html",
         packet=packet,
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        incident_severities=options_payload(sess, "incident_severity") or [
+            {"value": "Low", "label": "Low"},
+            {"value": "Medium", "label": "Medium"},
+            {"value": "High", "label": "High"},
+            {"value": "Critical", "label": "Critical"},
+        ],
         error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),

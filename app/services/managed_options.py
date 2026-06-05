@@ -44,6 +44,75 @@ def _intish(value: Any, default: int = 0) -> int:
         return default
 
 
+OPTION_TONES = {"neutral", "info", "success", "warning", "danger", "muted"}
+_META_BOOL_DEFAULTS = {
+    "is_default": False,
+    "is_terminal": False,
+    "counts_as_open": True,
+}
+
+
+def _json_dict(raw: str | None) -> dict[str, Any]:
+    try:
+        data = json.loads(raw or "{}")
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _bool_meta(value: Any, *, default: bool = False) -> bool:
+    return bool(_boolish(value, default=default))
+
+
+def _tone(value: Any) -> str:
+    tone = str(value or "").strip().lower()
+    return tone if tone in OPTION_TONES else "neutral"
+
+
+def _normalized_metadata(data: dict[str, Any] | None = None,
+                         existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    metadata: dict[str, Any] = dict(existing or {})
+    if isinstance(data, dict):
+        metadata.update(data)
+    for key, default in _META_BOOL_DEFAULTS.items():
+        if key in metadata:
+            metadata[key] = _bool_meta(metadata.get(key), default=default)
+    if "tone" in metadata:
+        metadata["tone"] = _tone(metadata.get("tone"))
+    return metadata
+
+
+def _option_metadata_from_data(data: dict[str, Any], *, existing: dict[str, Any] | None = None) -> dict[str, Any]:
+    incoming = data.get("metadata") if isinstance(data.get("metadata"), dict) else None
+    metadata = _normalized_metadata(incoming, existing=existing)
+    for key, default in _META_BOOL_DEFAULTS.items():
+        if key in data:
+            metadata[key] = _bool_meta(data.get(key), default=default)
+    if "tone" in data:
+        metadata["tone"] = _tone(data.get("tone"))
+    return metadata
+
+
+def _payload_metadata(raw: str | None) -> dict[str, Any]:
+    return _normalized_metadata(_json_dict(raw))
+
+
+def _clear_other_defaults(sess: Session, option: ManagedOption) -> None:
+    metadata = _payload_metadata(option.metadata_json)
+    if not _bool_meta(metadata.get("is_default"), default=False):
+        return
+    rows = sess.scalars(select(ManagedOption).where(
+        ManagedOption.set_id == option.set_id,
+        ManagedOption.id != option.id,
+    )).all()
+    for row in rows:
+        row_meta = _payload_metadata(row.metadata_json)
+        if _bool_meta(row_meta.get("is_default"), default=False):
+            row_meta["is_default"] = False
+            row.metadata_json = _meta(row_meta)
+            row.updated_at = now_utc_naive()
+
+
 def _option(value: str, label: str | None = None, order: int = 0,
             description: str = "", metadata: dict[str, Any] | None = None) -> dict[str, Any]:
     return {
@@ -176,9 +245,9 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "surface": "Tasks, Intake, Feedback",
         "description": "Priority labels used by task, intake, and feedback workflows. Backend defaults still expect Low/Medium/High until workflow validation is fully dynamic.",
         "options": [
-            _option("Low", order=10),
-            _option("Medium", order=20),
-            _option("High", order=30),
+            _option("Low", order=10, metadata={"rank": 30, "tone": "success"}),
+            _option("Medium", order=20, metadata={"is_default": True, "rank": 20, "tone": "warning"}),
+            _option("High", order=30, metadata={"rank": 10, "tone": "danger"}),
         ],
     },
     {
@@ -187,10 +256,10 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "surface": "Incidents, Reports, Intake",
         "description": "Impact labels used by incident/capability reports.",
         "options": [
-            _option("Low", order=10),
-            _option("Medium", order=20),
-            _option("High", order=30),
-            _option("Critical", order=40),
+            _option("Low", order=10, metadata={"is_high_severity": False, "tone": "success"}),
+            _option("Medium", order=20, metadata={"is_default": True, "is_high_severity": False, "tone": "warning"}),
+            _option("High", order=30, metadata={"is_high_severity": True, "tone": "danger"}),
+            _option("Critical", order=40, metadata={"is_high_severity": True, "tone": "danger"}),
         ],
     },
     {
@@ -199,8 +268,8 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "surface": "Projects, Map, Reports",
         "description": "Project status values shown in the project registry, map, and report filters. Defaults match the master project list.",
         "options": [
-            _option("active", "Active", 10),
-            _option("dormant", "Dormant", 20),
+            _option("active", "Active", 10, metadata={"is_default": True, "counts_as_open": True, "tone": "success"}),
+            _option("dormant", "Dormant", 20, metadata={"is_terminal": True, "counts_as_open": False, "tone": "muted"}),
         ],
     },
 ]
@@ -245,6 +314,24 @@ def seed_default_option_sets(sess: Session) -> bool:
                     metadata_json=opt.get("metadata_json") or "{}",
                 ))
             changed = True
+        else:
+            existing = {
+                option.value: option
+                for option in sess.scalars(select(ManagedOption).where(ManagedOption.set_id == row.id)).all()
+            }
+            for opt in spec.get("options", []):
+                option = existing.get(opt["value"])
+                if option is None:
+                    continue
+                default_meta = _json_dict(opt.get("metadata_json"))
+                if not default_meta:
+                    continue
+                current_meta = _payload_metadata(option.metadata_json)
+                merged = {**default_meta, **current_meta}
+                if merged != current_meta:
+                    option.metadata_json = _meta(_normalized_metadata(merged))
+                    option.updated_at = now_utc_naive()
+                    changed = True
     if changed:
         sess.flush()
     return changed
@@ -285,10 +372,7 @@ def _skill_lookup(sess: Session) -> dict[str, int]:
 
 
 def option_payload(option: ManagedOption, *, set_key: str = "", skill_lookup: dict[str, int] | None = None) -> dict[str, Any]:
-    try:
-        metadata = json.loads(option.metadata_json or "{}")
-    except json.JSONDecodeError:
-        metadata = {}
+    metadata = _payload_metadata(option.metadata_json)
     payload = {
         "id": option.id,
         "set_id": option.set_id,
@@ -300,6 +384,10 @@ def option_payload(option: ManagedOption, *, set_key: str = "", skill_lookup: di
         "active": option.active,
         "is_placeholder": option.is_placeholder,
         "metadata": metadata,
+        "is_default": _bool_meta(metadata.get("is_default"), default=False),
+        "is_terminal": _bool_meta(metadata.get("is_terminal"), default=False),
+        "counts_as_open": _bool_meta(metadata.get("counts_as_open"), default=True),
+        "tone": _tone(metadata.get("tone")),
     }
     if skill_lookup is not None:
         skill_key = str(metadata.get("skill_category_slug") or "").strip().lower()
@@ -394,14 +482,15 @@ def create_option(sess: Session, set_row: ManagedOptionSet, data: dict[str, Any]
         display_order=_intish(data.get("display_order")),
         active=_boolish(data.get("active"), default=True),
         is_placeholder=_boolish(data.get("is_placeholder"), default=False),
-        metadata_json=_meta(data.get("metadata") if isinstance(data.get("metadata"), dict) else None),
+        metadata_json=_meta(_option_metadata_from_data(data)),
     )
     sess.add(row)
     sess.flush()
+    _clear_other_defaults(sess, row)
     return row
 
 
-def update_option(row: ManagedOption, data: dict[str, Any]) -> str | None:
+def update_option(sess: Session, row: ManagedOption, data: dict[str, Any]) -> str | None:
     if "value" in data:
         value = str(data.get("value") or "").strip()
         if not value:
@@ -420,7 +509,9 @@ def update_option(row: ManagedOption, data: dict[str, Any]) -> str | None:
         row.active = _boolish(data.get("active"), default=True)
     if "is_placeholder" in data:
         row.is_placeholder = _boolish(data.get("is_placeholder"), default=False)
-    if isinstance(data.get("metadata"), dict):
-        row.metadata_json = _meta(data.get("metadata"))
+    metadata_keys = {"metadata", "is_default", "is_terminal", "counts_as_open", "tone"}
+    if any(key in data for key in metadata_keys):
+        row.metadata_json = _meta(_option_metadata_from_data(data, existing=_payload_metadata(row.metadata_json)))
     row.updated_at = now_utc_naive()
+    _clear_other_defaults(sess, row)
     return None

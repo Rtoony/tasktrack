@@ -3121,7 +3121,7 @@ function clearMobileQuickCapture(showStatus=true) {
   const file = document.getElementById('mobile-quick-file');
   if (text) text.value = '';
   if (project) project.value = '';
-  if (priority) priority.value = 'Medium';
+  if (priority) priority.value = priority.dataset.managedDefault || managedDefault('task_priority', 'Medium');
   if (file) file.value = '';
   if (showStatus) mobileQuickStatus('');
   mobileUpdateCaptureState();
@@ -3597,6 +3597,7 @@ function advanceCompetencySelection() {
 
 // Live filter input — debounced re-render without re-fetching.
 document.addEventListener('DOMContentLoaded', () => {
+  populateManagedOptionControls();
   const filt = document.getElementById('comp-filter');
   if (filt) {
     let t;
@@ -5057,7 +5058,18 @@ function makeCalendarAgendaCard(r) {
    changes still go through the modal (no drag-drop yet). */
 let projectViewMode = 'table';
 const PROJECT_LANES = ['Not Started', 'In Progress', 'Pending Confirmation', 'Complete'];
-const PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+let PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+function updatePriorityRank(rows) {
+  const normalized = normalizeManagedOptions(rows, FALLBACK_TASK_PRIORITY_OPTIONS);
+  if (!normalized.length) return;
+  const next = {};
+  normalized.forEach((row, idx) => {
+    const rawRank = row.metadata?.rank;
+    const rank = Number.isFinite(Number(rawRank)) ? Number(rawRank) : (PRIORITY_RANK[row.value] ?? idx + 10);
+    next[row.value] = rank;
+  });
+  PRIORITY_RANK = { ...PRIORITY_RANK, ...next };
+}
 
 function projectTaskFilterProjectNumber() {
   const input = document.getElementById('filter-project-number');
@@ -6114,6 +6126,35 @@ function workspaceAddCalendarEvent() {
 }
 
 /* ── Modal forms ───────────────────────────── */
+const FALLBACK_TASK_PRIORITY_OPTIONS = [
+  { value: 'Low', label: 'Low' },
+  { value: 'Medium', label: 'Medium', is_default: true },
+  { value: 'High', label: 'High' },
+];
+const FALLBACK_INCIDENT_SEVERITY_OPTIONS = [
+  { value: 'Low', label: 'Low' },
+  { value: 'Medium', label: 'Medium', is_default: true },
+  { value: 'High', label: 'High' },
+  { value: 'Critical', label: 'Critical' },
+];
+const MANAGED_OPTION_FALLBACKS = {
+  task_priority: FALLBACK_TASK_PRIORITY_OPTIONS,
+  incident_severity: FALLBACK_INCIDENT_SEVERITY_OPTIONS,
+};
+const TASK_PRIORITY_SELECT = {
+  type: 'managed-option-select',
+  setKey: 'task_priority',
+  endpoint: '/api/v1/options/task_priority',
+  fallback: FALLBACK_TASK_PRIORITY_OPTIONS,
+  defaultValue: 'Medium',
+};
+const INCIDENT_SEVERITY_SELECT = {
+  type: 'managed-option-select',
+  setKey: 'incident_severity',
+  endpoint: '/api/v1/options/incident_severity',
+  fallback: FALLBACK_INCIDENT_SEVERITY_OPTIONS,
+  defaultValue: 'Medium',
+};
 const FORMS = {
   work:[
     {key:'title',label:'Task Title',type:'text',required:true},
@@ -6124,7 +6165,7 @@ const FORMS = {
     {key:'software',label:'Software / Tools',type:'text',placeholder:'autocad, civil3d, bluebeam'},
     {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked'},
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
+    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},
@@ -6138,7 +6179,7 @@ const FORMS = {
     {key:'task_description',label:'Task Description',type:'textarea',required:true},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
+    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
     {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local'},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local'}]},
     {key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'},
     {key:'scope_notes',label:'Planning / Scope Notes',type:'textarea',placeholder:'Not Started phase: scope, setup, prerequisites, or assignment context.'},
@@ -6157,7 +6198,7 @@ const FORMS = {
     {key:'skill_area',label:'Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/training_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose skill area —',hint:'Admin-managed training vocabulary.'},
     {key:'training_goals',label:'Training Goals',type:'textarea'},
     {key:'additional_context',label:'Additional Context',type:'textarea'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
+    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},
@@ -6174,7 +6215,7 @@ const FORMS = {
     {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
     {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
     {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links the incident to the Competency rubric (Phase 1).'},
-    {key:'_row',fields:[{key:'severity',label:'Impact',type:'select',options:['Low','Medium','High','Critical']},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
+    {key:'_row',fields:[{key:'severity',label:'Impact',...INCIDENT_SEVERITY_SELECT},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
     {key:'estimated_time_loss_minutes',label:'Estimated Time Loss (minutes)',type:'number',placeholder:'0'},
     {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
@@ -6206,7 +6247,7 @@ const FORMS = {
   triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
-    {key:'_row',fields:[{key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']}]},
+    {key:'_row',fields:[{key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -6218,7 +6259,7 @@ const FORMS = {
 const PERSONAL_FORM = [
   {key:'title',label:'Title',type:'text',required:true,placeholder:'What needs to happen?'},
   {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context.'},
-  {key:'_row',fields:[{key:'priority',label:'Priority',type:'select',options:['Low','Medium','High']},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
+  {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
   {key:'due_date',label:'Due Date',type:'date'},
   {key:'links',label:'Links',type:'links'},
 ];
@@ -6241,6 +6282,95 @@ async function loadFkOptions(endpoint) {
   return FK_OPTION_CACHE[endpoint];
 }
 function invalidateFkCache() { for (const k of Object.keys(FK_OPTION_CACHE)) delete FK_OPTION_CACHE[k]; }
+
+const MANAGED_OPTION_DEFAULTS = {};
+function managedOptionValue(row) { return String(row?.value ?? row?.label ?? '').trim(); }
+function managedOptionLabel(row) { return String(row?.label ?? row?.value ?? '').trim(); }
+function managedOptionDefault(rows, fallback='Medium') {
+  const found = (rows || []).find(row => row?.is_default || row?.metadata?.is_default);
+  return managedOptionValue(found) || fallback;
+}
+function normalizeManagedOptions(rows, fallback) {
+  const source = Array.isArray(rows) && rows.length ? rows : (fallback || []);
+  return source.map(row => ({
+    value: managedOptionValue(row),
+    label: managedOptionLabel(row),
+    display_order: Number(row?.display_order ?? 0),
+    metadata: row?.metadata || {},
+    is_default: Boolean(row?.is_default || row?.metadata?.is_default),
+  })).filter(row => row.value);
+}
+function fillManagedSelect(select, rows, opts={}) {
+  if (!select) return;
+  const current = Object.prototype.hasOwnProperty.call(opts, 'current') ? opts.current : select.value;
+  const fallback = opts.fallback || [];
+  const normalized = normalizeManagedOptions(rows, fallback);
+  const defaultValue = Object.prototype.hasOwnProperty.call(opts, 'defaultValue')
+    ? opts.defaultValue
+    : managedOptionDefault(normalized, 'Medium');
+  select.replaceChildren();
+  if (opts.emptyLabel) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = opts.emptyLabel;
+    select.appendChild(empty);
+  }
+  let matched = false;
+  normalized.forEach(row => {
+    const opt = document.createElement('option');
+    opt.value = row.value;
+    opt.textContent = row.label || row.value;
+    if (String(current || '').toLowerCase() === String(row.value).toLowerCase()) {
+      opt.selected = true;
+      matched = true;
+    }
+    select.appendChild(opt);
+  });
+  if (current && !matched) {
+    const opt = document.createElement('option');
+    opt.value = current;
+    opt.textContent = 'Current value: ' + current;
+    opt.selected = true;
+    select.appendChild(opt);
+  } else if (!current && defaultValue && !opts.emptyLabel) {
+    select.value = defaultValue;
+  } else if (!current && opts.emptyLabel) {
+    select.value = '';
+  }
+  if (opts.setKey) {
+    const def = managedOptionDefault(normalized, defaultValue || 'Medium');
+    MANAGED_OPTION_DEFAULTS[opts.setKey] = def;
+    select.dataset.managedDefault = def;
+  }
+}
+async function populateManagedSelect(select, setKey, opts={}) {
+  if (!select || !setKey) return;
+  const fallback = opts.fallback || MANAGED_OPTION_FALLBACKS[setKey] || [];
+  fillManagedSelect(select, fallback, { ...opts, fallback, setKey });
+  try {
+    const rows = await loadFkOptions('/api/v1/options/' + encodeURIComponent(setKey));
+    if (Array.isArray(rows) && rows.length) fillManagedSelect(select, rows, { ...opts, fallback, setKey });
+    if (setKey === 'task_priority') updatePriorityRank(rows);
+  } catch (e) {
+    if (setKey === 'task_priority') updatePriorityRank(fallback);
+  }
+}
+function managedDefault(setKey, fallback='Medium') {
+  return MANAGED_OPTION_DEFAULTS[setKey] || fallback;
+}
+function populateManagedOptionControls() {
+  [
+    'filter-triage-priority', 'filter-work-priority', 'filter-project-priority',
+    'filter-training-priority', 'filter-personal_husband-priority',
+    'filter-personal_father-priority', 'filter-personal_house-priority',
+    'filter-personal_cars-priority',
+  ].forEach(id => populateManagedSelect(document.getElementById(id), 'task_priority', { emptyLabel: 'All Priorities' }));
+  ['mobile-quick-priority', 'intake-field-priority', 'feedback-priority'].forEach(id => {
+    populateManagedSelect(document.getElementById(id), 'task_priority', { defaultValue: 'Medium' });
+  });
+  populateManagedSelect(document.getElementById('preset-priority'), 'task_priority', { emptyLabel: 'Auto (let AI decide)', defaultValue: '' });
+  populateManagedSelect(document.getElementById('filter-personnel-priority'), 'incident_severity', { emptyLabel: 'All Impact Levels' });
+}
 
 function normalizeProjectNumberCandidate(value) {
   const raw = String(value || '').trim();
@@ -6269,7 +6399,13 @@ function renderField(f,value) {
   const wrap=document.createElement('div'); wrap.className='field';
   const label=document.createElement('label'); label.textContent=f.label; wrap.appendChild(label);
   let input;
-  if (f.type==='select') {
+  if (f.type==='managed-option-select') {
+    input=document.createElement('select'); input.id='f-'+f.key;
+    const setKey = f.setKey || '';
+    const currentValue = String(value || f.defaultValue || managedDefault(setKey, 'Medium') || '').trim();
+    fillManagedSelect(input, f.fallback || MANAGED_OPTION_FALLBACKS[setKey] || [], { current: currentValue, defaultValue: f.defaultValue || 'Medium', fallback: f.fallback || [], setKey });
+    populateManagedSelect(input, setKey, { current: currentValue, defaultValue: f.defaultValue || 'Medium', fallback: f.fallback || [] });
+  } else if (f.type==='select') {
     input=document.createElement('select'); input.id='f-'+f.key;
     f.options.forEach(o=>{const opt=document.createElement('option');const optValue=(typeof o==='object')?o.value:o;const optLabel=(typeof o==='object')?o.label:o;opt.value=optValue;opt.textContent=optLabel;if(String(value)===String(optValue))opt.selected=true;input.appendChild(opt);});
   } else if (f.type==='project-picker') {
@@ -7341,7 +7477,7 @@ function intakeRenderPreview(plan, model, rawText, detectedProjectNumber) {
 
   document.getElementById('intake-field-title').value = plan.gist || '';
   const priorityInput = document.getElementById('intake-field-priority');
-  priorityInput.value = plan.priority || 'Medium';
+  priorityInput.value = plan.priority || managedDefault('task_priority', 'Medium');
   const lockedPriority = (document.getElementById('preset-priority').value || '').trim();
   const lockTag = document.getElementById('intake-priority-lock-tag');
   if (lockedPriority) {

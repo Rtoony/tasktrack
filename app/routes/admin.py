@@ -508,7 +508,7 @@ def admin_update_option(option_id):
         ))
         if dupe is not None:
             return jsonify({"error": "option value already exists in this set"}), 400
-    error = update_option(row, data)
+    error = update_option(sess, row, data)
     if error:
         return jsonify({"error": error}), 400
     set_row = sess.get(ManagedOptionSet, row.set_id)

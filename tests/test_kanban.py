@@ -122,6 +122,19 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert html.find('data-tab="dashboard"', side_nav_at) > side_nav_at
 
 
+def test_dashboard_priority_and_impact_controls_use_managed_options(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8")
+    assert "/api/v1/options/task_priority" in html
+    assert "/api/v1/options/incident_severity" in html
+    assert "TASK_PRIORITY_SELECT" in html
+    assert "INCIDENT_SEVERITY_SELECT" in html
+    assert "populateManagedOptionControls" in html
+    assert "filter-personnel-priority" in html
+    assert "managed-option-select" in html
+
+
 def test_project_endpoint_still_returns_200(auth_client):
     """Kanban reuses GET /api/v1/project_work_tasks — no new endpoint."""
     # Pre-seed one task so we exercise the rendered branch.

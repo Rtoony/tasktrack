@@ -102,14 +102,20 @@
   .option-set-btn strong { display:block; font-size:0.84rem; color:var(--text); }
   .option-set-btn span { display:block; margin-top:0.12rem; font-size:0.72rem; color:var(--text-muted); }
   .option-editor { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem; background:linear-gradient(180deg,#fbfcfe 0%,#fff 100%); }
-  .option-table { min-width:920px; table-layout:fixed; }
-  .option-table th:nth-child(1), .option-table td:nth-child(1), .option-table th:nth-child(2), .option-table td:nth-child(2) { width:26%; }
-  .option-table th:nth-child(3), .option-table td:nth-child(3) { width:10%; }
-  .option-table th:nth-child(4), .option-table td:nth-child(4), .option-table th:nth-child(5), .option-table td:nth-child(5) { width:8%; }
-  .option-table th:nth-child(6), .option-table td:nth-child(6) { width:18%; }
-  .option-row-input { width:100%; min-width:9rem; padding:0.35rem 0.45rem; font-size:0.78rem; border-radius:7px; }
+  .option-table { min-width:1320px; table-layout:fixed; }
+  .option-table th:nth-child(1), .option-table td:nth-child(1), .option-table th:nth-child(2), .option-table td:nth-child(2) { width:18%; }
+  .option-table th:nth-child(3), .option-table td:nth-child(3) { width:7%; }
+  .option-table th:nth-child(4), .option-table td:nth-child(4) { width:11%; }
+  .option-table th:nth-child(5), .option-table td:nth-child(5), .option-table th:nth-child(6), .option-table td:nth-child(6), .option-table th:nth-child(7), .option-table td:nth-child(7), .option-table th:nth-child(8), .option-table td:nth-child(8), .option-table th:nth-child(9), .option-table td:nth-child(9) { width:7%; }
+  .option-table th:nth-child(10), .option-table td:nth-child(10) { width:15%; }
+  .option-row-input { width:100%; min-width:8rem; padding:0.35rem 0.45rem; font-size:0.78rem; border-radius:7px; }
   .option-order-input { min-width:4.6rem; }
+  .option-tone-input { min-width:6.8rem; }
   .option-check { text-align:center; }
+  .option-check input { width:auto; }
+  .inline-checks { display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; margin:0.15rem 0 0.65rem; }
+  .inline-checks label { display:inline-flex; align-items:center; gap:0.3rem; margin:0; font-size:0.74rem; color:var(--text-muted); font-weight:600; text-transform:none; letter-spacing:0; }
+  .inline-checks input { width:auto; }
   .info-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:1rem; align-items:start; }
   .info-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.95rem 1rem; background:linear-gradient(180deg,#fbfcfe 0%,#fff 100%); }
   .info-label { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.3rem; }
@@ -262,7 +268,7 @@
             </div>
             <div class="table-wrap">
               <table class="option-table">
-                <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
+                <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Tone</th><th>Default</th><th>Terminal</th><th>Counts Open</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
                 <tbody id="managed-option-list"></tbody>
               </table>
             </div>
@@ -271,6 +277,12 @@
               <div class="option-field"><label for="new-option-value">New Value</label><input id="new-option-value" placeholder="Stored value"></div>
               <div class="option-field"><label for="new-option-label">New Label</label><input id="new-option-label" placeholder="Shown label"></div>
               <div class="option-field"><label for="new-option-order">Order</label><input id="new-option-order" type="number" value="0"></div>
+              <div class="option-field"><label for="new-option-tone">Tone</label><select id="new-option-tone"></select></div>
+            </div>
+            <div class="inline-checks">
+              <label><input id="new-option-default" type="checkbox"> Default</label>
+              <label><input id="new-option-terminal" type="checkbox"> Terminal</label>
+              <label><input id="new-option-counts-open" type="checkbox" checked> Counts open</label>
             </div>
             <button class="btn btn-primary btn-sm" onclick="addManagedOption()">Add Option</button>
           </div>
@@ -578,6 +590,14 @@ async function api(method, path, body) {
 
 let managedOptionSets = [];
 let selectedOptionSetKey = '';
+const OPTION_TONES = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'info', label: 'Info' },
+  { value: 'success', label: 'Success' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'danger', label: 'Danger' },
+  { value: 'muted', label: 'Muted' },
+];
 
 function htmlesc(value) {
   return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
@@ -617,6 +637,32 @@ function selectOptionSet(key) {
   renderOptionEditor();
 }
 
+function optionMeta(opt, key, fallback) {
+  if (opt && Object.prototype.hasOwnProperty.call(opt, key)) return opt[key];
+  if (opt?.metadata && Object.prototype.hasOwnProperty.call(opt.metadata, key)) return opt.metadata[key];
+  return fallback;
+}
+
+function checkedAttr(value) {
+  return value ? 'checked' : '';
+}
+
+function toneOptions(current) {
+  const value = String(current || 'neutral').toLowerCase();
+  return OPTION_TONES.map(tone => `<option value="${tone.value}" ${tone.value === value ? 'selected' : ''}>${tone.label}</option>`).join('');
+}
+
+function resetNewOptionMetadataControls() {
+  const tone = document.getElementById('new-option-tone');
+  if (tone) tone.innerHTML = toneOptions('neutral');
+  const def = document.getElementById('new-option-default');
+  const terminal = document.getElementById('new-option-terminal');
+  const countsOpen = document.getElementById('new-option-counts-open');
+  if (def) def.checked = false;
+  if (terminal) terminal.checked = false;
+  if (countsOpen) countsOpen.checked = true;
+}
+
 function renderOptionEditor() {
   const set = currentOptionSet();
   const empty = document.getElementById('option-editor-empty');
@@ -628,12 +674,17 @@ function renderOptionEditor() {
   document.getElementById('option-set-surface').value = set.surface || '';
   document.getElementById('option-set-description').value = set.description || '';
   document.getElementById('option-set-active').checked = !!set.active;
+  resetNewOptionMetadataControls();
   const rows = Array.isArray(set.options) ? set.options : [];
   document.getElementById('managed-option-list').innerHTML = rows.map(opt => `
     <tr data-option-id="${opt.id}">
       <td><input class="option-row-input" data-field="value" value="${htmlesc(opt.value)}"></td>
       <td><input class="option-row-input" data-field="label" value="${htmlesc(opt.label)}"></td>
       <td><input class="option-row-input option-order-input" data-field="display_order" type="number" value="${Number(opt.display_order || 0)}"></td>
+      <td><select class="option-row-input option-tone-input" data-meta-field="tone">${toneOptions(optionMeta(opt, 'tone', 'neutral'))}</select></td>
+      <td class="option-check"><input type="checkbox" data-meta-field="is_default" ${checkedAttr(optionMeta(opt, 'is_default', false))}></td>
+      <td class="option-check"><input type="checkbox" data-meta-field="is_terminal" ${checkedAttr(optionMeta(opt, 'is_terminal', false))}></td>
+      <td class="option-check"><input type="checkbox" data-meta-field="counts_as_open" ${checkedAttr(optionMeta(opt, 'counts_as_open', true))}></td>
       <td class="option-check"><input type="checkbox" data-field="active" ${opt.active ? 'checked' : ''}></td>
       <td class="option-check"><input type="checkbox" data-field="is_placeholder" ${opt.is_placeholder ? 'checked' : ''}></td>
       <td class="action-cell">
@@ -678,12 +729,19 @@ async function addManagedOption() {
   const value = document.getElementById('new-option-value').value.trim();
   const label = document.getElementById('new-option-label').value.trim() || value;
   const order = parseInt(document.getElementById('new-option-order').value || '0', 10);
+  const metadata = {
+    tone: document.getElementById('new-option-tone')?.value || 'neutral',
+    is_default: document.getElementById('new-option-default')?.checked || false,
+    is_terminal: document.getElementById('new-option-terminal')?.checked || false,
+    counts_as_open: document.getElementById('new-option-counts-open')?.checked !== false,
+  };
   if (!value || !label) { toast('Option value and label are required'); return; }
-  const res = await api('POST', '/api/v1/admin/options/sets/' + encodeURIComponent(set.key) + '/options', { value, label, display_order: order });
+  const res = await api('POST', '/api/v1/admin/options/sets/' + encodeURIComponent(set.key) + '/options', { value, label, display_order: order, metadata });
   if (res && res.error) { toast(res.error); return; }
   document.getElementById('new-option-value').value = '';
   document.getElementById('new-option-label').value = '';
   document.getElementById('new-option-order').value = '0';
+  resetNewOptionMetadataControls();
   await loadManagedOptions();
   toast('Option added');
 }
@@ -691,12 +749,16 @@ async function addManagedOption() {
 async function saveManagedOption(id) {
   const tr = document.querySelector('tr[data-option-id="' + id + '"]');
   if (!tr) return;
-  const payload = {};
+  const payload = { metadata: {} };
   tr.querySelectorAll('[data-field]').forEach(input => {
     const field = input.dataset.field;
     if (input.type === 'checkbox') payload[field] = input.checked;
     else if (field === 'display_order') payload[field] = parseInt(input.value || '0', 10);
     else payload[field] = input.value.trim();
+  });
+  tr.querySelectorAll('[data-meta-field]').forEach(input => {
+    const field = input.dataset.metaField;
+    payload.metadata[field] = input.type === 'checkbox' ? input.checked : input.value;
   });
   const res = await api('PATCH', '/api/v1/admin/options/options/' + id, payload);
   if (res && res.error) { toast(res.error); return; }

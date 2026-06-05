@@ -117,6 +117,36 @@ def test_incident_report_filters(admin_client, temp_app):
     assert [row["person_name"] for row in project.get_json()["incidents"]] == ["Incident Employee"]
 
 
+def test_incident_report_filter_renders_managed_severity(admin_client, temp_app):
+    option = admin_client.post("/api/v1/admin/options/sets/incident_severity/options", json={
+        "value": "Sev-1",
+        "label": "Sev 1",
+        "display_order": 5,
+        "metadata": {"tone": "danger", "is_high_severity": True},
+    })
+    assert option.status_code == 201
+
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Managed Severity Employee",
+            observed_by="Supervisor",
+            cad_skill_area="Civil 3D",
+            issue_description="Managed severity incident",
+            incident_context="Custom severity context",
+            severity="Sev-1",
+            status="Observed",
+            reported_date=datetime.now() - timedelta(days=1),
+        ))
+        sess.commit()
+
+    html = admin_client.get("/reports/incidents?severity=Sev-1")
+    assert html.status_code == 200
+    page = html.get_data(as_text=True)
+    assert '<option value="Sev-1" selected>Sev 1</option>' in page
+    assert "Managed severity incident" in page
+
+
 def test_incident_report_admin_only(auth_client):
     assert auth_client.get("/api/v1/reports/incidents").status_code == 403
     assert auth_client.get("/api/v1/reports/incidents.csv").status_code == 403

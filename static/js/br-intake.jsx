@@ -20,9 +20,19 @@ const Stroke = ({d,size=22,w=1.75}) => (
 const SKILL_AREAS = ['Surfaces','Corridors','Pipe Networks','Sheet Sets','LISP / Automation','Plan Production','Labels & Styles','Data Exchange','Dynamic Blocks','Templates','Other'];
 const PHASES = ['100 - Survey','200 - Prelim Design','300 - Const Docs','400 - Bid Support','500 - Const Admin'];
 const SUGGESTION_CATEGORIES = ['Standards','Workflow','Templates','Blocks','Onboarding','UI','Other'];
+const PRIORITIES = ['Low','Medium','High'];
+const SEVERITIES = ['Low','Medium','High','Critical'];
 
+function normalizeOption(row){
+  if(row && typeof row === 'object') return {value:row.value || row.label || '', label:row.label || row.value || ''};
+  return {value:row || '', label:row || ''};
+}
 function fallbackOptions(values){
-  return values.map(v => (typeof v === 'object' ? v : {value:v, label:v}));
+  return values.map(normalizeOption);
+}
+function optionMatches(current, option){
+  const needle = String(current || '').toLowerCase();
+  return [option.value, option.label].some(v => String(v || '').toLowerCase() === needle);
 }
 function useOptionSet(key, fallback){
   const [options, setOptions] = useState(() => fallbackOptions(fallback));
@@ -36,7 +46,7 @@ function useOptionSet(key, fallback){
         if(!res.ok) return;
         const rows = await res.json();
         if(!alive || !Array.isArray(rows) || !rows.length) return;
-        setOptions(rows.map(row => ({value:row.value || row.label || '', label:row.label || row.value || ''})).filter(row => row.value));
+        setOptions(rows.map(normalizeOption).filter(row => row.value));
       }catch(_){ /* keep fallback options */ }
     })();
     return () => { alive = false; };
@@ -148,6 +158,8 @@ function IntakeForm(){
   const trainingSkillAreas = useOptionSet('trainingSkillArea', SKILL_AREAS);
   const billingPhases = useOptionSet('projectBillingPhase', PHASES);
   const suggestionCategories = useOptionSet('suggestionCategory', SUGGESTION_CATEGORIES);
+  const taskPriorities = useOptionSet('taskPriority', PRIORITIES);
+  const incidentSeverities = useOptionSet('incidentSeverity', SEVERITIES);
   const problemAreas = [
     ...cadSkillAreas.filter(o => !['other','workflow','software'].includes(String(o.value).toLowerCase())),
     {value:'Workflow', label:'Workflow'},
@@ -357,7 +369,7 @@ function IntakeForm(){
               </select>
             </Field>
             <Field label="Severity">
-              <div className="seg sev">{['Low','Medium','High','Critical'].map(s=>(<button key={s} data-sev={s} className={f.severity===s?'on':''} onClick={()=>set('severity',s)}>{s}</button>))}</div>
+              <div className="seg sev">{incidentSeverities.map(s=>(<button key={s.value} data-sev={s.label} className={optionMatches(f.severity,s)?'on':''} onClick={()=>set('severity',s.value)}>{s.label}</button>))}</div>
             </Field>
           </div>
           <Field label="People or files involved" hint="optional"><input className="input" value={f.involved||''} onChange={e=>set('involved',e.target.value)}/></Field>
@@ -370,7 +382,7 @@ function IntakeForm(){
         {type!=='problem' && type!=='suggestion' && (
           <div className="row">
             <Field label="Urgency">
-              <div className="seg">{['Low','Medium','High'].map(s=>(<button key={s} className={f.priority===s?'on':''} onClick={()=>set('priority',s)}>{s}</button>))}</div>
+              <div className="seg">{taskPriorities.map(s=>(<button key={s.value} className={optionMatches(f.priority,s)?'on':''} onClick={()=>set('priority',s.value)}>{s.label}</button>))}</div>
             </Field>
             <Field label="Needed by" hint="optional">
               <input className="input mono" type="date" min={TODAY} value={f.desiredBy||''} onChange={e=>set('desiredBy',e.target.value)}/>

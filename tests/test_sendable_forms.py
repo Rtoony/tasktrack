@@ -107,6 +107,8 @@ def test_unified_request_form_renders_br_shell(auth_client):
     assert "window.TT_INTAKE" in html
     assert "/api/v1/intake/submit" in html
     assert "/api/v1/projects/search" in html
+    assert "/api/v1/options/task_priority" in html
+    assert "/api/v1/options/incident_severity" in html
     assert "breljerace-logo-white.png" in html
     assert "js/br-intake.bundle.js" in html
     assert "unpkg.com" not in html
