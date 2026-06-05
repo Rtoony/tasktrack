@@ -106,7 +106,7 @@ def test_report_center_and_admin_link_to_intake_report(auth_client, admin_client
     assert "/reports/intake" in reports_html
     assert "/intake/review?needs_review=1" in reports_html
 
-    admin = admin_client.get("/admin")
+    admin = admin_client.get("/admin/reports")
     assert admin.status_code == 200
     admin_html = admin.get_data(as_text=True)
     assert "/reports/intake" in admin_html

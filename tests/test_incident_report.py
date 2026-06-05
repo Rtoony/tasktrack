@@ -162,7 +162,7 @@ def test_incident_report_links_from_report_center_and_admin(auth_client):
         s["user_name"] = "Admin User"
         s["user_role"] = "admin"
 
-    admin_page = auth_client.get("/admin")
+    admin_page = auth_client.get("/admin/reports")
     assert admin_page.status_code == 200
     admin_html = admin_page.get_data(as_text=True)
     assert "Incident Reports" in admin_html

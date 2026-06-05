@@ -1,4 +1,4 @@
-"""Admin routes — user/email/role management + Telegram pairing controls."""
+"""Admin routes - control center, user/email/role management, and vocabulary CRUD."""
 import secrets
 
 from flask import (
@@ -10,7 +10,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select
 from werkzeug.security import generate_password_hash
 
 from ..auth import admin_required, login_required
@@ -20,6 +20,7 @@ from ..models import (
     ApprovedEmail,
     AppSetting,
     Employee,
+    FeedbackItem,
     ManagedOption,
     ManagedOptionSet,
     Project,
@@ -40,10 +41,237 @@ from ..services.managed_options import (
 
 bp = Blueprint("admin", __name__)
 
+ADMIN_SECTIONS = [
+    {
+        "key": "overview",
+        "title": "Overview",
+        "href": "/admin",
+        "subtitle": "Control-center summary and shortcuts.",
+    },
+    {
+        "key": "dropdowns",
+        "title": "Dropdowns",
+        "href": "/admin/dropdowns",
+        "subtitle": "Admin-managed vocabulary and select lists.",
+    },
+    {
+        "key": "people",
+        "title": "People",
+        "href": "/admin/people",
+        "subtitle": "Employee registry and competency participation.",
+    },
+    {
+        "key": "projects",
+        "title": "Projects",
+        "href": "/admin/projects",
+        "subtitle": "Project registry, source sync checks, and project shortcuts.",
+    },
+    {
+        "key": "access",
+        "title": "Access",
+        "href": "/admin/access",
+        "subtitle": "Users, approved emails, and Telegram pairing.",
+    },
+    {
+        "key": "intake",
+        "title": "Intake",
+        "href": "/admin/intake",
+        "subtitle": "Capture workflows, forms, and triage presets.",
+    },
+    {
+        "key": "reports",
+        "title": "Reports",
+        "href": "/admin/reports",
+        "subtitle": "Report shortcuts, packets, exports, and workflow views.",
+    },
+    {
+        "key": "system",
+        "title": "System",
+        "href": "/admin/system",
+        "subtitle": "Operational health, audit inventory, and next admin-control phases.",
+    },
+]
 
-@bp.route("/admin")
-@admin_required
-def admin_panel():
+ADMIN_REPORT_LINKS = [
+    {
+        "title": "Full Tracker",
+        "href": "/",
+        "subtitle": "Dashboard, triage, map, calendar, and task queues.",
+    },
+    {
+        "title": "Project Map",
+        "href": "/?tab=map",
+        "subtitle": "Map pins, workspace drawer, reports, and map focus actions.",
+    },
+    {
+        "title": "Calendar",
+        "href": "/?tab=calendar",
+        "subtitle": "Internal meetings, prep blocks, deadlines, and project-linked events.",
+    },
+    {
+        "title": "Report Center",
+        "href": "/reports",
+        "subtitle": "Central report surface for packets, briefs, and review flows.",
+    },
+    {
+        "title": "Today Brief",
+        "href": "/reports/today",
+        "subtitle": "Compact daily operator packet with upcoming meetings and project actions.",
+    },
+    {
+        "title": "Management Packet",
+        "href": "/reports/management",
+        "subtitle": "Print-ready portfolio, action, intake, meeting, and incident summary.",
+    },
+    {
+        "title": "Portfolio Reports",
+        "href": "/reports/projects",
+        "subtitle": "Management-ready project packets with filters, presets, and print layout.",
+    },
+    {
+        "title": "At-Risk Queue",
+        "href": "/reports/projects?attention_level=at_risk&limit=25",
+        "subtitle": "Portfolio report filtered to projects needing attention first.",
+    },
+    {
+        "title": "Incident Reports",
+        "href": "/reports/incidents?open_only=1",
+        "subtitle": "Admin-only incident reports with full narratives, JSON, and CSV.",
+    },
+    {
+        "title": "High Severity Incidents",
+        "href": "/reports/incidents?severity=High&open_only=1",
+        "subtitle": "Open high-severity capability incidents for management review.",
+    },
+    {
+        "title": "Incident CSV",
+        "href": "/api/v1/reports/incidents.csv?open_only=1",
+        "subtitle": "Download the current open incident report as CSV.",
+    },
+    {
+        "title": "At-Risk CSV",
+        "href": "/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25",
+        "subtitle": "Download the current management action queue as CSV.",
+    },
+    {
+        "title": "Project One-Pager",
+        "href": "/reports/project",
+        "subtitle": "Single-project status packet with workspace data and activity.",
+    },
+    {
+        "title": "Meeting Packet Batch",
+        "href": "/reports/meetings?days=14&limit=12",
+        "subtitle": "Printable batch of upcoming visible event packets.",
+    },
+    {
+        "title": "Weekly Review",
+        "href": "/weekly?days=7",
+        "subtitle": "Seven-day operational digest for check-ins and review meetings.",
+    },
+    {
+        "title": "Submission Forms",
+        "href": "/intake",
+        "subtitle": "Authenticated intake forms for triage and operational capture.",
+    },
+    {
+        "title": "Printable Intake Packet",
+        "href": "/intake/printable",
+        "subtitle": "Browser PDF and reMarkable-ready request forms.",
+    },
+    {
+        "title": "Intake Review Queue",
+        "href": "/intake/review?needs_review=1",
+        "subtitle": "Operator queue for web, paper, and OCR-created requests.",
+    },
+    {
+        "title": "Intake Source Report",
+        "href": "/reports/intake",
+        "subtitle": "Review and export paper, OCR, and source-tagged capture records.",
+    },
+]
+
+ADMIN_CONTROL_INVENTORY = [
+    {
+        "area": "Managed dropdowns",
+        "status": "Admin-managed now",
+        "scope": "CAD skills, training skills, billing phases, calendar types, intake sources, suggestion categories, feedback types.",
+        "next_step": "Keep expanding simple vocabulary fields here.",
+    },
+    {
+        "area": "People registry",
+        "status": "Admin-managed now",
+        "scope": "Employees, active state, and competency tracking participation.",
+        "next_step": "Add office/team/discipline fields once workflow terminology is settled.",
+    },
+    {
+        "area": "Project registry",
+        "status": "Partially admin-managed",
+        "scope": "Projects are editable, but display statuses are still validated as active/dormant in code.",
+        "next_step": "Move project display status labels into managed workflow configuration.",
+    },
+    {
+        "area": "Workflow states and priorities",
+        "status": "Code-controlled",
+        "scope": "Task statuses, feedback statuses, severity, and priority validation.",
+        "next_step": "Make backend validation dynamic before exposing CRUD controls.",
+    },
+    {
+        "area": "Intake presets and form copy",
+        "status": "Partially code-controlled",
+        "scope": "Preset labels, default targets, source defaults, and paper/OCR form copy.",
+        "next_step": "Promote capture presets to Admin > Intake after the shell consolidation.",
+    },
+    {
+        "area": "Report shortcuts and defaults",
+        "status": "Code-controlled",
+        "scope": "Admin/report shortcut cards, default filters, and export links.",
+        "next_step": "Add saved admin report shortcuts and configurable default filters.",
+    },
+    {
+        "area": "Map and visual status legends",
+        "status": "Code-controlled",
+        "scope": "Project pin colors, status colors, and map legend labels.",
+        "next_step": "Expose presentation controls after project statuses are made dynamic.",
+    },
+    {
+        "area": "Competency rubric",
+        "status": "Partially admin-managed",
+        "scope": "Skill categories are editable; dimensions and rating levels remain static.",
+        "next_step": "Treat full rubric editing as a separate larger phase.",
+    },
+]
+
+PROJECT_DISPLAY_STATUSES = ("active", "dormant")
+
+
+def _section_meta(section: str) -> dict:
+    return next((item for item in ADMIN_SECTIONS if item["key"] == section), ADMIN_SECTIONS[0])
+
+
+def _admin_counts(sess) -> dict:
+    open_feedback = sess.scalar(
+        select(func.count())
+        .select_from(FeedbackItem)
+        .where(FeedbackItem.status.not_in(["Completed", "Closed", "Resolved", "Fixed"]))
+    ) or 0
+    return {
+        "users": sess.scalar(select(func.count()).select_from(User)) or 0,
+        "approved_emails": sess.scalar(select(func.count()).select_from(ApprovedEmail)) or 0,
+        "telegram_chats": sess.scalar(select(func.count()).select_from(TelegramChatAccess)) or 0,
+        "employees": sess.scalar(select(func.count()).select_from(Employee)) or 0,
+        "active_employees": sess.scalar(
+            select(func.count()).select_from(Employee).where(Employee.active == 1)
+        ) or 0,
+        "projects": sess.scalar(select(func.count()).select_from(Project)) or 0,
+        "active_projects": sess.scalar(
+            select(func.count()).select_from(Project).where(Project.active == 1)
+        ) or 0,
+        "option_sets": sess.scalar(select(func.count()).select_from(ManagedOptionSet)) or 0,
+        "open_feedback": open_feedback,
+    }
+
+
+def _render_admin(section: str):
     sess = get_session()
     users = [
         {
@@ -62,6 +290,12 @@ def admin_panel():
         }
         for ae in sess.scalars(select(ApprovedEmail).order_by(ApprovedEmail.email)).all()
     ]
+    employees = sess.scalars(
+        select(Employee).order_by(Employee.active.desc(), Employee.display_name.asc())
+    ).all()
+    projects = sess.scalars(
+        select(Project).order_by(Project.active.desc(), Project.project_number.asc())
+    ).all()
     code_setting = sess.get(AppSetting, "telegram_link_code")
     telegram_link_code = code_setting.value if code_setting else ""
     telegram_chats = [
@@ -78,52 +312,82 @@ def admin_panel():
         ).all()
     ]
     workflow_links = [
-        {"key": key, "title": meta["title"], "subtitle": meta["subtitle"], "href": f"/admin/workflow/{key}"}
+        {
+            "key": key,
+            "title": meta["title"],
+            "subtitle": meta["subtitle"],
+            "href": f"/admin/workflow/{key}",
+        }
         for key, meta in ADMIN_WORKFLOW_VIEWS.items()
     ]
     return render_template(
         "admin.html",
+        active_section=section,
+        admin_sections=ADMIN_SECTIONS,
+        section_meta=_section_meta(section),
         users=users,
         approved_emails=emails,
+        employees=employees,
+        projects=projects,
         user_name=session.get("user_name", ""),
         workflow_links=workflow_links,
+        report_links=ADMIN_REPORT_LINKS,
+        control_inventory=ADMIN_CONTROL_INVENTORY,
+        project_display_statuses=PROJECT_DISPLAY_STATUSES,
+        admin_counts=_admin_counts(sess),
         telegram_link_code=telegram_link_code,
         telegram_chats=telegram_chats,
     )
+
+
+@bp.route("/admin")
+@admin_required
+def admin_panel():
+    return _render_admin("overview")
+
+
+@bp.route("/admin/dropdowns")
+@admin_required
+def admin_dropdowns():
+    return _render_admin("dropdowns")
 
 
 @bp.route("/admin/people")
 @admin_required
 def admin_people():
     """Seed/manage the Employees registry."""
-    sess = get_session()
-    employees = sess.scalars(
-        select(Employee).order_by(Employee.active.desc(), Employee.display_name.asc())
-    ).all()
-    return render_template(
-        "admin_registry.html",
-        kind="employees",
-        title="Employees",
-        rows=employees,
-        user_name=session.get("user_name", ""),
-    )
+    return _render_admin("people")
 
 
 @bp.route("/admin/projects")
 @admin_required
 def admin_projects():
     """Seed/manage the Projects registry."""
-    sess = get_session()
-    projects = sess.scalars(
-        select(Project).order_by(Project.active.desc(), Project.project_number.asc())
-    ).all()
-    return render_template(
-        "admin_registry.html",
-        kind="projects",
-        title="Projects",
-        rows=projects,
-        user_name=session.get("user_name", ""),
-    )
+    return _render_admin("projects")
+
+
+@bp.route("/admin/access")
+@admin_required
+def admin_access():
+    return _render_admin("access")
+
+
+@bp.route("/admin/intake")
+@admin_required
+def admin_intake():
+    return _render_admin("intake")
+
+
+@bp.route("/admin/reports")
+@admin_required
+def admin_reports():
+    return _render_admin("reports")
+
+
+@bp.route("/admin/system")
+@admin_required
+def admin_system():
+    return _render_admin("system")
 
 
 @bp.route("/admin/workflow/<workflow>")

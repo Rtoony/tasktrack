@@ -30,23 +30,52 @@ def test_admin_panel_serves_admin(admin_client):
     r = admin_client.get("/admin")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert "Pages & Reports" in html
-    assert "Report Center" in html
-    assert "Today Brief" in html
-    assert "Management Packet" in html
-    assert "/reports/management" in html
-    assert "Portfolio Reports" in html
-    assert "At-Risk Queue" in html
-    assert "At-Risk CSV" in html
-    assert "Project One-Pager" in html
-    assert "Meeting Packet Batch" in html
-    assert "Weekly Review" in html
-    assert "Submission Forms" in html
-    assert "Printable Intake Packet" in html
-    assert "/intake/printable" in html
-    assert "/reports/today" in html
-    assert "/reports/meetings?days=14&limit=12" in html
+    assert "Admin Control Center" in html
+    assert "Admin Workbench" in html
+    assert "/admin/dropdowns" in html
+    assert "/admin/people" in html
+    assert "/admin/projects" in html
+    assert "/admin/access" in html
+    assert "/admin/reports" in html
+    assert "Control Inventory" in html
 
+    reports = admin_client.get("/admin/reports")
+    assert reports.status_code == 200
+    report_html = reports.get_data(as_text=True)
+    assert "Pages & Reports" in report_html
+    assert "Report Center" in report_html
+    assert "Today Brief" in report_html
+    assert "Management Packet" in report_html
+    assert "/reports/management" in report_html
+    assert "Portfolio Reports" in report_html
+    assert "At-Risk Queue" in report_html
+    assert "At-Risk CSV" in report_html
+    assert "Project One-Pager" in report_html
+    assert "Meeting Packet Batch" in report_html
+    assert "Weekly Review" in report_html
+    assert "Submission Forms" in report_html
+    assert "Printable Intake Packet" in report_html
+    assert "/intake/printable" in report_html
+    assert "/reports/today" in report_html
+    assert "/reports/meetings?days=14&amp;limit=12" in report_html
+
+
+def test_admin_section_routes_use_control_center_shell(admin_client):
+    for path, expected in [
+        ("/admin/dropdowns", "Managed Dropdowns"),
+        ("/admin/people", "Employee Roster"),
+        ("/admin/projects", "Project List"),
+        ("/admin/access", "Telegram Bot Access"),
+        ("/admin/intake", "Intake Controls"),
+        ("/admin/reports", "Pages & Reports"),
+        ("/admin/system", "Admin Control Inventory"),
+    ]:
+        r = admin_client.get(path)
+        assert r.status_code == 200
+        html = r.get_data(as_text=True)
+        assert "Admin Control Center" in html
+        assert expected in html
+        assert "Admin ·" not in html
 
 
 def test_admin_workflow_project_uses_standalone_shell(admin_client):

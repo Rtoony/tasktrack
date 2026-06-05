@@ -3,352 +3,568 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>{{ brand_name }} — Admin</title>
+<title>{{ brand_name }} - Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --surface: #ffffff; --border: #e2e5ea; --border-light: #eef0f3;
-    --text: #1a1d23; --text-muted: #6b7280; --text-light: #9ca3af;
+    --bg: #f4f6f8; --surface: #ffffff; --surface-soft: #f9fafb;
+    --border: #dfe4ea; --border-light: #edf0f3;
+    --text: #171b22; --text-muted: #657080; --text-light: #9aa3af;
     --accent: #2563eb; --accent-hover: #1d4ed8; --accent-light: #eff6ff;
-    --danger: #dc2626; --danger-hover: #b91c1c; --danger-light: #fef2f2;
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05); --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
-    --radius: 8px; --radius-lg: 12px;
+    --danger: #dc2626; --danger-light: #fef2f2; --ok: #059669; --warn: #b45309;
+    --shadow-sm: 0 1px 2px rgba(15,23,42,0.05); --shadow-md: 0 12px 30px rgba(15,23,42,0.08);
+    --radius: 10px; --radius-lg: 16px;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: 'IBM Plex Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
-
-  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
-  .header-inner { max-width: 1520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
-  .logo { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em; }
-  .logo span { color: var(--accent); }
-  .nav-links { display: flex; align-items: center; gap: 1rem; }
-  .nav-links a { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; font-weight: 500; }
-  .nav-links a:hover { color: var(--text); }
-
-  .container { max-width: 1520px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
-  h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em; }
-
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
-  .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.9rem; }
-  .workflow-link-card { display: block; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.95rem 1rem; text-decoration: none; color: inherit; background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
-  .workflow-link-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
-  .workflow-link-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 0.25rem; }
-  .workflow-link-copy { font-size: 0.78rem; color: var(--text-muted); }
-  .option-layout { display:grid; grid-template-columns: minmax(280px, 340px) minmax(0,1fr); gap:1rem; align-items:start; }
+  body { font-family:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif; background:var(--bg); color:var(--text); line-height:1.5; min-height:100vh; }
+  a { color:inherit; }
+  .header { background:rgba(255,255,255,0.96); border-bottom:1px solid var(--border); padding:0 2rem; position:sticky; top:0; z-index:100; box-shadow:var(--shadow-sm); backdrop-filter:blur(10px); }
+  .header-inner { max-width:1640px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; height:62px; gap:1rem; }
+  .logo { font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:1.05rem; letter-spacing:-0.02em; white-space:nowrap; }
+  .logo span { color:var(--accent); }
+  .nav-links { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; justify-content:flex-end; }
+  .nav-links a { font-size:0.82rem; color:var(--text-muted); text-decoration:none; font-weight:500; }
+  .nav-links a:hover { color:var(--text); }
+  .admin-frame { max-width:1640px; margin:0 auto; padding:1.4rem 2rem 3rem; display:grid; grid-template-columns:280px minmax(0,1fr); gap:1.25rem; align-items:start; }
+  .sidebar { position:sticky; top:78px; background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .sidebar-head { padding:1rem 1rem 0.8rem; border-bottom:1px solid var(--border-light); }
+  .sidebar-title { font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.07em; color:var(--text-muted); }
+  .sidebar-subtitle { margin-top:0.25rem; font-size:0.78rem; color:var(--text-muted); }
+  .admin-nav { padding:0.5rem; display:grid; gap:0.25rem; }
+  .admin-nav a { display:block; padding:0.72rem 0.85rem; border-radius:9px; text-decoration:none; color:var(--text-muted); border:1px solid transparent; }
+  .admin-nav a:hover { color:var(--text); background:var(--surface-soft); }
+  .admin-nav a.active { color:var(--accent); background:var(--accent-light); border-color:#bfdbfe; }
+  .nav-title { display:block; font-size:0.88rem; font-weight:600; }
+  .nav-copy { display:block; margin-top:0.12rem; font-size:0.72rem; line-height:1.3; }
+  .sidebar-foot { padding:0.85rem 1rem 1rem; border-top:1px solid var(--border-light); font-size:0.74rem; color:var(--text-muted); }
+  .main { min-width:0; }
+  .page-head { display:flex; align-items:flex-end; justify-content:space-between; gap:1rem; margin-bottom:1rem; }
+  .eyebrow { font-size:0.72rem; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:0.08em; }
+  h1 { font-size:1.75rem; font-weight:650; letter-spacing:-0.035em; line-height:1.1; margin-top:0.1rem; }
+  h2 { font-size:1.04rem; font-weight:650; letter-spacing:-0.015em; margin-bottom:0.8rem; }
+  h3 { font-size:0.9rem; font-weight:650; margin-bottom:0.3rem; }
+  .page-subtitle { color:var(--text-muted); font-size:0.92rem; max-width:780px; margin-top:0.35rem; }
+  .head-actions { display:flex; gap:0.5rem; flex-wrap:wrap; justify-content:flex-end; }
+  .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:1.2rem 1.35rem; margin-bottom:1rem; }
+  .card.compact { padding:1rem; }
+  .muted { color:var(--text-muted); }
+  .table-note, .helper-copy { font-size:0.8rem; color:var(--text-muted); }
+  .metric-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:0.8rem; margin-bottom:1rem; }
+  .metric-card { background:linear-gradient(180deg,#ffffff 0%,#fbfcfe 100%); border:1px solid var(--border); border-radius:var(--radius-lg); padding:0.95rem; box-shadow:var(--shadow-sm); }
+  .metric-label { color:var(--text-muted); font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
+  .metric-value { font-size:1.45rem; font-weight:700; letter-spacing:-0.04em; margin-top:0.2rem; }
+  .metric-copy { color:var(--text-muted); font-size:0.75rem; margin-top:0.2rem; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:0.8rem; }
+  .two-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; align-items:start; }
+  .link-card { display:block; text-decoration:none; color:inherit; border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem 1rem; background:linear-gradient(180deg,#fbfcfe 0%,#ffffff 100%); transition:border-color 0.15s, transform 0.15s, box-shadow 0.15s; min-height:92px; }
+  .link-card:hover { border-color:var(--accent); transform:translateY(-1px); box-shadow:var(--shadow-sm); }
+  .link-title { font-size:0.9rem; font-weight:650; margin-bottom:0.25rem; }
+  .link-copy { font-size:0.78rem; color:var(--text-muted); }
+  .btn { display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:0.5rem 0.9rem; font-family:inherit; font-size:0.82rem; font-weight:600; border:1px solid transparent; border-radius:var(--radius); cursor:pointer; transition:all 0.15s; text-decoration:none; white-space:nowrap; }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent-hover); }
+  .btn-sm { padding:0.32rem 0.6rem; font-size:0.74rem; }
+  .btn-danger { background:var(--danger-light); color:var(--danger); }
+  .btn-danger:hover { background:#fecaca; }
+  .btn-ghost { background:transparent; color:var(--text-muted); border-color:transparent; }
+  .btn-ghost:hover { background:var(--surface-soft); color:var(--text); }
+  .btn-soft { background:var(--surface-soft); color:var(--text); border-color:var(--border); }
+  .btn-soft:hover { border-color:var(--accent); color:var(--accent); }
+  .form-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.7rem; align-items:end; }
+  .option-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.7rem; margin-bottom:0.8rem; }
+  .field label, .option-field label { display:block; font-size:0.7rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.22rem; }
+  input, select, textarea { width:100%; padding:0.48rem 0.6rem; font-family:inherit; font-size:0.83rem; border:1px solid var(--border); border-radius:var(--radius); background:#fff; color:var(--text); }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+  textarea { min-height:4.4rem; resize:vertical; }
+  .field.span-2, .option-field.full { grid-column:span 2; }
+  .field.span-all { grid-column:1 / -1; }
+  .add-row { display:flex; gap:0.5rem; margin-bottom:1rem; }
+  .add-row input { flex:1; }
+  .table-wrap { overflow-x:auto; margin:0 -0.2rem; padding:0 0.2rem; }
+  table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+  th { text-align:left; padding:0.55rem 0.7rem; font-weight:700; font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); border-bottom:1px solid var(--border); white-space:nowrap; }
+  td { padding:0.58rem 0.7rem; border-bottom:1px solid var(--border-light); vertical-align:middle; }
+  tr:last-child td { border-bottom:none; }
+  tr.inactive td { opacity:0.56; }
+  code, .mono { font-family:'IBM Plex Mono', monospace; }
+  .badge, .pill { display:inline-block; padding:0.15rem 0.5rem; border-radius:999px; font-size:0.7rem; font-weight:700; letter-spacing:0.02em; background:var(--surface-soft); color:var(--text-muted); border:1px solid var(--border); }
+  .badge-admin, .pill.ok { background:#ecfdf5; color:var(--ok); border-color:#bbf7d0; }
+  .badge-user { background:var(--accent-light); color:var(--accent); border-color:#bfdbfe; }
+  .pill.off { color:var(--text-muted); }
+  .status-managed { color:var(--ok); }
+  .status-partial { color:var(--warn); }
+  .status-code { color:var(--danger); }
+  .option-layout { display:grid; grid-template-columns:minmax(300px,360px) minmax(0,1fr); gap:1rem; align-items:start; }
   .option-list { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:#fff; }
-  .option-set-btn { width:100%; border:0; border-bottom:1px solid var(--border-light); background:#fff; text-align:left; padding:0.7rem 0.8rem; cursor:pointer; font-family:inherit; }
+  .option-set-btn { width:100%; border:0; border-bottom:1px solid var(--border-light); background:#fff; text-align:left; padding:0.72rem 0.8rem; cursor:pointer; font-family:inherit; }
   .option-set-btn:last-child { border-bottom:0; }
   .option-set-btn:hover, .option-set-btn.active { background:var(--accent-light); }
-  .option-set-btn strong { display:block; font-size:0.82rem; color:var(--text); }
-  .option-set-btn span { display:block; margin-top:0.12rem; font-size:0.7rem; color:var(--text-muted); }
+  .option-set-btn strong { display:block; font-size:0.84rem; color:var(--text); }
+  .option-set-btn span { display:block; margin-top:0.12rem; font-size:0.72rem; color:var(--text-muted); }
   .option-editor { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem; background:linear-gradient(180deg,#fbfcfe 0%,#fff 100%); }
-  .option-form-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.7rem; margin-bottom:0.8rem; }
-  .option-field label { display:block; font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.2rem; }
-  .option-field input, .option-field textarea { width:100%; padding:0.45rem 0.55rem; font-family:inherit; font-size:0.8rem; border:1px solid var(--border); border-radius:var(--radius); background:#fff; color:var(--text); }
-  .option-field textarea { min-height:4.4rem; resize:vertical; }
-  .option-field.full { grid-column:1 / -1; }
-  .option-table-wrap { overflow-x:auto; margin:0 -0.2rem; padding:0 0.2rem; }
-  .option-table { min-width: 920px; table-layout: fixed; }
-  .option-table th:nth-child(1), .option-table td:nth-child(1),
-  .option-table th:nth-child(2), .option-table td:nth-child(2) { width: 26%; }
-  .option-table th:nth-child(3), .option-table td:nth-child(3) { width: 10%; }
-  .option-table th:nth-child(4), .option-table td:nth-child(4),
-  .option-table th:nth-child(5), .option-table td:nth-child(5) { width: 8%; }
-  .option-table th:nth-child(6), .option-table td:nth-child(6) { width: 18%; }
-  .option-row-input { width:100%; min-width:9rem; padding:0.35rem 0.45rem; font-family:inherit; font-size:0.78rem; border:1px solid var(--border); border-radius:6px; }
-  .option-order-input { width:4.4rem; }
-  .option-check { display:flex; align-items:center; justify-content:center; }
+  .option-table { min-width:920px; table-layout:fixed; }
+  .option-table th:nth-child(1), .option-table td:nth-child(1), .option-table th:nth-child(2), .option-table td:nth-child(2) { width:26%; }
+  .option-table th:nth-child(3), .option-table td:nth-child(3) { width:10%; }
+  .option-table th:nth-child(4), .option-table td:nth-child(4), .option-table th:nth-child(5), .option-table td:nth-child(5) { width:8%; }
+  .option-table th:nth-child(6), .option-table td:nth-child(6) { width:18%; }
+  .option-row-input { width:100%; min-width:9rem; padding:0.35rem 0.45rem; font-size:0.78rem; border-radius:7px; }
+  .option-order-input { min-width:4.6rem; }
+  .option-check { text-align:center; }
+  .info-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:1rem; align-items:start; }
+  .info-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.95rem 1rem; background:linear-gradient(180deg,#fbfcfe 0%,#fff 100%); }
+  .info-label { font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:0.3rem; }
+  .info-code { font-family:'IBM Plex Mono', monospace; font-size:1rem; font-weight:700; }
+  .action-cell { text-align:right; white-space:nowrap; }
   .hidden { display:none !important; }
-  .info-grid { display:grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; align-items:start; }
-  .info-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.9rem 1rem; background:linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); }
-  .info-label { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.3rem; }
-  .info-code { font-family:'IBM Plex Mono', monospace; font-size:1rem; font-weight:600; }
-  .helper-copy { font-size:0.8rem; color:var(--text-muted); margin-top:0.4rem; }
-  .table-note { font-size:0.78rem; color:var(--text-muted); margin-bottom:0.8rem; }
-
-  .add-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
-  .add-row input { flex: 1; padding: 0.5rem 0.75rem; font-family: inherit; font-size: 0.875rem; border: 1px solid var(--border); border-radius: var(--radius); }
-  .add-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-
-  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 0.5rem 1rem; font-family: inherit; font-size: 0.825rem; font-weight: 500; border: none; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-primary:hover { background: var(--accent-hover); }
-  .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.75rem; }
-  .btn-danger { background: var(--danger-light); color: var(--danger); }
-  .btn-danger:hover { background: #fecaca; }
-  .btn-ghost { background: transparent; color: var(--text-muted); }
-  .btn-ghost:hover { background: var(--bg); color: var(--text); }
-
-  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-  th { text-align: left; padding: 0.5rem 0.75rem; font-weight: 600; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
-  td { padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--border-light); }
-  tr:last-child td { border-bottom: none; }
-
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.02em; }
-  .badge-admin { background: #eff6ff; color: #1d4ed8; }
-  .badge-user { background: var(--bg); color: var(--text-muted); }
-
-  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text); color: #fff; padding: 0.6rem 1.2rem; border-radius: var(--radius); font-size: 0.82rem; opacity: 0; transition: opacity 0.2s; z-index: 300; }
-  .toast.show { opacity: 1; }
-
-  @media (max-width: 768px) {
-    .header { padding: 0 1rem; }
-    .container { padding: 1rem; }
-    .header-inner, .container { max-width: 100%; }
-    .option-layout { grid-template-columns: 1fr; }
-    .add-row { flex-direction: column; }
+  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:var(--text); color:#fff; padding:0.65rem 1.1rem; border-radius:var(--radius); font-size:0.82rem; opacity:0; transition:opacity 0.2s; z-index:300; box-shadow:var(--shadow-md); }
+  .toast.show { opacity:1; }
+  @media (max-width:1200px) {
+    .metric-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .form-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .two-grid, .info-grid { grid-template-columns:1fr; }
+  }
+  @media (max-width:900px) {
+    .header { padding:0 1rem; }
+    .header-inner { height:auto; min-height:62px; padding:0.6rem 0; align-items:flex-start; flex-direction:column; }
+    .nav-links { justify-content:flex-start; }
+    .admin-frame { grid-template-columns:1fr; padding:1rem; }
+    .sidebar { position:relative; top:auto; }
+    .admin-nav { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .option-layout { grid-template-columns:1fr; }
+  }
+  @media (max-width:640px) {
+    .metric-grid, .form-grid, .option-form-grid, .admin-nav { grid-template-columns:1fr; }
+    .page-head { display:block; }
+    .head-actions { justify-content:flex-start; margin-top:0.8rem; }
+    .add-row { flex-direction:column; }
   }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
 <body>
-
 <header class="header">
   <div class="header-inner">
     <div class="logo"><span>//</span> {{ brand_name }} <span style="font-size:0.75rem;color:var(--text-muted);font-weight:400;margin-left:0.5rem;">Admin</span></div>
     <div class="nav-links">
       <a href="/">Back to Tracker</a>
-      <a href="/admin/people">Employees</a>
-      <a href="/admin/projects">Projects</a>
+      <a href="/reports">Report Center</a>
+      <a href="/feedback">Feedback</a>
       <a href="/logout">Sign out</a>
     </div>
   </div>
 </header>
 
-<main class="container">
-
-  <h2>Workflow Views</h2>
-  <div class="card">
-    <div class="workflow-grid">
-      {% for workflow in workflow_links %}
-      <a class="workflow-link-card" href="{{ workflow.href }}">
-        <div class="workflow-link-title">{{ workflow.title }}</div>
-        <div class="workflow-link-copy">{{ workflow.subtitle }}</div>
+<div class="admin-frame">
+  <aside class="sidebar" aria-label="Admin sections">
+    <div class="sidebar-head">
+      <div class="sidebar-title">Admin Control Center</div>
+      <div class="sidebar-subtitle">Routeable sections instead of one long page.</div>
+    </div>
+    <nav class="admin-nav">
+      {% for section in admin_sections %}
+      <a href="{{ section.href }}" class="{{ 'active' if active_section == section.key else '' }}">
+        <span class="nav-title">{{ section.title }}</span>
+        <span class="nav-copy">{{ section.subtitle }}</span>
       </a>
       {% endfor %}
+    </nav>
+    <div class="sidebar-foot">
+      Dropdowns are editable now. Workflow states and priorities remain code-controlled until validation becomes dynamic.
     </div>
-  </div>
+  </aside>
 
-  <h2>Pages & Reports</h2>
-  <div class="card">
-    <div class="workflow-grid">
-      <a class="workflow-link-card" href="/">
-        <div class="workflow-link-title">Full Tracker</div>
-        <div class="workflow-link-copy">Dashboard, triage, map, calendar, and all task queues.</div>
-      </a>
-      <a class="workflow-link-card" href="/?tab=map">
-        <div class="workflow-link-title">Project Map</div>
-        <div class="workflow-link-copy">Map pins, workspace drawer, and project report/map focus actions.</div>
-      </a>
-      <a class="workflow-link-card" href="/?tab=calendar">
-        <div class="workflow-link-title">Calendar</div>
-        <div class="workflow-link-copy">Internal meetings, prep blocks, deadlines, reminders, and project-linked events.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports">
-        <div class="workflow-link-title">Report Center</div>
-        <div class="workflow-link-copy">One place for Today Brief, portfolio packets, project reports, meeting packets, and weekly review.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/today">
-        <div class="workflow-link-title">Today Brief</div>
-        <div class="workflow-link-copy">Compact daily operator packet with upcoming meetings and at-risk project actions.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/management">
-        <div class="workflow-link-title">Management Packet</div>
-        <div class="workflow-link-copy">Print-ready packet combining executive portfolio summary, at-risk actions, intake, meetings, and incident summary.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/projects">
-        <div class="workflow-link-title">Portfolio Reports</div>
-        <div class="workflow-link-copy">Management-ready project packets with filters, presets, print layout, and action queue.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/projects?attention_level=at_risk&limit=25">
-        <div class="workflow-link-title">At-Risk Queue</div>
-        <div class="workflow-link-copy">Portfolio report filtered to projects that need management attention first.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/incidents?open_only=1">
-        <div class="workflow-link-title">Incident Reports</div>
-        <div class="workflow-link-copy">Admin-only capability and incident reports with full narratives, print, JSON, and CSV.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/incidents?severity=High&open_only=1">
-        <div class="workflow-link-title">High Severity Incidents</div>
-        <div class="workflow-link-copy">Open high-severity capability incidents for quick management review.</div>
-      </a>
-      <a class="workflow-link-card" href="/api/v1/reports/incidents.csv?open_only=1">
-        <div class="workflow-link-title">Incident CSV</div>
-        <div class="workflow-link-copy">Download the current open incident report as CSV.</div>
-      </a>
-      <a class="workflow-link-card" href="/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25">
-        <div class="workflow-link-title">At-Risk CSV</div>
-        <div class="workflow-link-copy">Download the current management action queue as CSV.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/project">
-        <div class="workflow-link-title">Project One-Pager</div>
-        <div class="workflow-link-copy">Single-project status packet with workspace data, action queue, map links, and activity.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/meetings?days=14&limit=12">
-        <div class="workflow-link-title">Meeting Packet Batch</div>
-        <div class="workflow-link-copy">Printable batch of upcoming visible event packets.</div>
-      </a>
-      <a class="workflow-link-card" href="/weekly?days=7">
-        <div class="workflow-link-title">Weekly Review</div>
-        <div class="workflow-link-copy">Seven-day operational digest for check-ins and review meetings.</div>
-      </a>
-      <a class="workflow-link-card" href="/intake">
-        <div class="workflow-link-title">Submission Forms</div>
-        <div class="workflow-link-copy">Authenticated intake forms for AI triage, capability reports, and weekly submissions.</div>
-      </a>
-      <a class="workflow-link-card" href="/intake/printable">
-        <div class="workflow-link-title">Printable Intake Packet</div>
-        <div class="workflow-link-copy">Browser PDF and reMarkable-ready request forms for paper-first work capture.</div>
-      </a>
-      <a class="workflow-link-card" href="/intake/review?needs_review=1">
-        <div class="workflow-link-title">Intake Review Queue</div>
-        <div class="workflow-link-copy">Operator queue for opening web, paper, and OCR-created requests and clearing review flags.</div>
-      </a>
-      <a class="workflow-link-card" href="/reports/intake">
-        <div class="workflow-link-title">Intake Source Report</div>
-        <div class="workflow-link-copy">Review and export records created from paper forms, reMarkable OCR, and source-tagged capture.</div>
-      </a>
-    </div>
-  </div>
-
-  <h2>Managed Dropdowns</h2>
-  <div class="card" id="managed-options-card">
-    <div class="table-note">Admin-managed terminology for dropdown fields. Phase 1 includes category/vocabulary fields; workflow statuses and priorities stay code-controlled until their backend validation is made dynamic.</div>
-    <div class="option-layout">
+  <main class="main">
+    <div class="page-head">
       <div>
-        <div class="option-list" id="option-set-list"><div style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem;">Loading option sets…</div></div>
-        <div style="margin-top:0.8rem;border-top:1px solid var(--border);padding-top:0.8rem;">
-          <div class="option-field"><label for="new-option-set-key">New Set Key</label><input id="new-option-set-key" placeholder="office_category"></div>
-          <div class="option-field" style="margin-top:0.45rem;"><label for="new-option-set-label">Label</label><input id="new-option-set-label" placeholder="Office Categories"></div>
-          <button class="btn btn-primary btn-sm" style="margin-top:0.55rem;" onclick="addOptionSet()">Add Set</button>
-        </div>
+        <div class="eyebrow">Admin</div>
+        <h1>{{ section_meta.title }}</h1>
+        <p class="page-subtitle">{{ section_meta.subtitle }}</p>
       </div>
-      <div class="option-editor">
-        <div id="option-editor-empty" class="table-note" style="margin:0;">Choose an option set to edit its labels, values, order, and active state.</div>
-        <div id="option-editor-body" class="hidden">
-          <div class="option-form-grid">
-            <div class="option-field"><label for="option-set-label">Set Label</label><input id="option-set-label"></div>
-            <div class="option-field"><label for="option-set-surface">Used On</label><input id="option-set-surface"></div>
-            <div class="option-field full"><label for="option-set-description">Description</label><textarea id="option-set-description"></textarea></div>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;">
-            <label style="font-size:0.78rem;color:var(--text-muted);"><input type="checkbox" id="option-set-active" style="vertical-align:middle;margin-right:0.3rem;"> Set active</label>
-            <button class="btn btn-primary btn-sm" onclick="saveOptionSet()">Save Set</button>
-          </div>
-          <div class="option-table-wrap">
-            <table class="option-table">
-              <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
-              <tbody id="managed-option-list"></tbody>
-            </table>
-          </div>
-          <div class="table-note" style="margin-top:0.7rem;">Value is what gets stored on records. Label is what users see. Deactivate old choices instead of removing historical values.</div>
-          <div class="option-form-grid" style="margin-top:0.7rem;">
-            <div class="option-field"><label for="new-option-value">New Value</label><input id="new-option-value" placeholder="Stored value"></div>
-            <div class="option-field"><label for="new-option-label">New Label</label><input id="new-option-label" placeholder="Shown label"></div>
-            <div class="option-field"><label for="new-option-order">Order</label><input id="new-option-order" type="number" value="0"></div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="addManagedOption()">Add Option</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <h2>Telegram Bot Access</h2>
-  <div class="card">
-    <div class="info-grid" style="margin-bottom:1rem;">
-      <div class="info-panel">
-        <div class="info-label">Pairing Code</div>
-        <div class="info-code" id="telegram-link-code">{{ telegram_link_code }}</div>
-        <div class="helper-copy">In Telegram, send <strong>/link {{ telegram_link_code }}</strong> to the bot from your phone. That chat will then be allowed to create tasks.</div>
-        <div style="margin-top:0.8rem;">
-          <button class="btn btn-primary btn-sm" onclick="regenerateTelegramCode()">Regenerate Code</button>
-        </div>
-      </div>
-      <div class="info-panel">
-        <div class="info-label">Recommended Flow</div>
-        <div class="helper-copy">1. Open <strong>@BR_Task_Admin_Bot</strong> in Telegram.</div>
-        <div class="helper-copy">2. Send the pairing command once.</div>
-        <div class="helper-copy">3. Use the on-screen buttons to create tasks from your phone.</div>
+      <div class="head-actions">
+        <a class="btn btn-soft" href="/admin/dropdowns">Edit Dropdowns</a>
+        <a class="btn btn-soft" href="/admin/system">Control Inventory</a>
       </div>
     </div>
 
-    <div class="table-note">Linked chats currently allowed to use the bot.</div>
-    <table>
-      <thead><tr><th>Display Name</th><th>Username</th><th>Chat ID</th><th>Linked</th><th>Last Seen</th><th></th></tr></thead>
-      <tbody id="telegram-chat-list">
-        {% for chat in telegram_chats %}
-        <tr data-chat-id="{{ chat.chat_id }}">
-          <td style="font-weight:500">{{ chat.display_name or '—' }}</td>
-          <td>{{ ('@' ~ chat.username) if chat.username else '—' }}</td>
-          <td style="font-family:'IBM Plex Mono', monospace; font-size:0.8rem;">{{ chat.chat_id }}</td>
-          <td style="color:var(--text-light);font-size:0.8rem;">{{ chat.linked_at or '—' }}</td>
-          <td style="color:var(--text-light);font-size:0.8rem;">{{ chat.last_seen_at or '—' }}</td>
-          <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="removeTelegramChat('{{ chat.chat_id }}')">Remove</button></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+    {% if active_section == 'overview' %}
+    <section class="metric-grid" aria-label="Admin summary">
+      <div class="metric-card"><div class="metric-label">Users</div><div class="metric-value">{{ admin_counts.users }}</div><div class="metric-copy">{{ admin_counts.approved_emails }} approved emails</div></div>
+      <div class="metric-card"><div class="metric-label">Employees</div><div class="metric-value">{{ admin_counts.active_employees }}</div><div class="metric-copy">{{ admin_counts.employees }} total records</div></div>
+      <div class="metric-card"><div class="metric-label">Projects</div><div class="metric-value">{{ admin_counts.active_projects }}</div><div class="metric-copy">{{ admin_counts.projects }} total records</div></div>
+      <div class="metric-card"><div class="metric-label">Dropdown Sets</div><div class="metric-value">{{ admin_counts.option_sets }}</div><div class="metric-copy">Managed terminology</div></div>
+      <div class="metric-card"><div class="metric-label">Open Feedback</div><div class="metric-value">{{ admin_counts.open_feedback }}</div><div class="metric-copy">Needs triage or verification</div></div>
+      <div class="metric-card"><div class="metric-label">Telegram</div><div class="metric-value">{{ admin_counts.telegram_chats }}</div><div class="metric-copy">Linked chats</div></div>
+    </section>
 
-  <!-- Approved Emails -->
-  <h2>Approved Emails</h2>
-  <div class="card">
-    <div class="add-row">
-      <input type="email" id="new-email" placeholder="email@example.com">
-      <button class="btn btn-primary" onclick="addEmail()">Add Email</button>
-    </div>
-    <table>
-      <thead><tr><th>Email</th><th>Added</th><th></th></tr></thead>
-      <tbody id="email-list">
-        {% for e in approved_emails %}
-        <tr data-email="{{ e.email }}">
-          <td>{{ e.email }}</td>
-          <td style="color:var(--text-light);font-size:0.8rem;">{{ e.added_at or '—' }}</td>
-          <td style="text-align:right"><button class="btn btn-sm btn-danger" onclick="removeEmail('{{ e.email }}', this)">Remove</button></td>
-        </tr>
+    <section class="card">
+      <h2>Admin Workbench</h2>
+      <div class="grid">
+        {% for section in admin_sections if section.key != 'overview' %}
+        <a class="link-card" href="{{ section.href }}">
+          <div class="link-title">{{ section.title }}</div>
+          <div class="link-copy">{{ section.subtitle }}</div>
+        </a>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
+      </div>
+    </section>
 
-  <!-- Users -->
-  <h2>Users</h2>
-  <div class="card">
-    <table>
-      <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
-      <tbody id="user-list">
-        {% for u in users %}
-        <tr data-uid="{{ u.id }}">
-          <td style="font-weight:500">{{ u.display_name }}</td>
-          <td>{{ u.email }}</td>
-          <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
-          <td style="color:var(--text-light);font-size:0.8rem;">{{ u.created_at[:10] if u.created_at else '—' }}</td>
-          <td style="text-align:right;white-space:nowrap">
-            <button class="btn btn-sm btn-ghost" onclick="toggleRole({{ u.id }}, '{{ u.role }}')">
-              {{ 'Demote' if u.role == 'admin' else 'Promote' }}
-            </button>
-            <button class="btn btn-sm btn-ghost" onclick="promptResetPassword({{ u.id }}, '{{ u.display_name }}')">Reset pw</button>
-            <button class="btn btn-sm btn-danger" onclick="deleteUser({{ u.id }}, '{{ u.display_name }}')">Delete</button>
-          </td>
-        </tr>
+    <section class="two-grid">
+      <div class="card">
+        <h2>Current Upgrade Focus</h2>
+        <p class="table-note">This Admin redesign separates operational controls from report shortcuts and makes future workflow terminology changes visible instead of hidden in code.</p>
+        <div class="grid" style="margin-top:0.8rem;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+          <a class="link-card" href="/admin/dropdowns"><div class="link-title">Managed Dropdowns</div><div class="link-copy">Edit local terminology without code changes.</div></a>
+          <a class="link-card" href="/admin/people"><div class="link-title">People Registry</div><div class="link-copy">Same controls, now in the light Admin shell.</div></a>
+          <a class="link-card" href="/admin/projects"><div class="link-title">Project Registry</div><div class="link-copy">Projects, sync preflight, map/report links.</div></a>
+          <a class="link-card" href="/admin/system"><div class="link-title">Control Inventory</div><div class="link-copy">Admin-managed versus code-controlled checklist.</div></a>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Next Control Candidates</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Area</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for item in control_inventory[:5] %}
+              <tr><td>{{ item.area }}</td><td class="muted">{{ item.status }}</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'dropdowns' %}
+    <section class="card" id="managed-options-card">
+      <h2>Managed Dropdowns</h2>
+      <div class="table-note">Admin-managed terminology for dropdown fields. Category/vocabulary fields are editable here; workflow statuses and priorities stay code-controlled until their backend validation is made dynamic.</div>
+      <div class="option-layout" style="margin-top:0.85rem;">
+        <div>
+          <div class="option-list" id="option-set-list"><div style="padding:0.8rem;color:var(--text-muted);font-size:0.8rem;">Loading option sets...</div></div>
+          <div style="margin-top:0.8rem;border-top:1px solid var(--border);padding-top:0.8rem;">
+            <div class="option-field"><label for="new-option-set-key">New Set Key</label><input id="new-option-set-key" placeholder="office_category"></div>
+            <div class="option-field" style="margin-top:0.45rem;"><label for="new-option-set-label">Label</label><input id="new-option-set-label" placeholder="Office Categories"></div>
+            <button class="btn btn-primary btn-sm" style="margin-top:0.55rem;" onclick="addOptionSet()">Add Set</button>
+          </div>
+        </div>
+        <div class="option-editor">
+          <div id="option-editor-empty" class="table-note" style="margin:0;">Choose an option set to edit its labels, values, order, and active state.</div>
+          <div id="option-editor-body" class="hidden">
+            <div class="option-form-grid">
+              <div class="option-field"><label for="option-set-label">Set Label</label><input id="option-set-label"></div>
+              <div class="option-field"><label for="option-set-surface">Used On</label><input id="option-set-surface"></div>
+              <div class="option-field full"><label for="option-set-description">Description</label><textarea id="option-set-description"></textarea></div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:0.65rem;">
+              <label style="font-size:0.78rem;color:var(--text-muted);"><input type="checkbox" id="option-set-active" style="vertical-align:middle;margin-right:0.3rem;width:auto;"> Set active</label>
+              <button class="btn btn-primary btn-sm" onclick="saveOptionSet()">Save Set</button>
+            </div>
+            <div class="table-wrap">
+              <table class="option-table">
+                <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
+                <tbody id="managed-option-list"></tbody>
+              </table>
+            </div>
+            <div class="table-note" style="margin-top:0.7rem;">Value is what gets stored on records. Label is what users see. Deactivate old choices instead of removing historical values.</div>
+            <div class="option-form-grid" style="margin-top:0.7rem;">
+              <div class="option-field"><label for="new-option-value">New Value</label><input id="new-option-value" placeholder="Stored value"></div>
+              <div class="option-field"><label for="new-option-label">New Label</label><input id="new-option-label" placeholder="Shown label"></div>
+              <div class="option-field"><label for="new-option-order">Order</label><input id="new-option-order" type="number" value="0"></div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="addManagedOption()">Add Option</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'people' %}
+    <section class="card">
+      <h2>Add Employee</h2>
+      <form class="form-grid" onsubmit="event.preventDefault(); addEmployee()">
+        <div class="field"><label for="add-name">Display name *</label><input id="add-name" required></div>
+        <div class="field"><label for="add-title">Title</label><input id="add-title"></div>
+        <div class="field"><label for="add-email">Email</label><input id="add-email" type="email"></div>
+        <div class="field"><button class="btn btn-primary" type="submit">Add Employee</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Employee Roster <span class="muted" style="font-size:0.8rem;">({{ employees|length }} rows)</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Status</th><th>Competency</th><th></th></tr></thead>
+          <tbody>
+            {% for r in employees %}
+            <tr class="{{ 'inactive' if not r.active else '' }}" data-id="{{ r.id }}">
+              <td style="font-weight:600;">{{ r.display_name }}</td>
+              <td>{{ r.title }}</td>
+              <td>{{ r.email }}</td>
+              <td><span class="pill {{ 'ok' if r.active else 'off' }}">{{ 'active' if r.active else 'inactive' }}</span></td>
+              <td><span class="pill {{ 'ok' if r.competency_tracked else 'off' }}">{{ 'rated' if r.competency_tracked else 'not rated' }}</span></td>
+              <td class="action-cell">
+                {% if r.competency_tracked %}
+                <button class="btn btn-sm btn-danger" onclick="setCompetencyTracked({{ r.id }}, false)">Exclude from competency</button>
+                {% else %}
+                <button class="btn btn-sm btn-soft" onclick="setCompetencyTracked({{ r.id }}, true)">Include in competency</button>
+                {% endif %}
+                {% if r.active %}
+                <button class="btn btn-sm btn-danger" onclick="deactivate('employees', {{ r.id }})">Deactivate</button>
+                {% else %}
+                <button class="btn btn-sm btn-soft" onclick="reactivate('employees', {{ r.id }})">Reactivate</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'projects' %}
+    <section class="card">
+      <h2>Add Project</h2>
+      <form class="form-grid" onsubmit="event.preventDefault(); addProject()">
+        <div class="field"><label for="add-pn">Project number *</label><input id="add-pn" required placeholder="1234.56"></div>
+        <div class="field"><label for="add-name">Name</label><input id="add-name"></div>
+        <div class="field"><label for="add-client">Client</label><input id="add-client"></div>
+        <div class="field"><label for="add-status">Status</label><select id="add-status">{% for status in project_display_statuses %}<option value="{{ status }}">{{ status }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="add-component">Component (type)</label><input id="add-component" placeholder="Topographic Mapping"></div>
+        <div class="field"><label for="add-principal">Principal</label><input id="add-principal" placeholder="Long, David"></div>
+        <div class="field"><label for="add-start">Start date</label><input id="add-start" type="date"></div>
+        <div class="field"><label for="add-dormant">Dormant date</label><input id="add-dormant" type="date"></div>
+        <div class="field"><label for="add-lat">Latitude</label><input id="add-lat" placeholder="38.4404" inputmode="decimal"></div>
+        <div class="field"><label for="add-lng">Longitude</label><input id="add-lng" placeholder="-122.7141" inputmode="decimal"></div>
+        <div class="field span-2"><button class="btn btn-primary" type="submit">Add Project</button></div>
+      </form>
+    </section>
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:0.8rem;">
+        <h2 style="margin:0;">Project List <span id="sync-status-badge" class="muted" style="font-size:0.76rem;font-weight:500;margin-left:0.5rem;"></span></h2>
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+          <button class="btn btn-sm btn-soft" type="button" onclick="runSyncPreflight()">Run Sync Preflight</button>
+          <span id="sync-preflight-result" class="table-note">Read-only check; does not import.</span>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Number</th><th>Name</th><th>Client</th><th>Component</th><th>Principal</th><th>Status</th><th>Location</th><th>Active</th><th></th></tr></thead>
+          <tbody>
+            {% for r in projects %}
+            <tr class="{{ 'inactive' if not r.active else '' }}" data-id="{{ r.id }}">
+              <td><a href="/?workspace={{ r.project_number }}" title="Open project workspace"><code>{{ r.project_number }}</code></a></td>
+              <td>{{ r.name }}</td>
+              <td>{{ r.client }}</td>
+              <td>{{ r.component }}</td>
+              <td>{{ r.principal }}</td>
+              <td><span class="pill {{ 'ok' if r.display_status == 'active' else 'off' }}">{{ r.display_status }}</span></td>
+              <td>{% if r.lat is not none and r.lng is not none %}<code style="font-size:0.72rem;color:var(--text-muted);">{{ '%.4f'|format(r.lat) }}, {{ '%.4f'|format(r.lng) }}</code>{% else %}<span class="muted">-</span>{% endif %}</td>
+              <td><span class="pill {{ 'ok' if r.active else 'off' }}">{{ 'active' if r.active else 'inactive' }}</span></td>
+              <td class="action-cell">
+                <a class="btn btn-sm btn-soft" href="/?workspace={{ r.project_number }}">Workspace</a>
+                <a class="btn btn-sm btn-soft" href="/?map_project={{ r.project_number }}">Map</a>
+                <a class="btn btn-sm btn-soft" href="/reports/project?project_number={{ r.project_number }}">Report</a>
+                {% if r.active %}
+                <button class="btn btn-sm btn-danger" onclick="deactivate('projects', {{ r.id }})">Deactivate</button>
+                {% else %}
+                <button class="btn btn-sm btn-soft" onclick="reactivate('projects', {{ r.id }})">Reactivate</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'access' %}
+    <section class="card">
+      <h2>Telegram Bot Access</h2>
+      <div class="info-grid" style="margin-bottom:1rem;">
+        <div class="info-panel">
+          <div class="info-label">Pairing Code</div>
+          <div class="info-code" id="telegram-link-code">{{ telegram_link_code }}</div>
+          <div class="helper-copy">In Telegram, send <strong>/link {{ telegram_link_code }}</strong> to the bot from your phone. That chat will then be allowed to create tasks.</div>
+          <div style="margin-top:0.8rem;"><button class="btn btn-primary btn-sm" onclick="regenerateTelegramCode()">Regenerate Code</button></div>
+        </div>
+        <div class="info-panel">
+          <div class="info-label">Recommended Flow</div>
+          <div class="helper-copy">1. Open <strong>@BR_Task_Admin_Bot</strong> in Telegram.</div>
+          <div class="helper-copy">2. Send the pairing command once.</div>
+          <div class="helper-copy">3. Use the on-screen buttons to create tasks from your phone.</div>
+        </div>
+      </div>
+      <div class="table-note" style="margin-bottom:0.6rem;">Linked chats currently allowed to use the bot.</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Display Name</th><th>Username</th><th>Chat ID</th><th>Linked</th><th>Last Seen</th><th></th></tr></thead>
+          <tbody id="telegram-chat-list">
+            {% for chat in telegram_chats %}
+            <tr data-chat-id="{{ chat.chat_id }}">
+              <td style="font-weight:600;">{{ chat.display_name or '-' }}</td>
+              <td>{{ ('@' ~ chat.username) if chat.username else '-' }}</td>
+              <td class="mono" style="font-size:0.8rem;">{{ chat.chat_id }}</td>
+              <td class="muted" style="font-size:0.8rem;">{{ chat.linked_at or '-' }}</td>
+              <td class="muted" style="font-size:0.8rem;">{{ chat.last_seen_at or '-' }}</td>
+              <td class="action-cell"><button class="btn btn-sm btn-danger" onclick="removeTelegramChat('{{ chat.chat_id }}')">Remove</button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Approved Emails</h2>
+      <div class="add-row">
+        <input type="email" id="new-email" placeholder="email@example.com">
+        <button class="btn btn-primary" onclick="addEmail()">Add Email</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Email</th><th>Added</th><th></th></tr></thead>
+          <tbody id="email-list">
+            {% for e in approved_emails %}
+            <tr data-email="{{ e.email }}">
+              <td>{{ e.email }}</td>
+              <td class="muted" style="font-size:0.8rem;">{{ e.added_at or '-' }}</td>
+              <td class="action-cell"><button class="btn btn-sm btn-danger" onclick="removeEmail('{{ e.email }}', this)">Remove</button></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Users</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th></th></tr></thead>
+          <tbody id="user-list">
+            {% for u in users %}
+            <tr data-uid="{{ u.id }}">
+              <td style="font-weight:600;">{{ u.display_name }}</td>
+              <td>{{ u.email }}</td>
+              <td><span class="badge badge-{{ u.role }}">{{ u.role }}</span></td>
+              <td class="muted" style="font-size:0.8rem;">{{ u.created_at[:10] if u.created_at else '-' }}</td>
+              <td class="action-cell">
+                <button class="btn btn-sm btn-ghost" onclick="toggleRole({{ u.id }}, '{{ u.role }}')">{{ 'Demote' if u.role == 'admin' else 'Promote' }}</button>
+                <button class="btn btn-sm btn-ghost" onclick="promptResetPassword({{ u.id }}, '{{ u.display_name }}')">Reset pw</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteUser({{ u.id }}, '{{ u.display_name }}')">Delete</button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'intake' %}
+    <section class="two-grid">
+      <div class="card">
+        <h2>Intake Controls</h2>
+        <p class="table-note">This section separates intake configuration from report shortcuts. Intake Sources are already managed through Dropdowns; preset definitions, form copy, OCR labels, and triage targets are still code-controlled.</p>
+        <div class="grid" style="margin-top:0.9rem;">
+          <a class="link-card" href="/admin/dropdowns"><div class="link-title">Intake Sources</div><div class="link-copy">Edit managed source terminology in Dropdowns.</div></a>
+          <a class="link-card" href="/intake"><div class="link-title">Submission Forms</div><div class="link-copy">Open the current authenticated intake forms.</div></a>
+          <a class="link-card" href="/intake/printable"><div class="link-title">Printable Intake Packet</div><div class="link-copy">Review paper and reMarkable-ready request forms.</div></a>
+          <a class="link-card" href="/intake/review?needs_review=1"><div class="link-title">Intake Review Queue</div><div class="link-copy">Clear review flags for web, paper, and OCR-created requests.</div></a>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Planned Intake Admin Controls</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Control</th><th>Why it matters</th></tr></thead>
+            <tbody>
+              <tr><td>Capture presets</td><td class="muted">Team rollout will add local request types and default routing.</td></tr>
+              <tr><td>Form copy</td><td class="muted">Labels and instructions should match office terminology.</td></tr>
+              <tr><td>AI triage targets</td><td class="muted">Defaults should be adjustable without editing code.</td></tr>
+              <tr><td>Review flags</td><td class="muted">Paper/OCR workflows need configurable review expectations.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'reports' %}
+    <section class="card">
+      <h2>Workflow Views</h2>
+      <div class="grid">
+        {% for workflow in workflow_links %}
+        <a class="link-card" href="{{ workflow.href }}">
+          <div class="link-title">{{ workflow.title }}</div>
+          <div class="link-copy">{{ workflow.subtitle }}</div>
+        </a>
         {% endfor %}
-      </tbody>
-    </table>
-  </div>
+      </div>
+    </section>
 
-</main>
+    <section class="card">
+      <h2>Pages & Reports</h2>
+      <div class="grid">
+        {% for link in report_links %}
+        <a class="link-card" href="{{ link.href }}">
+          <div class="link-title">{{ link.title }}</div>
+          <div class="link-copy">{{ link.subtitle }}</div>
+        </a>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+
+    {% if active_section == 'system' %}
+    <section class="metric-grid" aria-label="System summary">
+      <div class="metric-card"><div class="metric-label">Dropdown Sets</div><div class="metric-value">{{ admin_counts.option_sets }}</div><div class="metric-copy">Admin vocabulary</div></div>
+      <div class="metric-card"><div class="metric-label">Feedback</div><div class="metric-value">{{ admin_counts.open_feedback }}</div><div class="metric-copy">Open items</div></div>
+      <div class="metric-card"><div class="metric-label">Projects</div><div class="metric-value">{{ admin_counts.projects }}</div><div class="metric-copy">Registry rows</div></div>
+      <div class="metric-card"><div class="metric-label">Employees</div><div class="metric-value">{{ admin_counts.employees }}</div><div class="metric-copy">Registry rows</div></div>
+      <div class="metric-card"><div class="metric-label">Users</div><div class="metric-value">{{ admin_counts.users }}</div><div class="metric-copy">Accounts</div></div>
+      <div class="metric-card"><div class="metric-label">Access</div><div class="metric-value">{{ admin_counts.telegram_chats }}</div><div class="metric-copy">Telegram chats</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Admin Control Inventory</h2>
+      <p class="table-note">This is the working audit of placeholder, boilerplate, or hardcoded areas that should eventually be controlled from Admin.</p>
+      <div class="table-wrap" style="margin-top:0.8rem;">
+        <table>
+          <thead><tr><th>Area</th><th>Status</th><th>Current Scope</th><th>Next Step</th></tr></thead>
+          <tbody>
+            {% for item in control_inventory %}
+            {% set status_class = 'status-managed' if item.status == 'Admin-managed now' else ('status-partial' if 'Partially' in item.status else 'status-code') %}
+            <tr>
+              <td style="font-weight:650;">{{ item.area }}</td>
+              <td class="{{ status_class }}" style="font-weight:650;">{{ item.status }}</td>
+              <td class="muted">{{ item.scope }}</td>
+              <td class="muted">{{ item.next_step }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+    {% endif %}
+  </main>
+</div>
 
 <div class="toast" id="toast"></div>
 
 <script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
 function toast(msg) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+  setTimeout(() => t.classList.remove('show'), 2400);
 }
 
-const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 async function api(method, path, body) {
   const opts = {
     method,
@@ -357,7 +573,7 @@ async function api(method, path, body) {
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(path, opts);
   if (res.status === 401) { window.location = '/login'; return null; }
-  return res.json();
+  return res.json().catch(() => ({}));
 }
 
 let managedOptionSets = [];
@@ -368,6 +584,7 @@ function htmlesc(value) {
 }
 
 async function loadManagedOptions() {
+  if (!document.getElementById('option-set-list')) return;
   const rows = await api('GET', '/api/v1/admin/options/sets?include_inactive=1');
   managedOptionSets = Array.isArray(rows) ? rows : [];
   if (!selectedOptionSetKey && managedOptionSets.length) selectedOptionSetKey = managedOptionSets[0].key;
@@ -419,7 +636,7 @@ function renderOptionEditor() {
       <td><input class="option-row-input option-order-input" data-field="display_order" type="number" value="${Number(opt.display_order || 0)}"></td>
       <td class="option-check"><input type="checkbox" data-field="active" ${opt.active ? 'checked' : ''}></td>
       <td class="option-check"><input type="checkbox" data-field="is_placeholder" ${opt.is_placeholder ? 'checked' : ''}></td>
-      <td style="text-align:right;white-space:nowrap">
+      <td class="action-cell">
         <button class="btn btn-sm btn-ghost" onclick="saveManagedOption(${opt.id})">Save</button>
         <button class="btn btn-sm btn-danger" onclick="deleteManagedOption(${opt.id})">Deactivate</button>
       </td>
@@ -428,8 +645,8 @@ function renderOptionEditor() {
 }
 
 async function addOptionSet() {
-  const key = document.getElementById('new-option-set-key').value.trim();
-  const label = document.getElementById('new-option-set-label').value.trim();
+  const key = document.getElementById('new-option-set-key')?.value.trim() || '';
+  const label = document.getElementById('new-option-set-label')?.value.trim() || '';
   if (!key || !label) { toast('Set key and label are required'); return; }
   const res = await api('POST', '/api/v1/admin/options/sets', { key, label });
   if (res && res.error) { toast(res.error); return; }
@@ -497,9 +714,11 @@ async function deleteManagedOption(id) {
 
 async function addEmail() {
   const input = document.getElementById('new-email');
+  if (!input) return;
   const email = input.value.trim();
   if (!email) return;
-  await api('POST', '/api/v1/admin/approved-emails', { email });
+  const res = await api('POST', '/api/v1/admin/approved-emails', { email });
+  if (res && res.error) { toast(res.error); return; }
   input.value = '';
   toast('Added ' + email);
   location.reload();
@@ -507,15 +726,17 @@ async function addEmail() {
 
 async function removeEmail(email, btn) {
   if (!confirm('Remove ' + email + ' from the approved list? They will no longer be able to register.')) return;
-  await api('DELETE', '/api/v1/admin/approved-emails/' + encodeURIComponent(email));
-  btn.closest('tr').remove();
+  const res = await api('DELETE', '/api/v1/admin/approved-emails/' + encodeURIComponent(email));
+  if (res && res.error) { toast(res.error); return; }
+  btn.closest('tr')?.remove();
   toast('Removed ' + email);
 }
 
 async function toggleRole(uid, current) {
   const newRole = current === 'admin' ? 'user' : 'admin';
   if (!confirm('Change role to ' + newRole + '?')) return;
-  await api('PUT', '/api/v1/admin/users/' + uid + '/role', { role: newRole });
+  const res = await api('PUT', '/api/v1/admin/users/' + uid + '/role', { role: newRole });
+  if (res && res.error) { toast(res.error); return; }
   toast('Role updated');
   location.reload();
 }
@@ -524,14 +745,15 @@ async function deleteUser(uid, name) {
   if (!confirm('Delete user ' + name + '?')) return;
   const res = await api('DELETE', '/api/v1/admin/users/' + uid);
   if (res && res.error) { toast(res.error); return; }
-  document.querySelector('tr[data-uid="' + uid + '"]').remove();
+  document.querySelector('tr[data-uid="' + uid + '"]')?.remove();
   toast('Deleted ' + name);
 }
 
 async function promptResetPassword(uid, name) {
   const pw = prompt('New password for ' + name + ' (min 6 chars):');
   if (!pw || pw.length < 6) { if (pw !== null) toast('Password too short'); return; }
-  await api('PUT', '/api/v1/admin/users/' + uid + '/reset-password', { password: pw });
+  const res = await api('PUT', '/api/v1/admin/users/' + uid + '/reset-password', { password: pw });
+  if (res && res.error) { toast(res.error); return; }
   toast('Password reset for ' + name);
 }
 
@@ -553,8 +775,124 @@ async function removeTelegramChat(chatId) {
   }
 }
 
-document.getElementById('new-email').addEventListener('keydown', e => { if (e.key === 'Enter') addEmail(); });
+async function addEmployee() {
+  const payload = {
+    display_name: document.getElementById('add-name')?.value.trim() || '',
+    title: document.getElementById('add-title')?.value.trim() || '',
+    email: document.getElementById('add-email')?.value.trim() || '',
+  };
+  if (!payload.display_name) return toast('Name is required');
+  const r = await api('POST', '/api/v1/employees', payload);
+  if (r && r.error) return toast(r.error);
+  toast('Added ' + payload.display_name);
+  location.reload();
+}
+
+async function addProject() {
+  const payload = {
+    project_number: document.getElementById('add-pn')?.value.trim() || '',
+    name: document.getElementById('add-name')?.value.trim() || '',
+    client: document.getElementById('add-client')?.value.trim() || '',
+    display_status: document.getElementById('add-status')?.value || 'active',
+    component: document.getElementById('add-component')?.value.trim() || '',
+    principal: document.getElementById('add-principal')?.value.trim() || '',
+    start_date: document.getElementById('add-start')?.value.trim() || '',
+    dormant_date: document.getElementById('add-dormant')?.value.trim() || '',
+  };
+  const lat = document.getElementById('add-lat')?.value.trim() || '';
+  const lng = document.getElementById('add-lng')?.value.trim() || '';
+  if (lat) payload.lat = lat;
+  if (lng) payload.lng = lng;
+  if (!payload.project_number) return toast('Project number required');
+  const r = await api('POST', '/api/v1/projects', payload);
+  if (r && r.error) return toast(r.error);
+  toast('Added ' + payload.project_number);
+  location.reload();
+}
+
+async function setCompetencyTracked(id, tracked) {
+  const r = await api('PATCH', '/api/v1/employees/' + id, { competency_tracked: tracked });
+  if (r && r.error) return toast(r.error);
+  toast(tracked ? 'Included in competency' : 'Excluded from competency');
+  location.reload();
+}
+
+async function deactivate(kind, id) {
+  if (!confirm('Deactivate this row? FK references stay intact.')) return;
+  const r = await api('DELETE', '/api/v1/' + kind + '/' + id);
+  if (r && r.error) return toast(r.error);
+  location.reload();
+}
+
+async function reactivate(kind, id) {
+  const r = await api('PATCH', '/api/v1/' + kind + '/' + id, { active: true });
+  if (r && r.error) return toast(r.error);
+  location.reload();
+}
+
+function syncPreflightFileName(path) {
+  const value = String(path || '');
+  return value ? value.split('/').pop() : '';
+}
+
+async function runSyncPreflight() {
+  const out = document.getElementById('sync-preflight-result');
+  if (!out) return;
+  out.textContent = 'Preflight: checking source files...';
+  out.dataset.state = 'checking';
+  try {
+    const res = await fetch('/api/v1/projects/sync-preflight');
+    if (!res.ok) {
+      out.dataset.state = 'error';
+      out.textContent = 'Preflight unavailable (' + res.status + ')';
+      return;
+    }
+    const data = await res.json();
+    const file = syncPreflightFileName(data.xlsx_path) || data.source_readiness?.xlsx_selected || 'master source';
+    const state = data.ok ? (data.would_import ? 'would import' : 'unchanged') : 'blocked';
+    const suffix = data.ok ? file : (data.source_readiness?.state || 'source not ready');
+    out.dataset.state = state.replace(/\s+/g, '-');
+    out.textContent = 'Preflight: ' + state + ' - ' + (data.message || suffix);
+  } catch (e) {
+    out.dataset.state = 'error';
+    out.textContent = 'Preflight failed';
+  }
+}
+
+async function loadSyncStatusBadge() {
+  const badge = document.getElementById('sync-status-badge');
+  if (!badge) return;
+  try {
+    const res = await fetch('/api/v1/projects/sync-status');
+    if (!res.ok) return;
+    const data = await res.json();
+    const source = data.source_readiness || {};
+    const sourceTail = source.ready
+      ? 'source ready: ' + (source.xlsx_selected || 'master list')
+      : 'source check: ' + (source.state || 'unknown');
+    if (data.state === 'never_run') {
+      badge.textContent = 'Master sync: never run on this host - ' + sourceTail;
+      return;
+    }
+    const when = data.last_run_at ? new Date(data.last_run_at).toLocaleString() : '(unknown)';
+    const r = data.last_report || {};
+    const parts = [];
+    if (r.created_count) parts.push(r.created_count + ' added');
+    if (r.updated_count) parts.push(r.updated_count + ' updated');
+    if (r.vanished_count) parts.push(r.vanished_count + ' vanished');
+    if (r.returned_count) parts.push(r.returned_count + ' returned');
+    parts.push(sourceTail);
+    const overlayCount = data.overlay_attention?.count || 0;
+    if (overlayCount) parts.push(overlayCount + ' overlay review');
+    const tail = parts.length ? ' - ' + parts.join(', ') : ' - no changes';
+    badge.textContent = 'Master sync: ' + when + tail;
+  } catch (e) { /* informational only */ }
+}
+
+const newEmailInput = document.getElementById('new-email');
+if (newEmailInput) newEmailInput.addEventListener('keydown', e => { if (e.key === 'Enter') addEmail(); });
 loadManagedOptions();
+loadSyncStatusBadge();
 </script>
 </body>
 </html>
