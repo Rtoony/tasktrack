@@ -6180,7 +6180,7 @@ const FORMS = {
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
-    {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local'},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local'}]},
+    {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local',step:900},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local',step:900}]},
     {key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'},
     {key:'scope_notes',label:'Planning / Scope Notes',type:'textarea',placeholder:'Not Started phase: scope, setup, prerequisites, or assignment context.'},
     {key:'progress_notes',label:'Progress Notes',type:'textarea',placeholder:'In Progress phase: current work, blockers, or next production step.'},
