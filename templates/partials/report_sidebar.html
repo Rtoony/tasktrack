@@ -1,0 +1,17 @@
+<aside class="report-sidebar" aria-label="Report sections">
+  <div class="report-sidebar-head">
+    <div class="report-sidebar-title">Report Console</div>
+    <div class="report-sidebar-subtitle">Packets, filters, presets, and exports.</div>
+  </div>
+  <nav class="report-side-nav">
+    {% for section in report_sections %}
+    <a href="{{ section.href }}" class="{{ 'active' if active_report_section == section.key else '' }}">
+      <span class="report-nav-title">{{ section.title }}</span>
+      <span class="report-nav-copy">{{ section.subtitle }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  <div class="report-sidebar-foot">
+    Print buttons still hide this navigation so packets remain clean on paper.
+  </div>
+</aside>

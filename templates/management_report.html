@@ -70,6 +70,7 @@
   @media (max-width: 980px) { .filters,.stats,.grid,.cover-grid { grid-template-columns:1fr; } .preset-row { grid-template-columns:1fr; } .hero { flex-direction:column; } .actions { justify-content:flex-start; } .nav a { margin-left:0.5rem; } }
   @media print { @page { size:letter; margin:0.45in; } body { background:#fff; color:#111827; font-size:9.2pt; line-height:1.25; } header,.filters,.nav,.btn,.screen-only { display:none !important; } main { max-width:none; padding:0 0 0.15in; } .print-only { display:block !important; } .print-masthead { display:flex !important; justify-content:space-between; gap:0.3in; align-items:flex-start; border-color:#111827; } .print-eyebrow,.print-meta,.summary-label { color:#4b5563; } .card,.hero,.stat,.cover-sheet { border-color:#d1d5db; background:#fff; box-shadow:none; break-inside:avoid; } .cover-sheet,.hero,.card { padding:0.12in; margin-bottom:0.12in; } .cover-grid { grid-template-columns:1.35fr 0.65fr; } .cover-title { font-size:15pt; } .summary-list { gap:0.06in; margin-top:0.08in; } .summary-item { border-color:#111827; } .stats { grid-template-columns:repeat(6,1fr); gap:0.08in; margin-bottom:0.12in; } .stat { padding:0.08in; } .stat-value { color:#111827; font-size:13pt; } .packet-section { break-inside:avoid; } .cover-only .detail-section { display:none !important; } .cover-only .cover-sheet { min-height:8.75in; } .row { border-color:#e5e7eb; padding:0.05in 0; } .row-title { white-space:normal; } .when { color:#374151; } }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -85,6 +86,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main class="{{ 'cover-only' if packet.cover_page else '' }}">
   <section class="print-masthead print-only" aria-label="Printable packet header">
     <div>
@@ -272,6 +276,8 @@
 
   <section class="print-footer print-only">TaskTrack management packet generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives are admin-gated.</section>
 </main>
+  </div>
+</div>
 <script>
 function applyManagementPreset(id) {
   window.location = id ? `/reports/management?preset=${encodeURIComponent(id)}` : '/reports/management';

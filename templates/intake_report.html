@@ -41,6 +41,7 @@
   @media (max-width: 900px) { .filters,.stats { grid-template-columns:1fr; } table { font-size:0.78rem; } .nav a { margin-left:0.5rem; } }
   @media print { @page { size:letter; margin:0.45in; } body { background:#fff; color:#111827; font-size:9.5pt; } header,.filters,.btn { display:none !important; } main { max-width:none; padding:0; } .card,.stat { background:#fff; border-color:#d1d5db; box-shadow:none; } th,td { border-color:#e5e7eb; } .stat-value { color:#111827; } }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -55,6 +56,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <h1>Intake Source Report</h1>
   <p class="sub">Review items created from web forms, paper forms, reMarkable OCR, and other capture sources. This is the audit queue for the form-to-TaskTrack workflow.</p>
@@ -113,5 +117,7 @@
     {% else %}<div class="empty">No matching intake records found.</div>{% endif %}
   </section>
 </main>
+  </div>
+</div>
 </body>
 </html>

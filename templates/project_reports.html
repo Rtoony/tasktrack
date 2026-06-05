@@ -96,6 +96,7 @@
     .action-queue { border-left:3px solid #111827; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -111,6 +112,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <section class="print-masthead print-only" aria-label="Printable report header">
     <div>
@@ -276,6 +280,8 @@
   {% endfor %}
   <section class="print-footer print-only">TaskTrack portfolio packet generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
 </main>
+  </div>
+</div>
 
 <script>
 function applyPortfolioPreset(id) {

@@ -59,6 +59,7 @@
     .stat-value { font-size:10pt; color:#111827; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -73,6 +74,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   {% if error %}
     <section class="card"><h1>Incident not found</h1><p class="note">{{ error }}</p></section>
@@ -126,5 +130,7 @@
   <section class="print-footer print-only">TaskTrack incident one-pager generated {{ packet.generated_at[:16] }}. Admin-only sensitive narrative report.</section>
   {% endif %}
 </main>
+  </div>
+</div>
 </body>
 </html>

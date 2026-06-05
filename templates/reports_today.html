@@ -72,6 +72,7 @@
     .when { color:#374151; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -87,6 +88,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <section class="print-masthead print-only" aria-label="Printable report header">
     <div>
@@ -258,5 +262,7 @@
 
   <section class="print-footer print-only">TaskTrack today brief generated {{ packet.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
 </main>
+  </div>
+</div>
 </body>
 </html>

@@ -1,0 +1,117 @@
+/* Shared report console shell. Individual report templates keep their print-first body styles. */
+.report-shell {
+  max-width: 1640px;
+  margin: 0 auto;
+  padding: 1.4rem 1.5rem 3rem;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+.report-sidebar {
+  position: sticky;
+  top: 70px;
+  background: linear-gradient(180deg, rgba(24, 33, 43, 0.98), rgba(31, 42, 55, 0.96));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
+}
+.report-sidebar-head {
+  padding: 1rem 1rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.report-sidebar-title {
+  color: var(--text-muted);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.report-sidebar-subtitle {
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  margin-top: 0.25rem;
+}
+.report-side-nav {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.55rem;
+}
+.report-side-nav a {
+  display: block;
+  color: var(--text-muted);
+  text-decoration: none;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0.72rem 0.82rem;
+}
+.report-side-nav a:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+}
+.report-side-nav a.active {
+  color: var(--accent);
+  background: rgba(56, 189, 248, 0.12);
+  border-color: rgba(56, 189, 248, 0.32);
+}
+.report-nav-title {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+.report-nav-copy {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: var(--text-muted);
+}
+.report-sidebar-foot {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  padding: 0.85rem 1rem 1rem;
+  border-top: 1px solid var(--border);
+}
+.report-content {
+  min-width: 0;
+}
+.report-content > main {
+  max-width: none;
+  margin: 0;
+  padding: 0 0 3rem;
+}
+@media (max-width: 1050px) {
+  .report-shell {
+    grid-template-columns: 1fr;
+    padding: 1rem;
+  }
+  .report-sidebar {
+    position: relative;
+    top: auto;
+  }
+  .report-side-nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .report-side-nav {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  .report-shell {
+    display: block;
+    max-width: none;
+    padding: 0;
+  }
+  .report-sidebar {
+    display: none !important;
+  }
+  .report-content > main {
+    max-width: none;
+    padding: 0 0 0.15in;
+  }
+}

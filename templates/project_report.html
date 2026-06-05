@@ -89,6 +89,7 @@
     .when { color:#374151; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -104,6 +105,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <form class="lookup" method="get" action="/reports/project" onsubmit="normalizeProjectReportLookup()">
     <div class="lookup-field">
@@ -288,6 +292,8 @@
     <section class="print-footer print-only">TaskTrack report generated {{ report.generated_at[:16] }}. Private events are excluded unless explicitly requested; capability narratives remain admin-gated.</section>
   {% endif %}
 </main>
+  </div>
+</div>
 
 <script>
 let projectReportOptionsLoaded = false;

@@ -64,6 +64,7 @@
     .chip { background:#fff; color:#374151; border-color:#d1d5db; }
   }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -78,6 +79,9 @@
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <section class="print-only" style="border-bottom:1px solid #111827;margin-bottom:0.12in;padding-bottom:0.08in">
     <strong>TaskTrack Competency Report</strong><br>
@@ -166,6 +170,8 @@
   </section>
   {% endfor %}
 </main>
+  </div>
+</div>
 <script>
 function filtersFromForm() {
   const form = document.getElementById('competency-filter-form');

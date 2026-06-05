@@ -896,6 +896,35 @@ def test_portfolio_action_queue_csv_export(auth_client, temp_app):
     assert "Private portfolio prep" not in body
 
 
+def test_report_pages_use_shared_sidebar_shell_and_admin_gating(auth_client):
+    portfolio = auth_client.get("/reports/projects")
+    assert portfolio.status_code == 200
+    html = portfolio.get_data(as_text=True)
+    assert 'class="report-shell"' in html
+    assert 'aria-label="Report sections"' in html
+    assert 'href="/reports/projects" class="active"' in html
+    assert 'href="/reports/management"' in html
+    assert 'href="/reports/incidents"' not in html
+    assert "Admin-only sensitive reports." not in html
+
+    intake = auth_client.get("/reports/intake")
+    assert intake.status_code == 200
+    intake_html = intake.get_data(as_text=True)
+    assert 'class="report-shell"' in intake_html
+    assert 'href="/reports/intake" class="active"' in intake_html
+
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+
+    incidents = auth_client.get("/reports/incidents")
+    assert incidents.status_code == 200
+    admin_html = incidents.get_data(as_text=True)
+    assert 'href="/reports/incidents" class="active"' in admin_html
+    assert 'href="/reports/competency"' in admin_html
+
+
 def test_reports_home_renders_command_center(client, auth_client):
     preset = auth_client.post("/api/v1/reports/presets", json={
         "name": "Management review",

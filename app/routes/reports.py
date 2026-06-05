@@ -33,6 +33,113 @@ from ..services.project_reports import (
 
 bp = Blueprint("reports", __name__)
 
+REPORT_SECTIONS = [
+    {
+        "key": "overview",
+        "title": "Overview",
+        "subtitle": "Launchpad and saved presets.",
+        "href": "/reports",
+    },
+    {
+        "key": "today",
+        "title": "Today Brief",
+        "subtitle": "Daily operator packet.",
+        "href": "/reports/today",
+    },
+    {
+        "key": "management",
+        "title": "Management",
+        "subtitle": "Print-ready combined packet.",
+        "href": "/reports/management",
+    },
+    {
+        "key": "portfolio",
+        "title": "Portfolio",
+        "subtitle": "Project packets and action queues.",
+        "href": "/reports/projects",
+    },
+    {
+        "key": "project",
+        "title": "Single Project",
+        "subtitle": "Focused project one-pager.",
+        "href": "/reports/project",
+    },
+    {
+        "key": "meetings",
+        "title": "Meetings",
+        "subtitle": "Upcoming event packet batch.",
+        "href": "/reports/meetings",
+    },
+    {
+        "key": "meeting",
+        "title": "Meeting Detail",
+        "subtitle": "One event packet by ID.",
+        "href": "/reports/meeting",
+    },
+    {
+        "key": "intake",
+        "title": "Intake",
+        "subtitle": "Source review and CSV audit.",
+        "href": "/reports/intake",
+    },
+    {
+        "key": "incidents",
+        "title": "Incidents",
+        "subtitle": "Admin-only sensitive reports.",
+        "href": "/reports/incidents",
+        "admin_only": True,
+    },
+    {
+        "key": "competency",
+        "title": "Competency",
+        "subtitle": "Admin-only rollout reports.",
+        "href": "/reports/competency",
+        "admin_only": True,
+    },
+]
+
+
+def _active_report_section() -> str:
+    path = request.path.rstrip("/") or "/"
+    if path == "/reports":
+        return "overview"
+    if path.startswith("/reports/incidents"):
+        return "incidents"
+    if path.startswith("/reports/competency"):
+        return "competency"
+    if path == "/reports/projects":
+        return "portfolio"
+    if path == "/reports/project":
+        return "project"
+    if path == "/reports/meetings":
+        return "meetings"
+    if path == "/reports/meeting":
+        return "meeting"
+    if path == "/reports/management":
+        return "management"
+    if path == "/reports/today":
+        return "today"
+    if path == "/reports/intake":
+        return "intake"
+    return "overview"
+
+
+def _visible_report_sections() -> list[dict]:
+    is_admin = _is_admin()
+    return [section for section in REPORT_SECTIONS if is_admin or not section.get("admin_only")]
+
+
+@bp.context_processor
+def report_nav_context():
+    active = _active_report_section()
+    sections = _visible_report_sections()
+    active_meta = next((section for section in sections if section["key"] == active), sections[0])
+    return {
+        "report_sections": sections,
+        "active_report_section": active,
+        "active_report_meta": active_meta,
+    }
+
 _TRUE_VALUES = {"1", "true", "yes", "on"}
 _PRESET_SURFACES = {"portfolio", "incidents", "meetings", "management", "competency"}
 _TEXT_FILTER_KEYS = {"q", "client", "principal", "component", "display_status", "attention_level"}
