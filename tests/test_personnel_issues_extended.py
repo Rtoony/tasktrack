@@ -76,6 +76,17 @@ def test_patch_updates_new_columns(auth_client):
     assert body["immediate_solution"] == "Pair-coded the fix"
 
 
+
+def test_dashboard_uses_controlled_cad_skill_area_dropdown(auth_client):
+    r = auth_client.get("/")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert html.count("key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select'") == 2
+    assert "endpoint:'/api/v1/skills/categories'" in html
+    assert "syncIdKey:'skill_category_id'" in html
+    assert "f.type==='endpoint-select'" in html
+    assert "Current value: " in html
+
 def test_model_columns_present(temp_app):
     """Sanity check the ORM model picks up the new columns — guards
     against future drift between models.py and the migration."""

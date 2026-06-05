@@ -6099,7 +6099,7 @@ function workspaceAddCalendarEvent() {
 const FORMS = {
   work:[
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
+    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/skills/categories',valueKey:'name',displayKey:'name',emptyLabel:'— choose CAD skill area —',hint:'Controlled list from the active competency rubric.'},
     {key:'description',label:'Requested Change',type:'textarea'},
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
     {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
@@ -6151,7 +6151,7 @@ const FORMS = {
     {key:'person_name',label:'People Involved (comma-separated, optional)',type:'text',placeholder:'Alice Smith, Bob Jones \u2014 or leave blank for 0-person incidents'},
     {key:'person_ids',label:'People (registry FK \u00b7 multi-select)',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional. Pick one or more employees. The People text field above is also parsed for matching names \u2014 either path works.'},
     {key:'observed_by',label:'Reported By',type:'employee-name-select',placeholder:'Pick the reporter'},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'text',placeholder:'Detailing, modeling, drawing standards, revision control, etc.'},
+    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/skills/categories',valueKey:'name',displayKey:'name',emptyLabel:'— choose CAD skill area —',syncIdKey:'skill_category_id',hint:'Controlled list from the active competency rubric. Selecting an area also links the Skill Category field below.'},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
     {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
     {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
@@ -6362,6 +6362,42 @@ function renderField(f,value) {
         if (selectedNames.includes(String(r.display_name || '').trim().toLowerCase())) opt.selected=true;
         input.appendChild(opt);
       });
+    });
+  } else if (f.type==='endpoint-select') {
+    input=document.createElement('select'); input.id='f-'+f.key;
+    const empty=document.createElement('option'); empty.value=''; empty.textContent=f.emptyLabel || '— choose —';
+    input.appendChild(empty);
+    const currentValue = String(value || '').trim();
+    const syncTarget = () => {
+      if (!f.syncIdKey) return;
+      const target = document.getElementById('f-' + f.syncIdKey);
+      if (!target) return;
+      const selected = input.selectedOptions && input.selectedOptions[0];
+      target.value = selected ? (selected.dataset.id || '') : '';
+      target.dispatchEvent(new Event('change', {bubbles:true}));
+    };
+    input.addEventListener('change', syncTarget);
+    loadFkOptions(f.endpoint).then(rows => {
+      let matched = false;
+      rows.forEach(r => {
+        const opt=document.createElement('option');
+        const optValue = f.valueKey ? (r[f.valueKey] || '') : r.id;
+        opt.value=optValue;
+        opt.dataset.id=r.id || '';
+        opt.textContent=f.displayKey ? (r[f.displayKey] || optValue) : (r.name || r.display_name || ('#'+r.id));
+        if (String(currentValue).trim().toLowerCase()===String(optValue).trim().toLowerCase()) {
+          opt.selected=true;
+          matched=true;
+        }
+        input.appendChild(opt);
+      });
+      if (currentValue && !matched) {
+        const opt=document.createElement('option');
+        opt.value=currentValue;
+        opt.textContent='Current value: ' + currentValue;
+        opt.selected=true;
+        input.appendChild(opt);
+      }
     });
   } else if (f.type==='fk-select') {
     /* Dual-column FK. value is the id (int). Renders as <select> with an
