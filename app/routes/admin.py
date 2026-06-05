@@ -205,9 +205,9 @@ ADMIN_CONTROL_INVENTORY = [
     },
     {
         "area": "Project registry",
-        "status": "Partially admin-managed",
-        "scope": "Projects are editable, but display statuses are still validated as active/dormant in code.",
-        "next_step": "Move project display status labels into managed workflow configuration.",
+        "status": "Admin-managed now",
+        "scope": "Projects are editable, and display statuses come from the managed Project Display Statuses option set.",
+        "next_step": "Add map color/legend controls after status semantics are settled.",
     },
     {
         "area": "Workflow states and priorities",
@@ -242,6 +242,7 @@ ADMIN_CONTROL_INVENTORY = [
 ]
 
 PROJECT_DISPLAY_STATUSES = ("active", "dormant")
+PROJECT_DISPLAY_STATUS_SET_KEY = "project_display_status"
 
 
 def _section_meta(section: str) -> dict:
@@ -333,7 +334,9 @@ def _render_admin(section: str):
         workflow_links=workflow_links,
         report_links=ADMIN_REPORT_LINKS,
         control_inventory=ADMIN_CONTROL_INVENTORY,
-        project_display_statuses=PROJECT_DISPLAY_STATUSES,
+        project_display_statuses=options_payload(sess, PROJECT_DISPLAY_STATUS_SET_KEY) or [
+            {"value": value, "label": value.title()} for value in PROJECT_DISPLAY_STATUSES
+        ],
         admin_counts=_admin_counts(sess),
         telegram_link_code=telegram_link_code,
         telegram_chats=telegram_chats,

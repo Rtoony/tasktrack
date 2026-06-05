@@ -4,7 +4,16 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 
 from app.db import get_session
-from app.models import ActivityLog, CalendarEvent, PersonnelIssue, Project, ProjectOverlay, ProjectSite, ProjectWorkTask, ReportPreset, WorkTask
+from app.models import (
+    ActivityLog,
+    CalendarEvent,
+    PersonnelIssue,
+    Project,
+    ProjectOverlay,
+    ProjectSite,
+    ProjectWorkTask,
+    WorkTask,
+)
 
 
 def _seed_report_project(sess):
@@ -409,6 +418,20 @@ def test_portfolio_project_report_html_renders(auth_client, temp_app):
     assert '/?map_project=8800.10' in html
     assert "Soft deleted portfolio" not in html
     assert "Private portfolio prep" not in html
+
+
+
+def test_portfolio_status_filter_uses_managed_options(admin_client):
+    option = admin_client.post("/api/v1/admin/options/sets/project_display_status/options", json={
+        "value": "paused",
+        "label": "Paused",
+        "display_order": 30,
+    })
+    assert option.status_code == 201
+
+    html = admin_client.get("/reports/projects").get_data(as_text=True)
+    assert '<option value="paused"' in html
+    assert ">Paused</option>" in html
 
 
 def test_portfolio_project_report_auth_and_dashboard_link(client, auth_client):

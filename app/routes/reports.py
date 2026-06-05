@@ -13,7 +13,6 @@ from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
 from ..services.agenda import today_agenda
-from ..services.intake_reports import intake_report_csv, intake_source_report
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
@@ -21,6 +20,8 @@ from ..services.incident_reports import (
     incident_detail_report,
     incident_report,
 )
+from ..services.intake_reports import intake_report_csv, intake_source_report
+from ..services.managed_options import options_payload
 from ..services.project_reports import (
     DEFAULT_PORTFOLIO_LIMIT,
     MAX_PORTFOLIO_LIMIT,
@@ -1124,6 +1125,10 @@ def portfolio_report_page():
         "project_reports.html",
         packet=packet,
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        project_display_statuses=options_payload(sess, "project_display_status") or [
+            {"value": "active", "label": "Active"},
+            {"value": "dormant", "label": "Dormant"},
+        ],
         error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),

@@ -33,6 +33,22 @@ def test_create_project_rejects_bad_status(admin_client):
     assert r.status_code == 400
 
 
+def test_create_project_accepts_admin_managed_status(admin_client):
+    option = admin_client.post("/api/v1/admin/options/sets/project_display_status/options", json={
+        "value": "paused",
+        "label": "Paused",
+        "display_order": 30,
+    })
+    assert option.status_code == 201
+
+    r = admin_client.post("/api/v1/projects", json={
+        "project_number": "9002.50",
+        "display_status": "paused",
+    })
+    assert r.status_code == 201
+    assert r.get_json()["display_status"] == "paused"
+
+
 def test_patch_geo_fields(admin_client, temp_app):
     with temp_app.app_context():
         sess = get_session()

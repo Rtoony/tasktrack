@@ -170,6 +170,39 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
             _option("Idea", order=60),
         ],
     },
+    {
+        "key": "task_priority",
+        "label": "Task Priorities",
+        "surface": "Tasks, Intake, Feedback",
+        "description": "Priority labels used by task, intake, and feedback workflows. Backend defaults still expect Low/Medium/High until workflow validation is fully dynamic.",
+        "options": [
+            _option("Low", order=10),
+            _option("Medium", order=20),
+            _option("High", order=30),
+        ],
+    },
+    {
+        "key": "incident_severity",
+        "label": "Incident Severities",
+        "surface": "Incidents, Reports, Intake",
+        "description": "Impact labels used by incident/capability reports.",
+        "options": [
+            _option("Low", order=10),
+            _option("Medium", order=20),
+            _option("High", order=30),
+            _option("Critical", order=40),
+        ],
+    },
+    {
+        "key": "project_display_status",
+        "label": "Project Display Statuses",
+        "surface": "Projects, Map, Reports",
+        "description": "Project status values shown in the project registry, map, and report filters. Defaults match the master project list.",
+        "options": [
+            _option("active", "Active", 10),
+            _option("dormant", "Dormant", 20),
+        ],
+    },
 ]
 
 

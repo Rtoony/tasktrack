@@ -31,14 +31,14 @@ from ..models import (
     to_dict,
 )
 from ..services.convex_hull import hull_geojson_ring
+from ..services.managed_options import options_payload
 from ..services.project_workspace import project_overlay_payload, project_workspace_payload
 
-# Pared down to {active, dormant} to match the firm's Master Project List
-# spreadsheet, which is now the source of truth for project state. The
-# old completed/draft/review options pre-dated the master-list import
-# and weren't actually in use (projects table was empty when the import
-# ran).
+# Default values match the firm's Master Project List. Admin-managed options
+# can extend this list, but these remain the safe fallback if option seeding
+# is unavailable during early app startup.
 _PROJECT_DISPLAY_STATUSES = {"active", "dormant"}
+_PROJECT_DISPLAY_STATUS_SET_KEY = "project_display_status"
 _PROJECT_OVERLAY_FIELDS = (
     "operator_status",
     "priority",
@@ -60,6 +60,15 @@ def _coerce_latlng(raw):
         return float(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _project_display_status_values(sess) -> set[str]:
+    values = {
+        str(row.get("value") or "").strip()
+        for row in options_payload(sess, _PROJECT_DISPLAY_STATUS_SET_KEY)
+        if str(row.get("value") or "").strip()
+    }
+    return values or set(_PROJECT_DISPLAY_STATUSES)
 
 
 def _project_identity_filters():
@@ -404,7 +413,7 @@ def projects_hulls():
         bucket["points"].append((site.lng, site.lat))
 
     features = []
-    for pid, bucket in by_project.items():
+    for _pid, bucket in by_project.items():
         if len(bucket["points"]) < 3:
             continue
         ring = hull_geojson_ring(bucket["points"])
@@ -766,9 +775,10 @@ def create_project():
                         "existing_id": existing.id,
                         "request_id": _rid()}), 409
     display_status = (data.get("display_status") or "active").strip()
-    if display_status not in _PROJECT_DISPLAY_STATUSES:
+    allowed_statuses = _project_display_status_values(sess)
+    if display_status not in allowed_statuses:
         return jsonify({
-            "error": f"display_status must be one of: {sorted(_PROJECT_DISPLAY_STATUSES)}",
+            "error": f"display_status must be one of: {sorted(allowed_statuses)}",
             "request_id": _rid(),
         }), 400
     proj = Project(
@@ -828,9 +838,10 @@ def update_project(proj_id):
         proj.lng = _coerce_latlng(data["lng"])
     if "display_status" in data:
         ds = (data["display_status"] or "").strip()
-        if ds not in _PROJECT_DISPLAY_STATUSES:
+        allowed_statuses = _project_display_status_values(sess)
+        if ds not in allowed_statuses:
             return jsonify({
-                "error": f"display_status must be one of: {sorted(_PROJECT_DISPLAY_STATUSES)}",
+                "error": f"display_status must be one of: {sorted(allowed_statuses)}",
                 "request_id": _rid(),
             }), 400
         proj.display_status = ds

@@ -329,7 +329,7 @@
         <div class="field"><label for="add-pn">Project number *</label><input id="add-pn" required placeholder="1234.56"></div>
         <div class="field"><label for="add-name">Name</label><input id="add-name"></div>
         <div class="field"><label for="add-client">Client</label><input id="add-client"></div>
-        <div class="field"><label for="add-status">Status</label><select id="add-status">{% for status in project_display_statuses %}<option value="{{ status }}">{{ status }}</option>{% endfor %}</select></div>
+        <div class="field"><label for="add-status">Status</label><select id="add-status">{% for status in project_display_statuses %}<option value="{{ status.value }}">{{ status.label }}</option>{% endfor %}</select></div>
         <div class="field"><label for="add-component">Component (type)</label><input id="add-component" placeholder="Topographic Mapping"></div>
         <div class="field"><label for="add-principal">Principal</label><input id="add-principal" placeholder="Long, David"></div>
         <div class="field"><label for="add-start">Start date</label><input id="add-start" type="date"></div>
