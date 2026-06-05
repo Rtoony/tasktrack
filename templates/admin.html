@@ -18,23 +18,23 @@
   body { font-family: 'IBM Plex Sans', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; }
 
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; position: sticky; top: 0; z-index: 100; box-shadow: var(--shadow-sm); }
-  .header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
+  .header-inner { max-width: 1520px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px; }
   .logo { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 1.05rem; letter-spacing: -0.02em; }
   .logo span { color: var(--accent); }
   .nav-links { display: flex; align-items: center; gap: 1rem; }
   .nav-links a { font-size: 0.82rem; color: var(--text-muted); text-decoration: none; font-weight: 500; }
   .nav-links a:hover { color: var(--text); }
 
-  .container { max-width: 960px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+  .container { max-width: 1520px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
   h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; letter-spacing: -0.01em; }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
-  .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.9rem; }
+  .workflow-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0.9rem; }
   .workflow-link-card { display: block; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.95rem 1rem; text-decoration: none; color: inherit; background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%); transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s; }
   .workflow-link-card:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
   .workflow-link-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 0.25rem; }
   .workflow-link-copy { font-size: 0.78rem; color: var(--text-muted); }
-  .option-layout { display:grid; grid-template-columns: 260px minmax(0,1fr); gap:1rem; align-items:start; }
+  .option-layout { display:grid; grid-template-columns: minmax(280px, 340px) minmax(0,1fr); gap:1rem; align-items:start; }
   .option-list { border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:#fff; }
   .option-set-btn { width:100%; border:0; border-bottom:1px solid var(--border-light); background:#fff; text-align:left; padding:0.7rem 0.8rem; cursor:pointer; font-family:inherit; }
   .option-set-btn:last-child { border-bottom:0; }
@@ -47,7 +47,15 @@
   .option-field input, .option-field textarea { width:100%; padding:0.45rem 0.55rem; font-family:inherit; font-size:0.8rem; border:1px solid var(--border); border-radius:var(--radius); background:#fff; color:var(--text); }
   .option-field textarea { min-height:4.4rem; resize:vertical; }
   .option-field.full { grid-column:1 / -1; }
-  .option-row-input { width:100%; min-width:5rem; padding:0.35rem 0.45rem; font-family:inherit; font-size:0.78rem; border:1px solid var(--border); border-radius:6px; }
+  .option-table-wrap { overflow-x:auto; margin:0 -0.2rem; padding:0 0.2rem; }
+  .option-table { min-width: 920px; table-layout: fixed; }
+  .option-table th:nth-child(1), .option-table td:nth-child(1),
+  .option-table th:nth-child(2), .option-table td:nth-child(2) { width: 26%; }
+  .option-table th:nth-child(3), .option-table td:nth-child(3) { width: 10%; }
+  .option-table th:nth-child(4), .option-table td:nth-child(4),
+  .option-table th:nth-child(5), .option-table td:nth-child(5) { width: 8%; }
+  .option-table th:nth-child(6), .option-table td:nth-child(6) { width: 18%; }
+  .option-row-input { width:100%; min-width:9rem; padding:0.35rem 0.45rem; font-family:inherit; font-size:0.78rem; border:1px solid var(--border); border-radius:6px; }
   .option-order-input { width:4.4rem; }
   .option-check { display:flex; align-items:center; justify-content:center; }
   .hidden { display:none !important; }
@@ -86,6 +94,8 @@
   @media (max-width: 768px) {
     .header { padding: 0 1rem; }
     .container { padding: 1rem; }
+    .header-inner, .container { max-width: 100%; }
+    .option-layout { grid-template-columns: 1fr; }
     .add-row { flex-direction: column; }
   }
 </style>
@@ -225,10 +235,12 @@
             <label style="font-size:0.78rem;color:var(--text-muted);"><input type="checkbox" id="option-set-active" style="vertical-align:middle;margin-right:0.3rem;"> Set active</label>
             <button class="btn btn-primary btn-sm" onclick="saveOptionSet()">Save Set</button>
           </div>
-          <table>
-            <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
-            <tbody id="managed-option-list"></tbody>
-          </table>
+          <div class="option-table-wrap">
+            <table class="option-table">
+              <thead><tr><th>Value Stored</th><th>Label Shown</th><th>Order</th><th>Active</th><th>Placeholder</th><th></th></tr></thead>
+              <tbody id="managed-option-list"></tbody>
+            </table>
+          </div>
           <div class="table-note" style="margin-top:0.7rem;">Value is what gets stored on records. Label is what users see. Deactivate old choices instead of removing historical values.</div>
           <div class="option-form-grid" style="margin-top:0.7rem;">
             <div class="option-field"><label for="new-option-value">New Value</label><input id="new-option-value" placeholder="Stored value"></div>
