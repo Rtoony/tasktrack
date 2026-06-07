@@ -120,6 +120,7 @@ def create_app(db_path=None) -> Flask:
     from .routes.agenda import bp as agenda_bp
     from .routes.agent_tasks import bp as agent_tasks_bp
     from .routes.agent_feedback import bp as agent_feedback_bp
+    from .routes.agent_projects import bp as agent_projects_bp
     from .routes.calendar import bp as calendar_bp
     from .routes.competency import bp as competency_bp
     from .routes.digest import bp as digest_bp
@@ -146,6 +147,7 @@ def create_app(db_path=None) -> Flask:
     app.register_blueprint(agenda_bp)
     app.register_blueprint(agent_tasks_bp)
     app.register_blueprint(agent_feedback_bp)
+    app.register_blueprint(agent_projects_bp)
     app.register_blueprint(attachments_bp)
     app.register_blueprint(links_bp)
     app.register_blueprint(inbox_bp)
