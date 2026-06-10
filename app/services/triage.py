@@ -13,6 +13,7 @@ env-vars to admin config.
 import json
 import os
 import re
+import time
 
 import requests
 
@@ -157,12 +158,25 @@ def _triage_call_model(model, raw_text):
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
     }
-    resp = requests.post(
-        f"{LITELLM_BASE_URL.rstrip('/')}/v1/chat/completions",
-        headers=headers,
-        json=payload,
-        timeout=TRIAGE_TIMEOUT_S,
-    )
+    # One retry on transport-level failures (gateway blip, cold model)
+    # before giving up on this model — email-sourced inputs are lost if
+    # the whole chain errors out.
+    last_exc = None
+    for attempt in (1, 2):
+        try:
+            resp = requests.post(
+                f"{LITELLM_BASE_URL.rstrip('/')}/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=TRIAGE_TIMEOUT_S,
+            )
+            break
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as exc:
+            last_exc = exc
+            if attempt == 1:
+                time.sleep(2)
+    else:
+        raise last_exc
     resp.raise_for_status()
     data = resp.json()
     content = data["choices"][0]["message"]["content"]

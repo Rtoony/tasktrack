@@ -48,6 +48,10 @@ def _ensure_engine() -> None:
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")
+        # Multiple gunicorn workers share this file; without a busy
+        # timeout a concurrent write raises "database is locked"
+        # immediately instead of waiting for the lock to clear.
+        cursor.execute("PRAGMA busy_timeout=5000")
         cursor.close()
 
     _session_factory = sessionmaker(

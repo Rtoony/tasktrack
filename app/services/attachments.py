@@ -11,7 +11,8 @@ Service layer concerns:
   - MIME / extension whitelist (PDF, DWG, DXF, PNG, JPG, XLSX, DOCX)
   - sha256 dedupe — same bytes twice on the same record returns the
     existing Attachment row
-  - 5-minute presigned URLs for downloads — Flask doesn't proxy bytes
+  - presigned URLs for downloads (default 5 min, overridable via
+    ATTACHMENT_URL_TTL_SECONDS env) — Flask doesn't proxy bytes
   - audit_log row on every upload / delete
 
 Routing concerns (table validation, auth, JSON shape) live in
@@ -301,7 +302,14 @@ def delete_attachment(sess: Session, attachment_id: int) -> Attachment:
     return att
 
 
-def presigned_download_url(att: Attachment, ttl_seconds: int = 300) -> str:
+# Remote users on slow links can outlive a 5-minute URL; keep it
+# tunable without a deploy.
+PRESIGN_TTL_SECONDS = int(os.environ.get("ATTACHMENT_URL_TTL_SECONDS", "300"))
+
+
+def presigned_download_url(att: Attachment, ttl_seconds: int | None = None) -> str:
+    if ttl_seconds is None:
+        ttl_seconds = PRESIGN_TTL_SECONDS
     cfg = _config()
     s3 = _client()
     try:

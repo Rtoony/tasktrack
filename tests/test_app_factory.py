@@ -57,7 +57,7 @@ def test_register_rejects_unapproved_email(client):
         data={
             "email": "stranger@example.com",
             "name": "Stranger",
-            "password": "test1234",
+            "password": "test1234-long-enough",
         },
     )
     assert r.status_code == 200

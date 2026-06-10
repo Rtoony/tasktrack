@@ -36,6 +36,8 @@ from datetime import datetime
 from flask import Blueprint, Response, jsonify, request, session
 from sqlalchemy import select
 
+from .. import limiter
+from .. import profile as _profile
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
@@ -45,6 +47,10 @@ from ..services.tickets import create_direct_record
 from ..tokens import check_scoped_token
 
 bp = Blueprint("inbox", __name__)
+
+
+def _token_post_limit():
+    return f"{_profile.TOKEN_API_RATE_LIMIT_PER_HR_PER_IP} per hour"
 
 
 # ── POST /api/v1/inbox  (session or token-scoped capture) ────────────────
@@ -57,6 +63,7 @@ def _require_capture_auth():
 
 
 @bp.route("/api/v1/inbox", methods=["POST"])
+@limiter.limit(_token_post_limit, methods=["POST"])
 def capture():
     auth = _require_capture_auth()
     if auth is not None:

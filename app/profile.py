@@ -52,6 +52,12 @@ LOG_FORMAT = _str("LOG_FORMAT", "text")
 # the form surface even on this private install.
 INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP = _int("INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP", 60)
 
+# ── Token API writes ──────────────────────────────────────────────────────
+# Per-IP cap on POSTs to the token-authed capture surfaces
+# (/api/v1/triage, /api/v1/inbox). Legit writers are slow (email poller
+# is 12/hr, bots are bursty but small); this only stops a looping client.
+TOKEN_API_RATE_LIMIT_PER_HR_PER_IP = _int("TOKEN_API_RATE_LIMIT_PER_HR_PER_IP", 240)
+
 
 def summary() -> dict:
     return {

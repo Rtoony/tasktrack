@@ -5,6 +5,7 @@ common "create a record + log it" path. These take a SQLAlchemy session
 plus a payload — no Flask routing concerns here.
 """
 import json
+import logging
 import re
 from datetime import date, datetime
 
@@ -32,6 +33,8 @@ from ..models import (
     WorkTask,
 )
 from .audit import log_activity
+
+LOG = logging.getLogger("tasktrack.tickets")
 
 TABLE_MODELS = {
     "work_tasks": WorkTask,
@@ -85,6 +88,9 @@ def _coerce_fk_columns(data):
         try:
             data[key] = int(raw)
         except (TypeError, ValueError):
+            LOG.warning(
+                "dropping malformed FK value %s=%r — stored as NULL", key, raw
+            )
             data[key] = None
 
 
@@ -122,12 +128,17 @@ def enrich_with_fks(sess: Session, table: str, record, *,
                     setattr(record, fk_col, None)
                     changed = True
                 continue
-            hit = sess.scalar(
+            hits = sess.scalars(
                 select(model).where(
                     func.lower(getattr(model, lookup_col)) == text_val.lower()
-                ).limit(1)
-            )
-            new_fk = hit.id if hit is not None else None
+                ).limit(2)
+            ).all()
+            if len(hits) > 1:
+                LOG.warning(
+                    "ambiguous %s lookup %r on %s.%s — linking first match id=%s",
+                    model.__name__, text_val, table, text_col, hits[0].id,
+                )
+            new_fk = hits[0].id if hits else None
             if getattr(record, fk_col, None) != new_fk:
                 setattr(record, fk_col, new_fk)
                 changed = True

@@ -12,6 +12,8 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request, session
 
+from .. import limiter
+from .. import profile as _profile
 from ..db import get_session
 from ..models import to_dict
 from ..services.audit import log_activity
@@ -30,6 +32,10 @@ from ..tokens import check_scoped_token
 bp = Blueprint("triage", __name__)
 
 
+def _token_post_limit():
+    return f"{_profile.TOKEN_API_RATE_LIMIT_PER_HR_PER_IP} per hour"
+
+
 def _require_triage_auth():
     """Either active session or `triage`-scoped token (or legacy token)."""
     if "user_id" in session:
@@ -38,6 +44,7 @@ def _require_triage_auth():
 
 
 @bp.route("/api/v1/triage", methods=["POST"])
+@limiter.limit(_token_post_limit, methods=["POST"])
 def triage_endpoint():
     err = _require_triage_auth()
     if err:

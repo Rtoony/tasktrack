@@ -78,8 +78,8 @@ def register():
 
         if not email or not name or not password:
             error = "All fields are required."
-        elif len(password) < 6:
-            error = "Password must be at least 6 characters."
+        elif len(password) < 12:
+            error = "Password must be at least 12 characters."
         else:
             sess = get_session()
             approved = sess.scalar(

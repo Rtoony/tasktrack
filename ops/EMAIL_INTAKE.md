@@ -56,3 +56,23 @@ set -a; source /dev/shm/nexus-env-tasktrack-email-intake; set +a
   `INTAKE_MAX_ATTACHMENT_BYTES`.
 - Body-only text extraction; rich attachment understanding (Gemini vision
   OCR on scanned PDFs, image captioning) is still a later iteration.
+
+## STATUS 2026-06-09 — paused (bridge signed out)
+
+`tasktrack-email-intake.timer` was **disabled** 2026-06-09 after crash-looping
+since the 06-08 reboot. Root cause: Proton Bridge restarted at boot and could
+not load its keychain ("could not create keychain: no keychain" in
+`~/snap/protonmail-bridge/13/.local/share/protonmail/bridge-v3/logs/`), so the
+RtoonyClwBot account is effectively signed out → IMAP LOGIN returns
+"no such user", then "too many login attempts" from the 5-min retry hammering.
+
+To revive (Josh, interactive):
+1. `snap run protonmail-bridge --cli` → `login` → re-auth RtoonyClwBot@proton.me.
+2. Note the NEW bridge IMAP password (`info` in the CLI) — it likely changed.
+   Update vault item "Nexus - Intake Mailbox" (INTAKE_IMAP_PASS) and the
+   PROTON_BRIDGE_PASSWORD mirror in "Nexus - Maximus" (Maximus email-ops uses
+   the same bridge and is likely broken by this too).
+3. Test one login manually, then: `systemctl --user enable --now tasktrack-email-intake.timer`
+4. Still outstanding from the original checklist: Proton filter (+intake →
+   Folders/Intake) and Gmail/work-mail forwarding — without those, the poller
+   finds nothing even when healthy.
