@@ -156,5 +156,18 @@
 <body>
 <div id="root"></div>
 <script src="{{ url_for('static', filename='js/br-intake.bundle.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+      let projectNameInput = document.getElementById('project_name');
+      if (!projectNameInput) {
+        projectNameInput = document.querySelector('input[name="project_name"]');
+      }
+      if (projectNameInput) {
+        projectNameInput.focus();
+      }
+    }, 100);
+  });
+</script>
 </body>
 </html>
