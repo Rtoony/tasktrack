@@ -297,6 +297,15 @@ class InboxItem(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # Triage+Assignment unification (W2): ADVISORY AI suggestion. The
+    # system suggests a target tracker + drafted fields; the human has
+    # final say at promote ("Assignment") time. suggestion_json holds the
+    # full suggestion dict ({"target_table", "category", "confidence",
+    # "fields", "model", "rationale"}); suggested_table is denormalized
+    # for cheap list filtering. Never auto-creates tracker rows.
+    suggested_table: Mapped[str | None] = mapped_column(Text)
+    suggestion_json: Mapped[str | None] = mapped_column(Text)
+    suggested_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_inbox_items_status", "status"),

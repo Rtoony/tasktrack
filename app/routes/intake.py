@@ -11,7 +11,7 @@ Per-route rate limits run off INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP
 stay browseable.
 """
 import json
-from datetime import date
+from datetime import date, datetime
 from functools import wraps
 
 from sqlalchemy import or_, select
@@ -29,6 +29,7 @@ from flask import (
 from .. import limiter
 from .. import profile as _profile
 from ..auth import login_required
+from ..config import ALLOWED_TABLES
 from ..csrf import get_csrf_token
 from ..db import get_session
 from ..models import InboxItem, Project
@@ -39,6 +40,8 @@ from ..services.ocr_forms import (
     printable_form_record_payload,
 )
 from ..services.tickets import create_direct_record
+from ..services.triage import auto_project_number
+from .inbox import spawn_auto_suggest
 
 bp = Blueprint("intake", __name__)
 
@@ -174,6 +177,120 @@ def _title_and_body(
     return title, "\n".join(lines)
 
 
+# ── Deterministic request-type → suggestion seeding (Triage+Assignment) ──
+#
+# The form's REQUEST TYPE is a strong human signal, so the inbox item is
+# seeded with a rule-based ADVISORY suggestion at capture time — the row
+# stays useful even when the LLM is down. The background auto-suggest
+# refine (spawn_auto_suggest) may later overwrite this seed with richer
+# drafted fields. Suggestions never auto-create tracker rows.
+
+# Bookkeeping keys never emitted in a suggestion's fields dict (matches
+# the classifier contract in app/services/triage.py).
+_SUGGESTION_FIELD_EXCLUDES = ("needs_review", "source", "ai_raw_input", "ai_model")
+
+# Explicitly typed requests map straight to their tracker. general /
+# suggestion / anything else falls through: project_work_tasks when a
+# ####.## project number is detected, else personal_items + Follow-up.
+_RTYPE_TARGET_MAP = {
+    "cad": "work_tasks",
+    "project_work": "project_work_tasks",
+    "training": "training_tasks",
+    "problem": "personnel_issues",
+}
+
+
+def _seed_request_type_suggestion(rtype, fields, title, body,
+                                  priority, severity, desired_by=""):
+    """Build the deterministic capture-time suggestion dict.
+
+    Shape matches the suggestion_json contract exactly:
+    {"target_table", "category" (personal_items only, else None),
+     "confidence", "fields", "model", "rationale"}.
+    """
+    details = str(fields.get("details") or "").strip()
+    long_text = details or str(fields.get("body") or "").strip()
+    detected = auto_project_number(" ".join((
+        str(fields.get("project_number") or ""),
+        str(fields.get("project") or ""),
+        title,
+        long_text,
+        body,
+    )))
+
+    category = None
+    label = _TYPE_META.get(rtype, {}).get("label", rtype)
+    if rtype in _RTYPE_TARGET_MAP:
+        target = _RTYPE_TARGET_MAP[rtype]
+        rationale = (f"Request type '{label}' deterministically routes to "
+                     f"{ALLOWED_TABLES[target]['label']}.")
+    elif detected:
+        target = "project_work_tasks"
+        rationale = (f"Request carries project number {detected} — "
+                     "routed to Project Task.")
+    else:
+        target = "personal_items"
+        category = "Follow-up"
+        rationale = f"Request type '{label}' routes to Internal Item (Follow-up)."
+
+    if target == "work_tasks":
+        seed = {"title": title, "description": long_text,
+                "priority": priority, "status": "Not Started"}
+        skill = str(fields.get("skill") or "").strip()
+        if skill:
+            seed["cad_skill_area"] = skill
+        who = str(fields.get("who") or "").strip()
+        if who:
+            seed["requested_by"] = who
+        if desired_by:
+            seed["due_date"] = desired_by
+    elif target == "project_work_tasks":
+        seed = {"title": title,
+                "project_name": str(fields.get("project") or "").strip() or title,
+                "project_number": detected or "",
+                "task_description": long_text or title,
+                "priority": priority, "status": "Not Started"}
+        if desired_by:
+            seed["due_at"] = desired_by
+    elif target == "training_tasks":
+        seed = {"title": title,
+                "training_goals": str(fields.get("goals") or "").strip() or long_text,
+                "priority": priority, "status": "Not Started"}
+        skill = str(fields.get("skill") or "").strip()
+        if skill:
+            seed["skill_area"] = skill
+        trainees = str(fields.get("trainees") or fields.get("who") or "").strip()
+        if trainees:
+            seed["trainees"] = trainees
+        if desired_by:
+            seed["due_date"] = desired_by
+    elif target == "personnel_issues":
+        seed = {"issue_description": long_text or title,
+                "severity": severity, "status": "Observed"}
+        involved = str(fields.get("involved") or "").strip()
+        if involved:
+            seed["person_name"] = involved
+        if detected:
+            seed["project_number"] = detected
+    else:  # personal_items
+        seed = {"title": title, "category": category or "Follow-up",
+                "body": long_text, "priority": priority, "status": "New"}
+        if desired_by:
+            seed["due_date"] = desired_by
+
+    allowed = set(ALLOWED_TABLES[target]["fields"]) - set(_SUGGESTION_FIELD_EXCLUDES)
+    seed = {k: v for k, v in seed.items() if k in allowed}
+
+    return {
+        "target_table": target,
+        "category": category,
+        "confidence": "high",
+        "fields": seed,
+        "model": "rule:request-type",
+        "rationale": rationale[:200],
+    }
+
+
 def _redirect_to_request(rtype: str):
     return redirect(f"/intake/request?type={rtype}", code=302)
 
@@ -247,8 +364,29 @@ def br_intake_submit():
         sess, "inbox_items", item.id, "submitted",
         new=f"web-form: {title[:80]}",
     )
+
+    # Deterministic ADVISORY suggestion from the request type — useful
+    # even when the LLM is down. The background refine below may
+    # overwrite it with richer drafted fields.
+    suggestion = _seed_request_type_suggestion(
+        rtype, fields, title, body,
+        priority=item_priority, severity=severity, desired_by=desired_by,
+    )
+    item.suggested_table = suggestion["target_table"]
+    item.suggestion_json = json.dumps(suggestion)
+    item.suggested_at = datetime.now()
+    log_activity(sess, "inbox_items", item.id, "suggested",
+                 new=suggestion["target_table"])
     sess.commit()
-    return jsonify({"ref": ref, "inbox_id": item.id}), 201
+
+    # Best-effort AI refine of the rule seed (no-op when disabled or the
+    # triage model is unconfigured; never blocks this response).
+    spawn_auto_suggest(item.id)
+    return jsonify({
+        "ref": ref,
+        "inbox_id": item.id,
+        "suggested_table": suggestion["target_table"],
+    }), 201
 
 
 @bp.route("/api/v1/projects/search", methods=["GET"])

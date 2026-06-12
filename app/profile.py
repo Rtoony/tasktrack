@@ -58,6 +58,12 @@ INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP = _int("INTAKE_FORM_RATE_LIMIT_PER_HR_PER_I
 # is 12/hr, bots are bursty but small); this only stops a looping client.
 TOKEN_API_RATE_LIMIT_PER_HR_PER_IP = _int("TOKEN_API_RATE_LIMIT_PER_HR_PER_IP", 240)
 
+# ── Inbox auto-suggest (Triage+Assignment) ────────────────────────────────
+# Fire a best-effort background classification after every inbox capture
+# so items arrive with an ADVISORY suggested tracker + drafted fields.
+# Flip off to rely on explicit POST /api/v1/inbox/<id>/suggest only.
+INBOX_AUTO_SUGGEST = _bool("INBOX_AUTO_SUGGEST", True)
+
 
 def summary() -> dict:
     return {
@@ -66,4 +72,5 @@ def summary() -> dict:
         "SESSION_COOKIE_SECURE": SESSION_COOKIE_SECURE,
         "LOG_FORMAT": LOG_FORMAT,
         "INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP": INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP,
+        "INBOX_AUTO_SUGGEST": INBOX_AUTO_SUGGEST,
     }

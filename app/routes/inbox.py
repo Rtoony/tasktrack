@@ -5,7 +5,9 @@ Surface, all under /api/v1/inbox:
   GET    /                         login: list inbox items (status filter)
   GET    /<id>                     login: single item
   PATCH  /<id>                     login: update fields
-  POST   /<id>/promote             login: promote to a tracker
+  POST   /<id>/suggest             login or inbox/triage token: run the
+                                   classifier, store the ADVISORY suggestion
+  POST   /<id>/promote             login: promote ("assign") to a tracker
   DELETE /<id>                     login: hard delete
 
 POST is the unified write path. Body:
@@ -31,9 +33,21 @@ existing row. Lets bots safely retry.
 """
 from __future__ import annotations
 
+import json
+import logging
+import os
+import threading
 from datetime import datetime
 
-from flask import Blueprint, Response, jsonify, request, session
+from flask import (
+    Blueprint,
+    Response,
+    current_app,
+    has_request_context,
+    jsonify,
+    request,
+    session,
+)
 from sqlalchemy import select
 
 from .. import limiter
@@ -41,10 +55,14 @@ from .. import profile as _profile
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import InboxItem, to_dict
+from ..models import ActivityLog, InboxItem, to_dict
+from ..services import triage as triage_svc
 from ..services.audit import log_activity
 from ..services.tickets import create_direct_record
+from ..services.triage import run_classify
 from ..tokens import check_scoped_token
+
+LOG = logging.getLogger("tasktrack.inbox")
 
 bp = Blueprint("inbox", __name__)
 
@@ -56,10 +74,167 @@ def _token_post_limit():
 # ── POST /api/v1/inbox  (session or token-scoped capture) ────────────────
 
 def _require_capture_auth():
-    """Allow browser capture through the login session plus token writers."""
+    """Allow browser capture through the login session plus token writers.
+
+    Accepts the inbox scope (canonical) or the triage scope — the email
+    intake poller holds the triage token (it also drives the attachments
+    upload with it) and captures into the inbox without a second secret.
+    Mirrors _require_suggest_auth below.
+    """
     if "user_id" in session:
         return None
-    return check_scoped_token("inbox")
+    inbox_err = check_scoped_token("inbox")
+    if inbox_err is None:
+        return None
+    if check_scoped_token("triage") is None:
+        return None
+    return inbox_err
+
+
+# ── Advisory suggestion core (Triage+Assignment unification) ─────────────
+#
+# The inbox is the dump ground; the SYSTEM suggests a target tracker +
+# drafted fields (stored on the item, ADVISORY only); the HUMAN has final
+# say at promote ("Assignment") time. Suggestions never auto-create
+# tracker rows, and rows created at assignment time carry NO needs_review
+# flag — a human just reviewed them.
+
+# INTAKE_META fields (from the B&R form) worth forwarding to the
+# classifier as operator hints. They steer the model only — run_classify
+# never force-merges them into the drafted fields.
+_HINT_FIELD_KEYS = (
+    "project", "skill", "software", "who", "trainees",
+    "goals", "category", "severity", "involved",
+)
+
+
+def _intake_hints(body):
+    """Extract classifier hints from an INTAKE_META line in an item body.
+
+    The B&R intake form embeds a JSON metadata line ("INTAKE_META: {...}")
+    carrying the request type and raw form fields. Parsed defensively:
+    any malformed payload returns None — hints only steer the model.
+    """
+    for line in (body or "").splitlines():
+        line = line.strip()
+        if not line.startswith("INTAKE_META:"):
+            continue
+        try:
+            meta = json.loads(line[len("INTAKE_META:"):].strip())
+        except (ValueError, TypeError):
+            return None
+        if not isinstance(meta, dict):
+            return None
+        hints = {}
+        rtype = str(meta.get("type") or "").strip()
+        if rtype:
+            hints["request_type"] = rtype
+        target = str(meta.get("suggested_target") or "").strip()
+        if target and target != "triage":
+            hints["requested_target"] = target
+        meta_fields = meta.get("fields")
+        if isinstance(meta_fields, dict):
+            for key in _HINT_FIELD_KEYS:
+                val = meta_fields.get(key)
+                sval = str(val).strip() if val is not None else ""
+                if sval:
+                    hints[key] = sval
+        return hints or None
+    return None
+
+
+def _log_suggested(sess, item_id, target):
+    """Activity row for a suggestion write.
+
+    log_activity reads flask.session, which doesn't exist on the
+    background auto-suggest thread — write the row directly there.
+    """
+    if has_request_context():
+        log_activity(sess, "inbox_items", item_id, "suggested", new=target)
+        return
+    sess.add(ActivityLog(
+        table_name="inbox_items",
+        record_id=item_id,
+        action="suggested",
+        field_name="",
+        old_value="",
+        new_value=str(target),
+        user_name="System",
+    ))
+
+
+def run_suggest_for_item(sess, item):
+    """Classify an inbox item and store the ADVISORY suggestion on it.
+
+    Synchronous core shared by POST /<id>/suggest and the capture-time
+    background refine. Raises RuntimeError (from run_classify) on model
+    failure, leaving the item untouched. Re-runs overwrite the previous
+    suggestion. Never creates tracker rows.
+    """
+    raw_text = item.title + (("\n\n" + item.body) if item.body else "")
+    hints = _intake_hints(item.body)
+    suggestion, _model = run_classify(raw_text, hints=hints)
+    item.suggested_table = suggestion["target_table"]
+    item.suggestion_json = json.dumps(suggestion)
+    item.suggested_at = datetime.now()
+    item.updated_at = datetime.now()
+    _log_suggested(sess, item.id, suggestion["target_table"])
+    return suggestion
+
+
+def auto_suggest_enabled(app) -> bool:
+    """Config gate for the capture-time background suggest.
+
+    Off when INBOX_AUTO_SUGGEST (env, default ON) is disabled, and
+    silently skipped when no triage model is configured at all.
+    """
+    if not app.config.get("INBOX_AUTO_SUGGEST", True):
+        return False
+    return bool(triage_svc.TRIAGE_MODEL_LOCAL or triage_svc.TRIAGE_MODEL_CLOUD)
+
+
+def _auto_suggest_worker(app, item_id):
+    """Background-thread body: own app context + own DB session.
+
+    Best-effort by design — every failure is logged and swallowed so the
+    thread can never disturb the request that spawned it.
+    """
+    try:
+        with app.app_context():
+            sess = get_session()
+            item = sess.get(InboxItem, item_id)
+            if item is None:
+                return
+            run_suggest_for_item(sess, item)
+            sess.commit()
+            LOG.info("auto-suggest stored for inbox item %s -> %s",
+                     item_id, item.suggested_table)
+    except Exception:  # noqa: BLE001 — best-effort background work
+        LOG.exception("auto-suggest failed for inbox item %s", item_id)
+
+
+def spawn_auto_suggest(item_id):
+    """Fire-and-forget background suggestion for a just-captured item.
+
+    Mirrors the health-probe daemon-thread pattern. Returns the Thread
+    (or None when skipped) so ops tooling could join if it ever cares.
+    Capture latency is unaffected — the caller has already committed.
+    """
+    # Skipped under pytest the same way create_app skips health probes —
+    # tests exercise run_suggest_for_item / _auto_suggest_worker directly.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+    app = current_app._get_current_object()
+    if not auto_suggest_enabled(app):
+        return None
+    thread = threading.Thread(
+        target=_auto_suggest_worker,
+        args=(app, item_id),
+        name=f"tasktrack-suggest-{item_id}",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 @bp.route("/api/v1/inbox", methods=["POST"])
@@ -145,6 +320,9 @@ def capture():
                  new=f"{source}: {title[:80]}")
     sess.commit()
     sess.refresh(item)
+    # Best-effort background classification (advisory suggestion). Never
+    # blocks or fails the capture; gated by INBOX_AUTO_SUGGEST.
+    spawn_auto_suggest(item.id)
     return jsonify(to_dict(item)), 201
 
 
@@ -211,7 +389,58 @@ def patch_item(item_id):
     return jsonify(to_dict(item))
 
 
-# ── POST /api/v1/inbox/<id>/promote ──────────────────────────────────────
+# ── POST /api/v1/inbox/<id>/suggest ──────────────────────────────────────
+
+def _require_suggest_auth():
+    """Session, inbox-scoped token, or triage-scoped token.
+
+    Same capture-auth pattern as the other inbox POSTs, widened so the
+    email poller / triage clients (which hold the triage scope) can ask
+    for suggestions too.
+    """
+    if "user_id" in session:
+        return None
+    inbox_err = check_scoped_token("inbox")
+    if inbox_err is None:
+        return None
+    if check_scoped_token("triage") is None:
+        return None
+    return inbox_err
+
+
+@bp.route("/api/v1/inbox/<int:item_id>/suggest", methods=["POST"])
+@limiter.limit(_token_post_limit, methods=["POST"])
+def suggest(item_id):
+    """Run the classifier and store the ADVISORY suggestion on the item.
+
+    Idempotent — re-runs overwrite the stored suggestion. On model
+    failure returns 502 with detail and leaves the item untouched.
+    Never creates tracker records.
+    """
+    auth = _require_suggest_auth()
+    if auth is not None:
+        return auth
+
+    sess = get_session()
+    item = sess.get(InboxItem, item_id)
+    if item is None:
+        return jsonify({"error": "Not found"}), 404
+
+    try:
+        suggestion = run_suggest_for_item(sess, item)
+    except RuntimeError as exc:
+        sess.rollback()
+        return jsonify({"error": "suggest failed", "detail": str(exc)}), 502
+
+    sess.commit()
+    sess.refresh(item)
+    return jsonify({
+        "suggestion": suggestion,
+        "inbox_item": to_dict(item),
+    })
+
+
+# ── POST /api/v1/inbox/<id>/promote  (Assignment) ────────────────────────
 
 @bp.route("/api/v1/inbox/<int:item_id>/promote", methods=["POST"])
 @login_required
@@ -227,7 +456,9 @@ def promote(item_id):
         return jsonify({"error": f"unknown target_table: {target_table}"}), 400
 
     cfg = ALLOWED_TABLES[target_table]
-    payload = {"title": item.title}
+    payload = {}
+    if "title" in cfg["fields"]:
+        payload["title"] = item.title
 
     # Carry body into whichever long-text field the target tracker has.
     if item.body:
@@ -247,12 +478,37 @@ def promote(item_id):
     if "source" in cfg["fields"]:
         payload["source"] = f"inbox:{item.source}"
 
-    # Caller-supplied field overrides land last.
+    # Caller-supplied field overrides land last (the assignment modal
+    # sends the full reviewed field set here).
     overrides = data.get("overrides") or {}
     if isinstance(overrides, dict):
         for k, v in overrides.items():
             if k in cfg["fields"]:
                 payload[k] = v
+
+    # A human is reviewing right now — assignment rows NEVER carry the
+    # needs_review flag, regardless of what the client sent.
+    payload.pop("needs_review", None)
+
+    # Target-specific conveniences so bare promotes still validate when
+    # the inbox item itself carries enough signal.
+    if ("issue_description" in cfg["fields"]
+            and not str(payload.get("issue_description") or "").strip()):
+        payload["issue_description"] = item.body or item.title
+    if ("severity" in cfg["fields"]
+            and not str(payload.get("severity") or "").strip()
+            and item.priority in ("Low", "Medium", "High")):
+        payload["severity"] = item.priority
+
+    # Structured required-field validation: tell the assignment UI
+    # exactly which fields are still missing.
+    missing = [req for req in cfg["required"]
+               if not str(payload.get(req) or "").strip()]
+    if missing:
+        return jsonify({
+            "error": "missing required fields",
+            "missing": missing,
+        }), 400
 
     record_id, error = create_direct_record(
         sess, target_table, payload, source_name="inbox-promote",
@@ -264,8 +520,14 @@ def promote(item_id):
     item.promoted_to_id = record_id
     item.status = "Archived"
     item.updated_at = datetime.now()
-    log_activity(sess, "inbox_items", item.id, "promoted",
-                 new=f"{target_table}#{record_id}")
+    # Suggestion columns stay as-is — they're the history of what the AI
+    # proposed. Note disagreement in the activity log when it happened.
+    suggested = (item.suggested_table or "").strip()
+    if suggested and suggested != target_table:
+        detail = f"assigned to {target_table}#{record_id} (AI suggested {suggested})"
+    else:
+        detail = f"{target_table}#{record_id}"
+    log_activity(sess, "inbox_items", item.id, "promoted", new=detail)
     sess.commit()
     sess.refresh(item)
     return jsonify({
