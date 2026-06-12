@@ -115,14 +115,14 @@
           <div class="field {% if field.type == 'textarea' %}full{% endif %}">
             <label for="{{ field.name }}"><span>{{ field.label }}</span>{% if field.required %}<span class="req">required</span>{% endif %}</label>
             {% if field.type == 'textarea' %}
-            <textarea id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}">{{ values.get(field.name, '') }}</textarea>
+            <textarea id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}" {% if loop.first %}autofocus{% endif %}>{{ values.get(field.name, '') }}</textarea>
             {% elif field.type == 'select' %}
             {% set current = values.get(field.name) or field.get('default', '') %}
-            <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %}>
+            <select id="{{ field.name }}" name="{{ field.name }}" {% if field.required %}required{% endif %} {% if loop.first %}autofocus{% endif %}>
               {% for option in field.options %}<option value="{{ option }}" {% if current == option %}selected{% endif %}>{{ option }}</option>{% endfor %}
             </select>
             {% else %}
-            <input id="{{ field.name }}" name="{{ field.name }}" type="{{ field.type }}" value="{{ values.get(field.name, '') }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}">
+            <input id="{{ field.name }}" name="{{ field.name }}" type="{{ field.type }}" value="{{ values.get(field.name, '') }}" {% if field.required %}required{% endif %} placeholder="{{ field.placeholder or '' }}" {% if loop.first %}autofocus{% endif %}>
             {% endif %}
           </div>
           {% endfor %}
