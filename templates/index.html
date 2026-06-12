@@ -93,6 +93,8 @@
   .kanban-card-actions { display:flex; flex-wrap:wrap; gap:0.35rem; margin-top:0.5rem; }
   .kanban-card-action { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:var(--radius); padding:0.16rem 0.45rem; font:inherit; font-size:0.68rem; cursor:pointer; }
   .kanban-card-action:hover { color:var(--accent); border-color:color-mix(in srgb, var(--accent) 50%, var(--border)); }
+  .kanban-card.dragging { opacity:0.45; }
+  .kanban-lane.drag-over { border-color:var(--accent); background:var(--accent-light); }
 
   /* Calendar agenda view — grouped by event day from the same filtered
      rows used by the table. The table remains available as a data view. */
@@ -146,7 +148,7 @@
   .search-results.open { display:block; }
   .search-item { padding:0.6rem 0.8rem; cursor:pointer; border-bottom:1px solid var(--border-light); font-size:0.82rem; }
   .search-item:last-child { border-bottom:none; }
-  .search-item:hover { background:var(--accent-light); }
+  .search-item:hover, .search-item.active { background:var(--accent-light); }
   .search-item-label { font-weight:500; }
   .search-item-meta { font-size:0.72rem; color:var(--text-muted); margin-top:2px; }
 
@@ -176,7 +178,6 @@
   body:has(#sec-triage.active) .container { max-width:none; }
 
   /* ── Dashboard ───────────────────────────── */
-  .dash-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem; }
   .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:1.1rem 1.25rem; box-shadow:var(--shadow-sm); }
   .stat-label { font-size:0.72rem; font-weight:600; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-muted); margin-bottom:0.25rem; }
   .stat-value { font-size:1.8rem; font-weight:700; letter-spacing:-0.02em; }
@@ -186,7 +187,6 @@
   .stat-value.success { color:var(--success); }
   .stat-sub { font-size:0.72rem; color:var(--text-light); margin-top:2px; }
 
-  .dash-cols { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; }
   .dash-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); overflow:hidden; }
   .dash-card-header { padding:0.8rem 1.1rem; border-bottom:1px solid var(--border-light); font-size:0.82rem; font-weight:600; }
   .dash-card-body { padding:0; max-height:320px; overflow-y:auto; }
@@ -204,7 +204,6 @@
   .activity-action { font-weight:500; color:var(--text); }
   .activity-time { font-size:0.68rem; color:var(--text-light); float:right; }
   .empty-card { padding:2rem; text-align:center; color:var(--text-light); font-size:0.85rem; }
-  .legacy-stat-grid { display:none; }
 
   /* ── Carbon daily cockpit ─────────────────── */
   .core-loop { display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.25rem; }
@@ -333,6 +332,10 @@
   .triage-cue-needs-review { color:#92400e; border-color:rgba(146,64,14,0.35); background:#fffbeb; }
   .triage-cue-promoted { color:#065f46; border-color:rgba(6,95,70,0.35); background:#ecfdf5; }
   .triage-route-cell { display:flex; flex-direction:column; gap:0.24rem; color:var(--text-muted); font-size:0.74rem; min-width:120px; }
+  .triage-check-col { width:2rem; }
+  .triage-check-col input[type=checkbox],.triage-check-cell input[type=checkbox] { cursor:pointer; accent-color:var(--accent); }
+  .triage-bulk-bar { display:flex; align-items:center; gap:0.45rem; padding:0.2rem 0.55rem; border:1px solid var(--border); background:var(--accent-light); }
+  .triage-bulk-count { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:600; color:var(--accent); white-space:nowrap; }
 
   .empty-state { text-align:center; padding:2.5rem 1rem; color:var(--text-light); font-size:0.85rem; }
   .empty-state strong { color:var(--text-muted); }
@@ -343,6 +346,11 @@
   .badge { display:inline-block; padding:2px 7px; border-radius:4px; font-size:0.68rem; font-weight:600; letter-spacing:0.02em; white-space:nowrap; cursor:default; }
   .badge-clickable { cursor:pointer; transition:all 0.1s; }
   .badge-clickable:hover { filter:brightness(0.92); transform:scale(1.04); }
+  .status-select { appearance:none; -webkit-appearance:none; border:1px solid transparent; font-family:inherit; cursor:pointer; transition:all 0.1s; }
+  .status-select:hover { filter:brightness(0.92); }
+  .status-select:focus { outline:none; border-color:var(--accent); }
+  .status-select:disabled { opacity:0.6; cursor:wait; }
+  .status-select-sm { font-size:0.62rem; padding:1px 5px; }
   .badge-ai-review { background:#3a3214; color:#fde68a; border:1px solid #78350f; margin-left:6px; }
   tr.ai-review td { box-shadow:inset 3px 0 0 var(--warn); }
   .badge-high,.badge-critical { background:#fef2f2; color:#b91c1c; }
@@ -408,6 +416,8 @@
   .feedback-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
   .feedback-context { background:#161616; color:#c6c6c6; border-radius:var(--radius); padding:0.65rem; font-family:'IBM Plex Mono',monospace; font-size:0.68rem; line-height:1.45; max-height:120px; overflow:auto; white-space:pre-wrap; }
   .feedback-status { margin-right:auto; color:var(--text-muted); font-size:0.78rem; }
+  .feedback-modal.feedback-shake { animation:feedbackShake 0.3s ease; }
+  @keyframes feedbackShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-7px)} 40%,80%{transform:translateX(7px)} }
   @media (max-width:720px) {
     .feedback-fab { right:0.8rem; bottom:0.8rem; }
     .feedback-grid { grid-template-columns:1fr; }
@@ -570,6 +580,15 @@
   .field textarea { resize:vertical; min-height:56px; }
   .field-row { display:flex; gap:0.65rem; }
   .field-row .field { flex:1; }
+  .notes-accordion { border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); margin-bottom:0.8rem; }
+  .notes-accordion summary { list-style:none; display:flex; align-items:center; gap:0.45rem; padding:0.5rem 0.65rem; cursor:pointer; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; user-select:none; }
+  .notes-accordion summary::-webkit-details-marker { display:none; }
+  .notes-accordion summary::before { content:'\25B8'; font-size:0.62rem; color:var(--text-light); transition:transform 0.12s; }
+  .notes-accordion[open] summary::before { transform:rotate(90deg); }
+  .notes-accordion summary:hover { color:var(--text); }
+  .notes-accordion-flag { margin-left:auto; font-size:0.62rem; font-weight:600; text-transform:none; letter-spacing:normal; color:var(--accent); background:var(--accent-light); padding:0.05rem 0.4rem; border-radius:999px; }
+  .notes-accordion .field { margin-bottom:0; padding:0 0.65rem 0.6rem; }
+  .notes-accordion .field > label { display:none; }
   .placeholder-panel { border:1px dashed var(--border); border-radius:var(--radius); padding:0.8rem 0.9rem; background:color-mix(in srgb, var(--surface) 82%, var(--bg)); }
   .placeholder-title { font-size:0.78rem; font-weight:600; color:var(--text); margin-bottom:0.25rem; }
   .placeholder-copy { font-size:0.76rem; color:var(--text-muted); }
@@ -656,7 +675,6 @@
     .container { padding:1rem; }
     .field-row { flex-direction:column; gap:0; }
     td,th { padding:0.45rem 0.55rem; font-size:0.78rem; }
-    .dash-cols { grid-template-columns:1fr; }
     .core-hero, .core-work-grid { grid-template-columns:1fr; }
     .core-hero-main { border-right:none; border-bottom:1px solid var(--border); }
     .core-tracker-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
@@ -711,7 +729,7 @@
     .core-stat-strip { grid-template-columns:1fr; }
     .core-stat-tile { border-left:none; border-top:1px solid var(--border); }
     .core-stat-tile:first-child { border-top:none; }
-    .core-tracker-grid,.tracker-summary,.dash-grid { grid-template-columns:1fr; }
+    .core-tracker-grid,.tracker-summary { grid-template-columns:1fr; }
     .project-command-controls { display:grid; grid-template-columns:1fr 1fr; width:100%; }
     .project-command-input { grid-column:1 / -1; width:100%; }
     .filter-bar { display:grid; grid-template-columns:1fr 1fr; gap:0.45rem; }
@@ -759,6 +777,7 @@
     .mobile-pane .dash-card,.mobile-pane .core-panel,.mobile-pane .core-loop,.mobile-pane .project-command,.mobile-pane .intake-card { width:100%; min-width:0; }
     .mobile-pane .dash-card { margin:0 !important; overflow:visible; }
     .mobile-pane .dash-card-header { padding:0.72rem 0.85rem; }
+    .mobile-pane .capture-card { display:none; } /* capture lives in core-loop now; mobile uses the quick-capture pane */
     .mobile-pane .capture-body { padding:0.85rem !important; }
     .mobile-pane .intake-layout { display:grid; grid-template-columns:1fr; gap:0.85rem; }
     .mobile-pane .preset-panel { padding:0.75rem; }
@@ -997,6 +1016,174 @@
       <div class="core-section-label">Trackers</div>
       <div class="core-tracker-grid" id="core-tracker-cards"></div>
 
+      <!-- Capture & triage card (was the standalone AI Intake tab) -->
+      <div class="dash-card capture-card">
+        <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
+          <span>Capture &amp; triage</span>
+          <button class="btn btn-sm btn-export" type="button" onclick="openModal('triage')">+ Add Triage Item</button>
+        </div>
+        <div class="capture-body">
+          <div class="intake-layout">
+            <div class="intake-card">
+              <h3>Raw Input</h3>
+              <div class="intake-sub">Paste a messy note, forwarded email, voice transcript, or tablet OCR text &mdash; the AI will draft a structured task. For a quick follow-up item without AI triage, use <strong>+ Add Triage Item</strong> instead.</div>
+              <div class="capture-presets" aria-label="Capture presets">
+                <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('remarkable')">reMarkable OCR</button>
+                <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('meeting')">Meeting Notes</button>
+                <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('cad_issue')">CAD Issue</button>
+                <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('training')">Training Need</button>
+              </div>
+              <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
+              <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
+
+              <div class="preset-panel" id="intake-preset-panel">
+                <div class="preset-title">Presets (lock values before triage runs)</div>
+                <div class="field-row">
+                  <div class="field">
+                    <label>Target table</label>
+                    <select id="preset-target">
+                      <option value="work_tasks" selected>CAD Dev</option>
+                      <option value="project_work_tasks">Project Tasks</option>
+                      <option value="training_tasks">Training</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Priority lock</label>
+                    <select id="preset-priority">
+                      <option value="">Auto (let AI decide)</option>
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>Source</label>
+                    <select id="preset-source">
+                      <option value="paste" selected>Paste</option>
+                      <option value="voice">Voice note</option>
+                      <option value="remarkable-ocr">reMarkable / OCR note</option>
+                      <option value="paper-form">Paper / printable form</option>
+                      <option value="paperless">Paperless scan</option>
+                      <option value="meeting">Meeting</option>
+                      <option value="phone">Phone call</option>
+                      <option value="contractor">Contractor</option>
+                      <option value="email">Email (manual)</option>
+                      <option value="triage">Triage capture</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="intake-options-toggle-row">
+                  <button type="button" class="intake-options-toggle" id="intake-options-toggle" aria-expanded="false">
+                    <span class="caret">&#9656;</span> <span class="label">Show more options</span>
+                  </button>
+                </div>
+                <div class="intake-options-collapsible" id="intake-options-collapsible">
+                  <div class="field-row">
+                    <div class="field" id="preset-skill-wrap">
+                      <label id="preset-skill-label">CAD Skill Area</label>
+                      <input type="text" id="preset-skill" placeholder="Grading, detailing, standards, markup&hellip;">
+                    </div>
+                    <div class="field">
+                      <label>Requested By</label>
+                      <input type="text" id="preset-requested-by" placeholder="Who's asking?">
+                    </div>
+                    <div class="field" id="preset-due-date-wrap">
+                      <label>Due Date</label>
+                      <input type="date" id="preset-due-date">
+                    </div>
+                    <div class="field" id="preset-due-at-wrap" style="display:none">
+                      <label>Due Date &amp; Time</label>
+                      <input type="datetime-local" id="preset-due-at" step="900">
+                    </div>
+                  </div>
+
+                  <!-- Project Tasks extra fields -->
+                  <div id="preset-project-extras" style="display:none">
+                    <div class="field-row">
+                      <div class="field">
+                        <label>Project Number (####.##)</label>
+                        <input type="text" id="preset-project-number" placeholder="2301.04" inputmode="numeric" maxlength="7">
+                        <div class="intake-hint" id="preset-project-number-hint">Auto-detected from raw text when possible.</div>
+                      </div>
+                      <div class="field">
+                        <label>Billing Phase (##)</label>
+                        <input type="text" id="preset-billing-phase" placeholder="03" inputmode="numeric" maxlength="2">
+                      </div>
+                    </div>
+                    <div class="field-row">
+                      <div class="field">
+                        <label>Project Name</label>
+                        <input type="text" id="preset-project-name" placeholder="Falls back to the triage gist">
+                      </div>
+                      <div class="field">
+                        <label>Engineer</label>
+                        <input type="text" id="preset-engineer" placeholder="Falls back to Requested By">
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Training extra fields -->
+                  <div id="preset-training-extras" style="display:none">
+                    <div class="field">
+                      <label>Trainees</label>
+                      <input type="text" id="preset-trainees" placeholder="Comma-separated. Falls back to Requested By.">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="intake-row">
+                <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
+                <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
+                <span class="intake-status" id="intake-status"></span>
+              </div>
+            </div>
+            <div class="intake-card" id="intake-preview-card" style="display:none">
+              <h3>Preview &mdash; edit before confirm</h3>
+              <div class="intake-meta" id="intake-preview-meta"></div>
+              <div class="field">
+                <label>Title (gist)</label>
+                <input type="text" id="intake-field-title">
+              </div>
+              <div class="starter-block" id="intake-starter-wrap" style="display:none">
+                <div class="starter-label">Start here &rarr;</div>
+                <div class="field" style="margin-bottom:0">
+                  <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
+                </div>
+              </div>
+              <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
+                <div class="clarify-label">Questions to resolve</div>
+                <div class="field" style="margin-bottom:0">
+                  <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
+                </div>
+              </div>
+              <div class="field">
+                <label id="intake-field-description-label">Checklist (markdown)</label>
+                <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
+                <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
+              </div>
+              <div class="field">
+                <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
+                <select id="intake-field-priority">
+                  <option value="Low">Low</option>
+                  <option value="Medium" selected>Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Software / Tools</label>
+                <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
+                <div class="intake-hint">Comma-separated. Applies to CAD Dev tasks; folded into context for Project/Training.</div>
+              </div>
+              <div class="intake-row">
+                <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
+                <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="core-work-grid">
         <section class="core-panel">
           <div class="core-panel-head">
@@ -1030,175 +1217,6 @@
       </section>
     </div>
 
-    <!-- Capture & triage card (was the standalone AI Intake tab) -->
-    <div class="dash-card capture-card" style="margin-bottom:1.25rem;">
-      <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
-        <span>Capture &amp; triage</span>
-        <button class="btn btn-sm btn-export" type="button" onclick="openModal('triage')">+ Add Triage Item</button>
-      </div>
-      <div class="capture-body">
-        <div class="intake-layout">
-          <div class="intake-card">
-            <h3>Raw Input</h3>
-            <div class="intake-sub">Paste a messy note, forwarded email, voice transcript, or tablet OCR text &mdash; the AI will draft a structured task. For a quick follow-up item without AI triage, use <strong>+ Add Triage Item</strong> instead.</div>
-            <div class="capture-presets" aria-label="Capture presets">
-              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('remarkable')">reMarkable OCR</button>
-              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('meeting')">Meeting Notes</button>
-              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('cad_issue')">CAD Issue</button>
-              <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('training')">Training Need</button>
-            </div>
-            <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
-            <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
-
-            <div class="preset-panel" id="intake-preset-panel">
-              <div class="preset-title">Presets (lock values before triage runs)</div>
-              <div class="field-row">
-                <div class="field">
-                  <label>Target table</label>
-                  <select id="preset-target">
-                    <option value="work_tasks" selected>CAD Dev</option>
-                    <option value="project_work_tasks">Project Tasks</option>
-                    <option value="training_tasks">Training</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Priority lock</label>
-                  <select id="preset-priority">
-                    <option value="">Auto (let AI decide)</option>
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-                <div class="field">
-                  <label>Source</label>
-                  <select id="preset-source">
-                    <option value="paste" selected>Paste</option>
-                    <option value="voice">Voice note</option>
-                    <option value="remarkable-ocr">reMarkable / OCR note</option>
-                    <option value="paper-form">Paper / printable form</option>
-                    <option value="paperless">Paperless scan</option>
-                    <option value="meeting">Meeting</option>
-                    <option value="phone">Phone call</option>
-                    <option value="contractor">Contractor</option>
-                    <option value="email">Email (manual)</option>
-                    <option value="triage">Triage capture</option>
-                  </select>
-                </div>
-              </div>
-              <div class="intake-options-toggle-row">
-                <button type="button" class="intake-options-toggle" id="intake-options-toggle" aria-expanded="false">
-                  <span class="caret">&#9656;</span> <span class="label">Show more options</span>
-                </button>
-              </div>
-              <div class="intake-options-collapsible" id="intake-options-collapsible">
-                <div class="field-row">
-                  <div class="field" id="preset-skill-wrap">
-                    <label id="preset-skill-label">CAD Skill Area</label>
-                    <input type="text" id="preset-skill" placeholder="Grading, detailing, standards, markup&hellip;">
-                  </div>
-                  <div class="field">
-                    <label>Requested By</label>
-                    <input type="text" id="preset-requested-by" placeholder="Who's asking?">
-                  </div>
-                  <div class="field" id="preset-due-date-wrap">
-                    <label>Due Date</label>
-                    <input type="date" id="preset-due-date">
-                  </div>
-                  <div class="field" id="preset-due-at-wrap" style="display:none">
-                    <label>Due Date &amp; Time</label>
-                    <input type="datetime-local" id="preset-due-at" step="900">
-                  </div>
-                </div>
-
-                <!-- Project Tasks extra fields -->
-                <div id="preset-project-extras" style="display:none">
-                  <div class="field-row">
-                    <div class="field">
-                      <label>Project Number (####.##)</label>
-                      <input type="text" id="preset-project-number" placeholder="2301.04" inputmode="numeric" maxlength="7">
-                      <div class="intake-hint" id="preset-project-number-hint">Auto-detected from raw text when possible.</div>
-                    </div>
-                    <div class="field">
-                      <label>Billing Phase (##)</label>
-                      <input type="text" id="preset-billing-phase" placeholder="03" inputmode="numeric" maxlength="2">
-                    </div>
-                  </div>
-                  <div class="field-row">
-                    <div class="field">
-                      <label>Project Name</label>
-                      <input type="text" id="preset-project-name" placeholder="Falls back to the triage gist">
-                    </div>
-                    <div class="field">
-                      <label>Engineer</label>
-                      <input type="text" id="preset-engineer" placeholder="Falls back to Requested By">
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Training extra fields -->
-                <div id="preset-training-extras" style="display:none">
-                  <div class="field">
-                    <label>Trainees</label>
-                    <input type="text" id="preset-trainees" placeholder="Comma-separated. Falls back to Requested By.">
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="intake-row">
-              <button class="btn btn-primary" id="intake-preview-btn" type="button">Run AI triage (preview)</button>
-              <button class="btn btn-cancel" id="intake-clear-btn" type="button">Clear</button>
-              <span class="intake-status" id="intake-status"></span>
-            </div>
-          </div>
-          <div class="intake-card" id="intake-preview-card" style="display:none">
-            <h3>Preview &mdash; edit before confirm</h3>
-            <div class="intake-meta" id="intake-preview-meta"></div>
-            <div class="field">
-              <label>Title (gist)</label>
-              <input type="text" id="intake-field-title">
-            </div>
-            <div class="starter-block" id="intake-starter-wrap" style="display:none">
-              <div class="starter-label">Start here &rarr;</div>
-              <div class="field" style="margin-bottom:0">
-                <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
-              </div>
-            </div>
-            <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
-              <div class="clarify-label">Questions to resolve</div>
-              <div class="field" style="margin-bottom:0">
-                <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
-              </div>
-            </div>
-            <div class="field">
-              <label id="intake-field-description-label">Checklist (markdown)</label>
-              <textarea id="intake-field-description" rows="7" style="font-family:'IBM Plex Mono',monospace; font-size:0.8rem;"></textarea>
-              <div class="intake-hint">Rendered with <code>- [ ]</code> style checkboxes on the task detail.</div>
-            </div>
-            <div class="field">
-              <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
-              <select id="intake-field-priority">
-                <option value="Low">Low</option>
-                <option value="Medium" selected>Medium</option>
-                <option value="High">High</option>
-              </select>
-            </div>
-            <div class="field">
-              <label>Software / Tools</label>
-              <input type="text" id="intake-field-software" placeholder="autocad, civil3d, bluebeam">
-              <div class="intake-hint">Comma-separated. Applies to CAD Dev tasks; folded into context for Project/Training.</div>
-            </div>
-            <div class="intake-row">
-              <button class="btn btn-primary" id="intake-confirm-btn" type="button">Create task &middot; flag AI needs review</button>
-              <button class="btn btn-cancel" id="intake-regen-btn" type="button">Re-run triage</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="dash-grid legacy-stat-grid" id="dash-stats" aria-hidden="true"></div>
     <div class="dash-card" style="margin:1.25rem 0;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Intake Review</span>
@@ -1280,16 +1298,6 @@
       </div>
     </div>
     {% endif %}
-    <div class="dash-cols">
-      <div class="dash-card">
-        <div class="dash-card-header" style="color:var(--danger)">Overdue Items</div>
-        <div class="dash-card-body" id="dash-overdue"><div class="empty-card">No overdue items</div></div>
-      </div>
-      <div class="dash-card">
-        <div class="dash-card-header">Recent Activity</div>
-        <div class="dash-card-body" id="dash-activity"><div class="empty-card">No activity yet</div></div>
-      </div>
-          </div>
   </section>
 
   <!-- ── INBOX ─────────────────────────────── -->
@@ -1320,11 +1328,17 @@
         <option value="email">Email</option>
         <option value="paste">Paste</option>
       </select>
+      <div class="triage-bulk-bar" id="triage-bulk-bar" style="display:none">
+        <span class="triage-bulk-count" id="triage-bulk-count">0 selected</span>
+        <button class="btn btn-sm btn-export" type="button" onclick="bulkArchiveTriage()">Archive selected</button>
+        <button class="btn btn-sm btn-danger-ghost" type="button" onclick="bulkDeleteTriage()">Delete selected</button>
+      </div>
       <a class="btn btn-sm btn-export" href="/api/v1/inbox_items/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('triage')">+ Add Triage Item</button>
     </div>
     <div class="table-wrap">
       <table class="triage-queue-table"><thead><tr>
+        <th class="triage-check-col"><input type="checkbox" id="triage-check-all" aria-label="Select all triage items" onchange="toggleTriageSelectAll(this.checked)"></th>
         <th data-col="title" data-table="triage">Title <span class="sort-arrow">&#9650;</span></th>
         <th data-col="source" data-table="triage">Source / Type <span class="sort-arrow">&#9650;</span></th>
         <th data-col="priority" data-table="triage">Priority <span class="sort-arrow">&#9650;</span></th>
@@ -1447,6 +1461,7 @@
         <div class="section-subtitle">Track requested CAD changes, the discipline involved, and the follow-up context behind the work.</div>
       </div>
       <select class="filter-select" id="filter-work-status" onchange="loadTable('work')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option>
         <option value="On Hold">On Hold</option><option value="Complete">Complete</option>
@@ -1486,6 +1501,7 @@
         <div class="section-subtitle">Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.</div>
       </div>
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option>
         <option value="Pending Confirmation">Pending Confirmation</option><option value="Complete">Complete</option>
@@ -1541,6 +1557,7 @@
         <div class="section-subtitle">Plan and track targeted training work by staff member, skill area, goals, and follow-up context.</div>
       </div>
       <select class="filter-select" id="filter-training-status" onchange="loadTable('training')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option>
         <option value="On Hold">On Hold</option><option value="Complete">Complete</option>
@@ -1580,6 +1597,7 @@
         <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
       </div>
       <select class="filter-select" id="filter-personnel-status" onchange="loadTable('personnel')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="Observed">Observed</option><option value="Coaching Planned">Coaching Planned</option>
         <option value="Training Scheduled">Training Scheduled</option><option value="Monitoring">Monitoring</option>
@@ -1676,6 +1694,7 @@
         <div class="section-subtitle">Internal follow-up items that do not belong in a project, CAD, training, or capability queue yet.</div>
       </div>
       <select class="filter-select" id="filter-personal_husband-status" onchange="loadTable('personal_husband')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
@@ -1712,6 +1731,7 @@
         <div class="section-subtitle">Meeting prep, management follow-ups, and time-bound coordination notes.</div>
       </div>
       <select class="filter-select" id="filter-personal_father-status" onchange="loadTable('personal_father')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
@@ -1748,6 +1768,7 @@
         <div class="section-subtitle">Office operations, workspace upkeep, and non-project administrative work.</div>
       </div>
       <select class="filter-select" id="filter-personal_house-status" onchange="loadTable('personal_house')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
@@ -1784,6 +1805,7 @@
         <div class="section-subtitle">Assets, equipment, tools, and other operational upkeep items.</div>
       </div>
       <select class="filter-select" id="filter-personal_cars-status" onchange="loadTable('personal_cars')">
+        <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
@@ -2077,6 +2099,7 @@ const TABLE_LABELS = {
   feedback_items:'Feedback',
   personal_items:'Internal',
   calendar_events:'Calendar',
+  projects:'Projects',
 };
 const CORE_TRACKERS = [
   { table:'project_work_tasks', label:'Project Tasks', tab:'project', key:'project' },
@@ -2432,6 +2455,7 @@ function collectFeedbackBrowserState() {
 }
 
 let feedbackTargetContext = null;
+let feedbackOpenSnapshot = null;
 
 function feedbackContextPayload() {
   const activeSection = document.querySelector('.section.active')?.id?.replace(/^sec-/, '') || currentTab || '';
@@ -2510,34 +2534,56 @@ function openFeedbackModal(target='') {
   document.getElementById('feedback-file').value = '';
   const fileHint = document.getElementById('feedback-file-hint');
   if (fileHint) fileHint.textContent = 'Attach, paste, or drop screenshots here.';
+  // Snapshot the prefilled values (component label from a record row, etc.)
+  // so feedbackHasDraft() only counts user-typed deltas as a draft.
+  feedbackOpenSnapshot = feedbackFieldSnapshot();
   document.getElementById('feedback-status').textContent = '';
   document.getElementById('feedback-context-preview').textContent = JSON.stringify(context, null, 2);
   document.getElementById('feedback-overlay').classList.add('open');
   setTimeout(() => document.getElementById('feedback-title')?.focus(), 30);
 }
 
+function feedbackFieldSnapshot() {
+  return {
+    title: document.getElementById('feedback-title')?.value.trim() || '',
+    body: document.getElementById('feedback-body')?.value.trim() || '',
+    component: document.getElementById('feedback-component')?.value.trim() || '',
+    files: document.getElementById('feedback-file')?.files?.length || 0,
+  };
+}
+
 function feedbackHasDraft() {
-  return !!(
-    document.getElementById('feedback-title')?.value.trim() ||
-    document.getElementById('feedback-body')?.value.trim() ||
-    document.getElementById('feedback-component')?.value.trim() ||
-    document.getElementById('feedback-file')?.files?.length
-  );
+  // Compare against the open-time snapshot so prefilled fields (component
+  // label from a record row) never trap the modal — only what the user
+  // actually typed or attached since opening counts as a draft.
+  const base = feedbackOpenSnapshot || { title:'', body:'', component:'', files:0 };
+  const now = feedbackFieldSnapshot();
+  return now.title !== base.title || now.body !== base.body ||
+         now.component !== base.component || now.files !== base.files;
 }
 
 function closeFeedbackModal(options={}) {
   const overlay = document.getElementById('feedback-overlay');
   if (!overlay) return;
+  const modal = overlay.querySelector('.feedback-modal');
   if (!options.force && feedbackHasDraft()) {
     if (options.confirmDraft) {
       if (!window.confirm('Discard this unsaved feedback draft?')) return;
     } else {
-      document.getElementById('feedback-status').textContent = 'Use Save Feedback or Cancel before closing.';
+      // Refusal is never silent: surface the hint and shake the modal.
+      document.getElementById('feedback-status').textContent = 'Unsaved draft — use Save Feedback or Cancel to close.';
+      if (modal) {
+        modal.classList.remove('feedback-shake');
+        void modal.offsetWidth; // restart the animation on repeat refusals
+        modal.classList.add('feedback-shake');
+      }
       return;
     }
   }
+  if (modal) modal.classList.remove('feedback-shake');
   overlay.classList.remove('open');
   feedbackTargetContext = null;
+  feedbackOpenSnapshot = null;
 }
 
 function setFeedbackFiles(files) {
@@ -4038,14 +4084,41 @@ const searchInput = document.getElementById('global-search');
 const searchResults = document.getElementById('search-results');
 let searchTimeout;
 if (searchInput && searchResults) {
+  let searchActiveIdx = -1;
+  function searchCloseDropdown() {
+    searchResults.classList.remove('open');
+    searchActiveIdx = -1;
+  }
+  function searchSetActive(idx) {
+    const items = searchResults.querySelectorAll('.search-item');
+    if (!items.length) return;
+    searchActiveIdx = ((idx % items.length) + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('active', i === searchActiveIdx));
+    items[searchActiveIdx].scrollIntoView({ block: 'nearest' });
+  }
+  function openSearchResult(r) {
+    searchCloseDropdown();
+    searchInput.value = '';
+    if (r.source === 'projects') { openProjectWorkspaceSmart(r.id, r.project_number); return; }
+    const tabKey = r.source === 'personal_items'
+      ? (({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[r.category] || 'personal_husband')
+      : {
+          work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
+          personnel_issues:'personnel', calendar_events:'calendar', inbox_items:'triage'
+        }[r.source];
+    if (!tabKey) return;
+    document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
+    setTimeout(() => editRecord(tabKey, r.id), 200);
+  }
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     const q = searchInput.value.trim();
-    if (q.length < 2) { searchResults.classList.remove('open'); return; }
+    if (q.length < 2) { searchCloseDropdown(); return; }
     searchTimeout = setTimeout(async () => {
       const data = await api('GET', '/api/v1/search?q='+encodeURIComponent(q));
-      if (!data || !data.length) { searchResults.classList.remove('open'); return; }
+      if (!data || !data.length) { searchCloseDropdown(); return; }
       searchResults.replaceChildren();
+      searchActiveIdx = -1;
       data.forEach(r => {
         const div = document.createElement('div');
         div.className = 'search-item';
@@ -4057,23 +4130,24 @@ if (searchInput && searchResults) {
         meta.textContent = (TABLE_LABELS[r.source]||r.source) + ' \u2022 ' + (r.status||'') + (r.priority?' \u2022 '+r.priority:'');
         div.appendChild(lbl);
         div.appendChild(meta);
-        div.addEventListener('click', () => {
-          searchResults.classList.remove('open');
-          searchInput.value = '';
-          const tabKey = {
-            work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
-            personnel_issues:'personnel', calendar_events:'calendar'
-          }[r.source];
-          if (!tabKey) return;
-          document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
-          setTimeout(() => editRecord(tabKey, r.id), 200);
-        });
+        div.addEventListener('click', () => openSearchResult(r));
         searchResults.appendChild(div);
       });
       searchResults.classList.add('open');
     }, 250);
   });
-  document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) searchResults.classList.remove('open'); });
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { searchCloseDropdown(); return; }
+    if (!searchResults.classList.contains('open')) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); searchSetActive(searchActiveIdx + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); searchSetActive((searchActiveIdx < 0 ? 0 : searchActiveIdx) - 1); }
+    else if (e.key === 'Enter') {
+      e.preventDefault();
+      const items = searchResults.querySelectorAll('.search-item');
+      (items[searchActiveIdx] || items[0])?.click();
+    }
+  });
+  document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) searchCloseDropdown(); });
 }
 
 /* ── Dashboard ─────────────────────────────── */
@@ -4275,7 +4349,10 @@ function coreDueQueueRows(stats, key, state, tone) {
   const items = [];
   CORE_TRACKERS.forEach(spec => {
     const bucket = stats[spec.table] || {};
-    (bucket[key] || []).forEach(row => items.push({...row, _table:spec.table, _label:spec.label, _state:state, _tone:tone}));
+    (bucket[key] || []).forEach(row => {
+      if (spec.category && row?.category !== spec.category) return;
+      items.push({...row, _table:spec.table, _label:spec.label, _state:state, _tone:tone});
+    });
   });
   items.sort((a, b) => coreDateSortValue(coreDueValue(a)) - coreDateSortValue(coreDueValue(b)));
   return items;
@@ -4310,6 +4387,19 @@ function renderCoreDueSoon(stats) {
   renderCoreDueQueue('core-due-soon', coreDueQueueRows(stats, 'due_soon_items', 'Due soon', 'amber'), 'No due items in the next 14 days.');
 }
 
+const CORE_ACTIVITY_PHRASES = {
+  status_change:'changed status of',
+  promoted:'promoted',
+  updated:'updated',
+  submitted:'created',
+  deleted:'deleted',
+};
+
+function coreActivityPhrase(action) {
+  const token = action || 'updated';
+  return CORE_ACTIVITY_PHRASES[token] || token.replace(/_/g, ' ');
+}
+
 function renderCoreRecentActivity(rows) {
   const host = document.getElementById('core-recent-activity');
   if (!host) return;
@@ -4321,7 +4411,8 @@ function renderCoreRecentActivity(rows) {
     item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
     const main = document.createElement('span'); main.className = 'core-row-main';
     const title = document.createElement('span'); title.className = 'core-row-title';
-    title.textContent = (row.user_name || 'TaskTrack') + ' ' + (row.action || 'updated') + ' ' + (row.record_title || row.label || TABLE_LABELS[row.table_name] || row.table_name || 'record');
+    title.textContent = (row.user_name || 'TaskTrack') + ' ' + coreActivityPhrase(row.action) + ' ' + (row.record_title || row.label || TABLE_LABELS[row.table_name] || row.table_name || 'record')
+      + (row.action === 'status_change' && row.new_value ? ' to ' + row.new_value : '');
     const meta = document.createElement('span'); meta.className = 'core-row-meta';
     meta.textContent = (row.label || TABLE_LABELS[row.table_name] || row.table_name || 'Record') + ' #' + (row.record_id || '—') + (row.field_name ? ' · ' + row.field_name : '');
     main.appendChild(title); main.appendChild(meta);
@@ -4336,66 +4427,15 @@ async function loadDashboard() {
   const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
   const s = data.stats;
-  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0) + (s.calendar_events?.active||0);
+  const totalActive = (s.work_tasks?.active||0) + (s.project_work_tasks?.active||0) + (s.training_tasks?.active||0) + (s.personnel_issues?.active||0) + (s.personal_items?.active||0);
   const totalOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0) + (s.personnel_issues?.overdue||0) + (s.personal_items?.overdue||0);
   const totalComplete = (s.work_tasks?.by_status?.Complete||0) + (s.project_work_tasks?.by_status?.Complete||0) + (s.training_tasks?.by_status?.Complete||0) + (s.personnel_issues?.by_status?.Closed||0) + (s.personal_items?.by_status?.Done||0) + (s.calendar_events?.by_status?.done||0);
   const totalHigh = (s.work_tasks?.by_priority?.High||0) + (s.project_work_tasks?.by_priority?.High||0) + (s.training_tasks?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.High||0) + (s.personnel_issues?.by_priority?.Critical||0) + (s.personal_items?.by_priority?.High||0);
   const intakeReview = data.intake?.summary?.needs_review_count || 0;
 
-  const statsEl = document.getElementById('dash-stats');
-  statsEl.replaceChildren();
-  [{l:'Active Items',v:totalActive,c:'accent',sub:'across all categories'},
-   {l:'Overdue',v:totalOverdue,c:totalOverdue>0?'danger':'success',sub:totalOverdue>0?'needs attention':'all on track'},
-   {l:'High Priority',v:totalHigh,c:totalHigh>0?'warn':'success',sub:'high + critical'},
-   {l:'Intake Review',v:intakeReview,c:intakeReview>0?'warn':'success',sub:'web / paper / OCR'},
-   {l:'Completed',v:totalComplete,c:'success',sub:'done items'},
-  ].forEach(st => {
-    const card = document.createElement('div'); card.className='stat-card';
-    card.innerHTML = '<div class="stat-label">'+st.l+'</div><div class="stat-value '+st.c+'">'+st.v+'</div><div class="stat-sub">'+st.sub+'</div>';
-    statsEl.appendChild(card);
-  });
-
   renderCoreLoop(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
   mobileUpdateFromDashboard(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
 
-  // Overdue list
-  const overdueEl = document.getElementById('dash-overdue');
-  const allOverdue = [
-    ...(s.work_tasks?.overdue_items||[]).map(r=>({...r,_src:'CAD Dev'})),
-    ...(s.project_work_tasks?.overdue_items||[]).map(r=>({...r,_src:'Project Tasks'})),
-    ...(s.training_tasks?.overdue_items||[]).map(r=>({...r,_src:'Training'})),
-    ...(s.personnel_issues?.overdue_items||[]).map(r=>({...r,_src:'Capabilities'})),
-    ...(s.personal_items?.overdue_items||[]).map(r=>({...r,_src:'Internal'})),
-  ];
-  overdueEl.replaceChildren();
-  if (!allOverdue.length) { overdueEl.innerHTML='<div class="empty-card">Nothing overdue</div>'; }
-  else {
-    allOverdue.forEach(r => {
-      const div = document.createElement('div'); div.className='overdue-item';
-      const left = document.createElement('div');
-      const title = document.createElement('span'); title.className='overdue-title'; title.textContent=r.title||r.person_name||'';
-      const src = document.createElement('span'); src.style.cssText='font-size:0.72rem;color:var(--text-light);margin-left:0.5rem'; src.textContent=r._src;
-      left.appendChild(title); left.appendChild(src);
-      const dateSpan = document.createElement('span'); dateSpan.className='overdue-date'; dateSpan.textContent=formatDateTime(r.due_at || r.due_date || r.follow_up_date || '');
-      div.appendChild(left); div.appendChild(dateSpan);
-      overdueEl.appendChild(div);
-    });
-  }
-
-  // Activity
-  const actEl = document.getElementById('dash-activity');
-  actEl.replaceChildren();
-  if (!data.recent_activity?.length) { actEl.innerHTML='<div class="empty-card">No activity yet</div>'; }
-  else {
-    data.recent_activity.forEach(a => {
-      const div = document.createElement('div'); div.className='activity-item';
-      const time = document.createElement('span'); time.className='activity-time'; time.textContent=formatTimeAgo(a.created_at);
-      const txt = document.createElement('span');
-      txt.innerHTML = '<span class="activity-action">'+esc(a.user_name)+'</span> '+esc(a.action)+' '+(TABLE_LABELS[a.table_name]||a.table_name)+' #'+a.record_id+(a.field_name?' ('+esc(a.field_name)+')':'');
-      div.appendChild(time); div.appendChild(txt);
-      actEl.appendChild(div);
-    });
-  }
   renderDashboardIntake(data.intake);
   loadTodayAgenda();
   loadUpcomingOperations();
@@ -4739,7 +4779,13 @@ async function loadTable(table) {
   if (INTERNAL_QUEUE_TABS.includes(table)) {
     filtered = filtered.filter(r => r.category === INTERNAL_QUEUE_CATEGORIES[table]);
   }
-  if (statusFilter) filtered = filtered.filter(r => r.status === statusFilter);
+  // "__active" = anything not in the tracker's done/closed statuses (default).
+  if (statusFilter === '__active') {
+    const doneStatuses = trackerDoneStatuses(table);
+    filtered = filtered.filter(r => !doneStatuses.has(r.status));
+  } else if (statusFilter) {
+    filtered = filtered.filter(r => r.status === statusFilter);
+  }
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
   if (sourceFilter && table === 'triage') {
@@ -4776,6 +4822,8 @@ async function loadTable(table) {
 
   tbody.replaceChildren();
   if (table === 'calendar') renderCalendarAgenda(filtered);
+  // Prune bulk selections that fell out of the current filter set.
+  if (table === 'triage') syncTriageBulkSelection(filtered);
   if (!filtered.length) { empty.style.display='block'; return; }
   empty.style.display='none';
 
@@ -4829,6 +4877,7 @@ async function loadTable(table) {
       tr.classList.add('triage-queue-row');
       if (triageNeedsReview(r)) tr.classList.add('triage-row-needs-review');
       if (triageIsPromoted(r)) tr.classList.add('triage-row-promoted');
+      tr.appendChild(makeTriageCheckCell(r));
       tr.appendChild(makeTriageTitleCell(r));
       tr.appendChild(makeTriageSourceCell(r));
       tr.appendChild(makeStatusBadge(r.priority));
@@ -4859,6 +4908,8 @@ async function loadTable(table) {
 
   // Phase-4: keep the Kanban view in sync with the same filtered set.
   if (table === 'project') renderProjectKanban(filtered);
+  // Checkboxes are in the DOM now — resync the select-all header state.
+  if (table === 'triage') updateTriageBulkBar();
   if (MOBILE_TODAY_INTERNAL_TABS.some(spec => spec.tab === table)) {
     renderMobileTodayQueue();
   }
@@ -5055,7 +5106,7 @@ function makeCalendarAgendaCard(r) {
    project_work_tasks gets an alt view toggled via the [Table|Kanban] bar.
    Renders client-side from the already-loaded filtered list — no extra
    round trip. Click a card to open the existing edit modal. Status
-   changes still go through the modal (no drag-drop yet). */
+   changes via drag-drop between lanes or the inline status select. */
 let projectViewMode = 'table';
 const PROJECT_LANES = ['Not Started', 'In Progress', 'Pending Confirmation', 'Complete'];
 let PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
@@ -5089,7 +5140,12 @@ function currentFilteredProjectRows() {
   const statusFilter = document.getElementById('filter-project-status')?.value || '';
   const priorityFilter = document.getElementById('filter-project-priority')?.value || '';
   const overdueFilter = document.getElementById('filter-project-overdue')?.checked || false;
-  if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+  if (statusFilter === '__active') {
+    const doneStatuses = trackerDoneStatuses('project');
+    rows = rows.filter(r => !doneStatuses.has(r.status));
+  } else if (statusFilter) {
+    rows = rows.filter(r => r.status === statusFilter);
+  }
   if (priorityFilter) rows = rows.filter(r => r.priority === priorityFilter);
   rows = applyProjectTaskFilters(rows);
   if (overdueFilter) rows = rows.filter(r => isOverdue(r));
@@ -5149,6 +5205,20 @@ function renderProjectKanban(rows) {
 
   PROJECT_LANES.forEach(status => {
     const lane = document.createElement('div'); lane.className = 'kanban-lane';
+    lane.addEventListener('dragover', ev => {
+      ev.preventDefault();
+      ev.dataTransfer.dropEffect = 'move';
+      lane.classList.add('drag-over');
+    });
+    lane.addEventListener('dragleave', ev => {
+      if (!lane.contains(ev.relatedTarget)) lane.classList.remove('drag-over');
+    });
+    lane.addEventListener('drop', ev => {
+      ev.preventDefault();
+      lane.classList.remove('drag-over');
+      const id = ev.dataTransfer.getData('text/plain');
+      if (id) moveProjectKanbanCard(id, status);
+    });
     const head = document.createElement('div'); head.className = 'kanban-lane-head';
     const label = document.createElement('span'); label.textContent = status;
     const count = document.createElement('span'); count.className = 'kanban-lane-count';
@@ -5163,12 +5233,31 @@ function renderProjectKanban(rows) {
   });
 }
 
+async function moveProjectKanbanCard(id, status) {
+  const row = (tableCache.project || []).find(r => String(r.id) === String(id));
+  if (!row || row.status === status) return;
+  const updated = await api('PUT','/api/v1/'+API_MAP.project+'/'+id, { status });
+  if (updated && !updated.error) {
+    toast(itemLabel('project') + ' status updated to ' + updated.status);
+    loadTable('project');
+  } else {
+    toast(updated?.error || 'status update failed');
+  }
+}
+
 function makeKanbanCard(r) {
   const card = document.createElement('div');
   card.className = 'kanban-card';
   card.dataset.id = r.id;
   card.tabIndex = 0;
   card.setAttribute('role', 'button');
+  card.draggable = true;
+  card.addEventListener('dragstart', event => {
+    event.dataTransfer.setData('text/plain', String(r.id));
+    event.dataTransfer.effectAllowed = 'move';
+    card.classList.add('dragging');
+  });
+  card.addEventListener('dragend', () => card.classList.remove('dragging'));
   card.addEventListener('click', () => editRecord('project', r.id));
   card.addEventListener('keydown', event => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -5181,6 +5270,7 @@ function makeKanbanCard(r) {
   card.appendChild(title);
 
   const meta = document.createElement('div'); meta.className = 'kanban-card-meta';
+  meta.appendChild(makeStatusSelect('project', r, true));
   if (r.project_number) {
     const pn = document.createElement('span'); pn.className = 'kanban-card-pn';
     pn.textContent = r.project_number;
@@ -5343,19 +5433,90 @@ function itemLabel(table) {
   }[table] || 'record';
 }
 
+function statusSelectClass(status, compact) {
+  const cls = String(status || '').toLowerCase().replace(/\s+/g,'-');
+  return 'badge badge-'+cls+' status-select'+(compact ? ' status-select-sm' : '');
+}
+
+function makeStatusSelect(table, r, compact) {
+  const sel = document.createElement('select');
+  sel.className = statusSelectClass(r.status, compact);
+  sel.title = 'Change status';
+  sel.setAttribute('aria-label', itemLabel(table) + ' status');
+  const flow = TRACKER_STATUS_FLOW[table] || [];
+  // Custom statuses outside the configured flow stay visible/selected.
+  const statuses = flow.includes(r.status) ? flow : [r.status, ...flow];
+  statuses.forEach(status => {
+    const opt = document.createElement('option');
+    opt.value = status;
+    opt.textContent = status;
+    if (status === r.status) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  // Table rows are exempt via interactiveRowTarget; kanban cards open the
+  // edit modal on any click/Enter, so keep select interactions contained.
+  sel.addEventListener('click', ev => ev.stopPropagation());
+  sel.addEventListener('keydown', ev => ev.stopPropagation());
+  sel.addEventListener('change', async () => {
+    const next = sel.value;
+    sel.disabled = true;
+    const updated = await api('PUT','/api/v1/'+API_MAP[table]+'/'+r.id, { status: next });
+    sel.disabled = false;
+    if (updated && !updated.error) {
+      r.status = updated.status;
+      sel.className = statusSelectClass(updated.status, compact);
+      toast(itemLabel(table) + ' status updated to ' + updated.status);
+      loadTable(table);
+    } else {
+      sel.value = r.status;
+      toast(updated?.error || 'status update failed');
+    }
+  });
+  return sel;
+}
+
 function makeClickableStatus(table,r) {
   const td = document.createElement('td');
-  const s = document.createElement('span');
-  const cls = r.status.toLowerCase().replace(/\s+/g,'-');
-  s.className = 'badge badge-'+cls+' badge-clickable';
-  s.textContent = r.status;
-  s.title = 'Click to advance status';
-  s.addEventListener('click', async () => {
-    const updated = await api('PUT','/api/v1/'+API_MAP[table]+'/'+r.id+'/cycle-status');
-    if (updated && !updated.error) { toast(itemLabel(table) + ' status updated to ' + updated.status); loadTable(table); }
-  });
-  td.appendChild(s);
+  td.appendChild(makeStatusSelect(table, r));
   return td;
+}
+
+/* Drawer-header variant of makeStatusSelect: same immediate partial-PUT
+   pattern, plus syncing the drawer form's own status field and the notes
+   accordion so the header and form never disagree. */
+function makeDrawerStatusSelect(table, r) {
+  const sel = document.createElement('select');
+  sel.className = statusSelectClass(r.status, true);
+  sel.title = 'Change status (saves immediately)';
+  sel.setAttribute('aria-label', itemLabel(table) + ' status');
+  const flow = TRACKER_STATUS_FLOW[table] || [];
+  const statuses = flow.includes(r.status) ? flow : [r.status, ...flow];
+  statuses.forEach(status => {
+    const opt = document.createElement('option');
+    opt.value = status;
+    opt.textContent = status;
+    if (status === r.status) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('change', async () => {
+    const next = sel.value;
+    sel.disabled = true;
+    const updated = await api('PUT','/api/v1/'+API_MAP[table]+'/'+r.id, { status: next });
+    sel.disabled = false;
+    if (updated && !updated.error) {
+      r.status = updated.status;
+      sel.className = statusSelectClass(updated.status, true);
+      const formStatus = document.getElementById('f-status');
+      if (formStatus) formStatus.value = updated.status;
+      syncNotesAccordion(table, updated.status);
+      toast(itemLabel(table) + ' status updated to ' + updated.status);
+      loadTable(table);
+    } else {
+      sel.value = r.status;
+      toast(updated?.error || 'status update failed');
+    }
+  });
+  return sel;
 }
 
 function makeDateCell(d) {
@@ -5487,6 +5648,91 @@ function makeTriageRouteCell(r) {
   if (!triageIsPromoted(r)) wrap.appendChild(makeTriageChip('Promote next', 'triage-cue-needs-review'));
   td.appendChild(wrap);
   return td;
+}
+
+/* Bulk selection — junk cleanup without two clicks per item. Selection is
+   pruned to the visible (filtered) rows on every render. */
+const triageBulkSelection = new Set();
+
+function makeTriageCheckCell(r) {
+  const td = document.createElement('td'); td.className='triage-check-cell';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.dataset.id = r.id;
+  box.checked = triageBulkSelection.has(r.id);
+  box.setAttribute('aria-label', 'Select triage item #' + r.id);
+  box.addEventListener('change', () => {
+    if (box.checked) triageBulkSelection.add(r.id);
+    else triageBulkSelection.delete(r.id);
+    updateTriageBulkBar();
+  });
+  td.appendChild(box);
+  return td;
+}
+
+function toggleTriageSelectAll(checked) {
+  document.querySelectorAll('#tbody-triage .triage-check-cell input[type=checkbox]').forEach(box => {
+    box.checked = checked;
+    const id = Number(box.dataset.id);
+    if (checked) triageBulkSelection.add(id);
+    else triageBulkSelection.delete(id);
+  });
+  updateTriageBulkBar();
+}
+
+function syncTriageBulkSelection(rows) {
+  const visible = new Set((rows || []).map(r => r.id));
+  triageBulkSelection.forEach(id => { if (!visible.has(id)) triageBulkSelection.delete(id); });
+  updateTriageBulkBar();
+}
+
+function updateTriageBulkBar() {
+  const bar = document.getElementById('triage-bulk-bar');
+  if (!bar) return;
+  const n = triageBulkSelection.size;
+  bar.style.display = n ? 'flex' : 'none';
+  const count = document.getElementById('triage-bulk-count');
+  if (count) count.textContent = n + ' selected';
+  const all = document.getElementById('triage-check-all');
+  if (all) {
+    const boxes = document.querySelectorAll('#tbody-triage .triage-check-cell input[type=checkbox]');
+    const checked = document.querySelectorAll('#tbody-triage .triage-check-cell input[type=checkbox]:checked');
+    all.checked = boxes.length > 0 && checked.length === boxes.length;
+    all.indeterminate = checked.length > 0 && checked.length < boxes.length;
+  }
+}
+
+async function bulkArchiveTriage() {
+  const ids = Array.from(triageBulkSelection);
+  if (!ids.length) return;
+  let failed = 0;
+  for (const id of ids) {
+    const res = await api('PUT','/api/v1/inbox_items/'+id, { status:'Archived' });
+    if (res && !res.error) triageBulkSelection.delete(id);
+    else failed++;
+  }
+  toast(failed
+    ? (ids.length - failed) + ' archived, ' + failed + ' failed'
+    : ids.length + ' triage item' + (ids.length === 1 ? '' : 's') + ' archived');
+  loadTable('triage');
+  loadDashboard();
+}
+
+async function bulkDeleteTriage() {
+  const ids = Array.from(triageBulkSelection);
+  if (!ids.length) return;
+  if (!confirm('Delete ' + ids.length + ' triage item' + (ids.length === 1 ? '' : 's') + '? This cannot be undone.')) return;
+  let failed = 0;
+  for (const id of ids) {
+    const res = await api('DELETE','/api/v1/inbox_items/'+id);
+    if (res && res.error) failed++;
+    else triageBulkSelection.delete(id);
+  }
+  toast(failed
+    ? (ids.length - failed) + ' deleted, ' + failed + ' failed'
+    : ids.length + ' triage item' + (ids.length === 1 ? '' : 's') + ' deleted');
+  loadTable('triage');
+  loadDashboard();
 }
 
 function makeTriageActions(r) {
@@ -6710,6 +6956,60 @@ const AI_REVIEW_TABLES = {
 };
 const AI_DESCRIPTION_FIELD = { work: 'description', project: 'task_description', training: 'training_goals' };
 
+/* ── Notes accordion ─────────────────────────────────────────────────────
+   Forms with 3+ notes-style textareas (currently the project form) render
+   each one as a collapsible <details> section instead of a wall of
+   textareas. The section matching the record's status phase default-opens;
+   everything else (including general notes) starts collapsed. getFormData
+   is unaffected: collapsed <details> content stays in the DOM. */
+const NOTES_ACCORDION_MIN = 3;
+const NOTES_PHASE_FIELD = {
+  'Not Started': 'scope_notes',
+  'In Progress': 'progress_notes',
+  'Pending Confirmation': 'confirmation_notes',
+  'Complete': 'completion_notes',
+};
+
+function notesAccordionKeys(table) {
+  const keys = FORMS[table]
+    .filter(f => f.key !== '_row' && f.type === 'textarea' && /(^|_)notes$/.test(f.key))
+    .map(f => f.key);
+  return new Set(keys.length >= NOTES_ACCORDION_MIN ? keys : []);
+}
+
+function notesAccordionOpenKey(table, data, keys) {
+  const status = String(data?.status || (TRACKER_STATUS_FLOW[table] || [])[0] || '');
+  const key = NOTES_PHASE_FIELD[status] || '';
+  return keys.has(key) ? key : '';
+}
+
+function renderNotesAccordion(f, value, open) {
+  const details = document.createElement('details');
+  details.className = 'notes-accordion';
+  details.dataset.notesKey = f.key;
+  if (open) details.open = true;
+  const summary = document.createElement('summary');
+  summary.textContent = f.label;
+  if (String(value || '').trim()) {
+    const flag = document.createElement('span');
+    flag.className = 'notes-accordion-flag';
+    flag.textContent = 'has notes';
+    summary.appendChild(flag);
+  }
+  details.appendChild(summary);
+  details.appendChild(renderField(f, value));
+  return details;
+}
+
+function syncNotesAccordion(table, status) {
+  // Open the section matching the new status phase; leave whatever the
+  // operator already expanded alone.
+  const key = NOTES_PHASE_FIELD[String(status || '')] || '';
+  if (!key) return;
+  const section = document.querySelector('#modal-body details.notes-accordion[data-notes-key="' + key + '"]');
+  if (section) section.open = true;
+}
+
 function buildForm(table,data) {
   const frag=document.createDocumentFragment();
   const displayData = (table === 'work') ? transformWorkForDisplay(data || {}) : (data || {});
@@ -6717,8 +7017,11 @@ function buildForm(table,data) {
   if (data && data.needs_review && AI_REVIEW_TABLES[table]) frag.appendChild(buildReviewBanner(table, data));
   const descField = AI_DESCRIPTION_FIELD[table];
   if (descField && data && data.needs_review && displayData[descField]) frag.appendChild(buildMarkdownPreview(displayData[descField]));
+  const notesKeys = notesAccordionKeys(table);
+  const openNotesKey = notesAccordionOpenKey(table, displayData, notesKeys);
   FORMS[table].forEach(f=>{
     if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,displayData[sf.key])));frag.appendChild(row);}
+    else if (notesKeys.has(f.key)) frag.appendChild(renderNotesAccordion(f, displayData[f.key], f.key === openNotesKey));
     else frag.appendChild(renderField(f,displayData[f.key]));
   });
   return frag;
@@ -7161,7 +7464,12 @@ function renderModalHeader(table, data, labels) {
   if (data?.source) meta.appendChild(coreTag(data.source, coreStatusTone(data.source)));
   if (data?.priority) meta.appendChild(coreTag(data.priority + ' priority', coreStatusTone(data.priority)));
   if (data?.severity) meta.appendChild(coreTag(data.severity + ' impact', coreStatusTone(data.severity)));
-  if (data?.status) meta.appendChild(coreTag(data.status, coreStatusTone(data.status)));
+  // Existing records get an interactive status select (immediate partial
+  // PUT); new records keep the read-only tag until first save.
+  if (data?.status) {
+    if (data.id) meta.appendChild(makeDrawerStatusSelect(table, data));
+    else meta.appendChild(coreTag(data.status, coreStatusTone(data.status)));
+  }
   if (data?.visibility) meta.appendChild(coreTag(data.visibility, coreStatusTone(data.visibility)));
   if (!data || !data.id) meta.appendChild(coreTag('new record', 'blue'));
 }

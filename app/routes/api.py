@@ -14,7 +14,16 @@ from sqlalchemy import desc, or_, select, text
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, CalendarEvent, Comment, PersonnelIssue, to_dict
+from ..models import (
+    ActivityLog,
+    CalendarEvent,
+    Comment,
+    InboxItem,
+    PersonalItem,
+    PersonnelIssue,
+    Project,
+    to_dict,
+)
 from ..services.audit import log_activity
 from ..services.intake_reports import intake_source_report
 from ..services.tickets import (
@@ -232,25 +241,37 @@ _SEARCH_SQLS = (
     text(
         "SELECT id, 'work_tasks' as source, title as label, description as detail, "
         "priority, status, due_date FROM work_tasks "
-        "WHERE title LIKE :p OR cad_skill_area LIKE :p OR description LIKE :p "
-        "OR requested_by LIKE :p OR request_reference LIKE :p OR notes LIKE :p"
+        "WHERE title LIKE :p ESCAPE '\\' OR cad_skill_area LIKE :p ESCAPE '\\' "
+        "OR description LIKE :p ESCAPE '\\' OR requested_by LIKE :p ESCAPE '\\' "
+        "OR request_reference LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
+        "LIMIT 20"
     ),
     text(
         "SELECT id, 'project_work_tasks' as source, title as label, "
         "task_description as detail, priority, status, due_at as due_date "
         "FROM project_work_tasks "
-        "WHERE project_name LIKE :p OR title LIKE :p OR project_number LIKE :p "
-        "OR engineer LIKE :p OR task_description LIKE :p OR notes LIKE :p "
-        "OR scope_notes LIKE :p OR progress_notes LIKE :p "
-        "OR confirmation_notes LIKE :p OR completion_notes LIKE :p"
+        "WHERE project_name LIKE :p ESCAPE '\\' OR title LIKE :p ESCAPE '\\' "
+        "OR project_number LIKE :p ESCAPE '\\' OR engineer LIKE :p ESCAPE '\\' "
+        "OR task_description LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
+        "OR scope_notes LIKE :p ESCAPE '\\' OR progress_notes LIKE :p ESCAPE '\\' "
+        "OR confirmation_notes LIKE :p ESCAPE '\\' OR completion_notes LIKE :p ESCAPE '\\' "
+        "LIMIT 20"
     ),
     text(
         "SELECT id, 'training_tasks' as source, title as label, "
         "training_goals as detail, priority, status, due_date FROM training_tasks "
-        "WHERE title LIKE :p OR trainees LIKE :p OR requested_by LIKE :p "
-        "OR skill_area LIKE :p OR training_goals LIKE :p OR additional_context LIKE :p OR notes LIKE :p"
+        "WHERE title LIKE :p ESCAPE '\\' OR trainees LIKE :p ESCAPE '\\' "
+        "OR requested_by LIKE :p ESCAPE '\\' OR skill_area LIKE :p ESCAPE '\\' "
+        "OR training_goals LIKE :p ESCAPE '\\' OR additional_context LIKE :p ESCAPE '\\' "
+        "OR notes LIKE :p ESCAPE '\\' "
+        "LIMIT 20"
     ),
 )
+
+
+def _escape_like(q: str) -> str:
+    """Escape LIKE wildcards so user input matches literally (with ESCAPE '\\')."""
+    return q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _search_personnel_issues(sess, pattern: str) -> list[dict]:
@@ -259,13 +280,13 @@ def _search_personnel_issues(sess, pattern: str) -> list[dict]:
         return []
     stmt = select(PersonnelIssue).where(
         or_(
-            PersonnelIssue.person_name.ilike(pattern),
-            PersonnelIssue.observed_by.ilike(pattern),
-            PersonnelIssue.cad_skill_area.ilike(pattern),
-            PersonnelIssue.issue_description.ilike(pattern),
-            PersonnelIssue.incident_context.ilike(pattern),
-            PersonnelIssue.recommended_training.ilike(pattern),
-            PersonnelIssue.resolution_notes.ilike(pattern),
+            PersonnelIssue.person_name.ilike(pattern, escape="\\"),
+            PersonnelIssue.observed_by.ilike(pattern, escape="\\"),
+            PersonnelIssue.cad_skill_area.ilike(pattern, escape="\\"),
+            PersonnelIssue.issue_description.ilike(pattern, escape="\\"),
+            PersonnelIssue.incident_context.ilike(pattern, escape="\\"),
+            PersonnelIssue.recommended_training.ilike(pattern, escape="\\"),
+            PersonnelIssue.resolution_notes.ilike(pattern, escape="\\"),
         )
     ).order_by(PersonnelIssue.id.desc()).limit(20)
     return [
@@ -287,11 +308,11 @@ def _search_calendar_events(sess, pattern: str) -> list[dict]:
     user_id = session.get("user_id")
     stmt = select(CalendarEvent).where(
         or_(
-            CalendarEvent.title.ilike(pattern),
-            CalendarEvent.description.ilike(pattern),
-            CalendarEvent.event_type.ilike(pattern),
-            CalendarEvent.project_number.ilike(pattern),
-            CalendarEvent.location.ilike(pattern),
+            CalendarEvent.title.ilike(pattern, escape="\\"),
+            CalendarEvent.description.ilike(pattern, escape="\\"),
+            CalendarEvent.event_type.ilike(pattern, escape="\\"),
+            CalendarEvent.project_number.ilike(pattern, escape="\\"),
+            CalendarEvent.location.ilike(pattern, escape="\\"),
         )
     )
     if user_id is None:
@@ -324,6 +345,77 @@ def _search_calendar_events(sess, pattern: str) -> list[dict]:
     return results
 
 
+def _search_personal_items(sess, pattern: str) -> list[dict]:
+    """Internal-queue search; category rides along so the UI picks the right tab."""
+    stmt = select(PersonalItem).where(
+        or_(
+            PersonalItem.title.ilike(pattern, escape="\\"),
+            PersonalItem.body.ilike(pattern, escape="\\"),
+            PersonalItem.source_ref.ilike(pattern, escape="\\"),
+        )
+    ).order_by(PersonalItem.id.desc()).limit(20)
+    return [
+        {
+            "id": row.id,
+            "source": "personal_items",
+            "label": row.title,
+            "detail": row.body or "",
+            "priority": row.priority,
+            "status": row.status,
+            "due_date": row.due_date or "",
+            "category": row.category or "",
+        }
+        for row in sess.scalars(stmt).all()
+    ]
+
+
+def _search_inbox_items(sess, pattern: str) -> list[dict]:
+    """Triage search; archived captures stay out of the dropdown."""
+    stmt = select(InboxItem).where(
+        InboxItem.status != "Archived",
+        or_(
+            InboxItem.title.ilike(pattern, escape="\\"),
+            InboxItem.body.ilike(pattern, escape="\\"),
+        ),
+    ).order_by(InboxItem.id.desc()).limit(20)
+    return [
+        {
+            "id": row.id,
+            "source": "inbox_items",
+            "label": row.title,
+            "detail": row.body or "",
+            "priority": row.priority,
+            "status": row.status,
+            "due_date": row.due_date or "",
+        }
+        for row in sess.scalars(stmt).all()
+    ]
+
+
+def _search_projects(sess, pattern: str) -> list[dict]:
+    """Registry search; project_number rides along so the UI opens the workspace."""
+    stmt = select(Project).where(
+        Project.active == 1,
+        or_(
+            Project.project_number.ilike(pattern, escape="\\"),
+            Project.name.ilike(pattern, escape="\\"),
+        ),
+    ).order_by(Project.project_number.asc()).limit(20)
+    return [
+        {
+            "id": row.id,
+            "source": "projects",
+            "label": (f"{row.project_number} — {row.name}" if row.name else row.project_number),
+            "detail": row.client or row.component or "",
+            "priority": "",
+            "status": row.display_status,
+            "due_date": "",
+            "project_number": row.project_number,
+        }
+        for row in sess.scalars(stmt).all()
+    ]
+
+
 @bp.route("/api/v1/search")
 @login_required
 def search_records():
@@ -331,13 +423,16 @@ def search_records():
     if len(q) < 2:
         return jsonify([])
     sess = get_session()
-    pattern = f"%{q}%"
+    pattern = f"%{_escape_like(q)}%"
     results = []
     for stmt in _SEARCH_SQLS:
         for row in sess.execute(stmt, {"p": pattern}).mappings().all():
             results.append(dict(row))
     results.extend(_search_personnel_issues(sess, pattern))
     results.extend(_search_calendar_events(sess, pattern))
+    results.extend(_search_personal_items(sess, pattern))
+    results.extend(_search_inbox_items(sess, pattern))
+    results.extend(_search_projects(sess, pattern))
     return jsonify(results)
 
 
