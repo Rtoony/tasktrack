@@ -1,5 +1,5 @@
 [Unit]
-Description=TaskTrack Email Intake — IMAP -> /api/triage poll
+Description=TaskTrack Email Intake — IMAP -> /api/v1/inbox capture poll
 After=network-online.target collab-tracker.service
 Wants=network-online.target
 # Pulls mailbox credentials and TASKTRACK_TOKEN from the "TaskTrack" + "Intake

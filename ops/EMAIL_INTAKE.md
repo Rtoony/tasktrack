@@ -1,7 +1,12 @@
 # TaskTrack Email Intake
 
-IMAP poller that forwards unread messages to `/api/triage`, creating CAD tasks
-flagged `needs_review`. Runs as a systemd user timer every 5 minutes.
+IMAP poller that captures unread messages into the **Triage inbox**
+(`POST /api/v1/inbox`, `source=email`). Each email becomes an inbox item; the
+server seeds an ADVISORY category suggestion in the background and a human
+makes the final call at assignment (promote) time. Emails are **no longer
+auto-committed as CAD Dev tasks** and the `needs_review` path is retired for
+email — nothing reaches a tracker without a human assigning it. Runs as a
+systemd user timer every 5 minutes.
 
 ## Wiring (one-time setup)
 
@@ -30,8 +35,9 @@ flagged `needs_review`. Runs as a systemd user timer every 5 minutes.
    ```
 
 4. **Verify.** Send a test email to the intake mailbox, wait up to 5 min, and
-   check the AI Intake / CAD Development tabs for a new row with the "AI ·
-   needs review" badge.
+   check the Triage inbox for a new item (source `email`, title = subject).
+   Shortly after capture the item shows the AI's suggested category; assign
+   it from there.
 
 ## Manual test run
 
@@ -43,14 +49,20 @@ set -a; source /dev/shm/nexus-env-tasktrack-email-intake; set +a
 
 ## Notes
 
-- Messages are marked `\Seen` only after the triage POST succeeds, so transient
-  network / LiteLLM outages don't drop mail — the next tick retries.
+- Messages are marked `\Seen` only after the capture POST succeeds, so
+  transient network outages don't drop mail — the next tick retries. The
+  Message-ID is sent as `source_ref`, so a retry after a crash between POST
+  and `\Seen` dedupes server-side (200 with the existing item) instead of
+  double-capturing.
+- Capture is fast and model-free: the classifier runs server-side in the
+  background (`INBOX_AUTO_SUGGEST`) and only ever stores an ADVISORY
+  suggestion on the inbox item — never a tracker row.
 - Up to 10 messages per tick (`INTAKE_MAX_MESSAGES` override). Large backlogs
   drain over several ticks.
 - Whitelisted MIME attachments (PDF / DWG / DXF / PNG / JPG / XLSX / DOCX)
-  ride along with the triage POST: once the task row is created, each part
-  is uploaded to `/api/v1/attachments/<table>/<task_id>` with the same
-  triage token. Failures are logged but never block the row — the task
+  ride along with the capture: once the inbox item is created, each part
+  is uploaded to `/api/v1/attachments/inbox_items/<item_id>` with the same
+  triage token. Failures are logged but never block the item — it
   still lands so the operator can chase the missing file. Override the
   per-part cap (default 50 MB, matching the server) with
   `INTAKE_MAX_ATTACHMENT_BYTES`.

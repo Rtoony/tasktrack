@@ -2,11 +2,23 @@
 """TaskTrack Email Intake poller.
 
 Reads unread mail from an IMAP mailbox, extracts body + sender + subject, and
-POSTs to `${TASKTRACK_URL}/api/v1/triage` with `commit=true` and `source=email` so
-the task lands in TaskTrack flagged `needs_review`. After the task is created,
-any whitelisted MIME attachments (PDF / DWG / DXF / PNG / JPG / XLSX / DOCX)
-are POSTed to `/api/v1/attachments/<table>/<task_id>` so the operator sees the
-referenced files when they review the row.
+POSTs to `${TASKTRACK_URL}/api/v1/inbox` with `source=email` so each email
+lands as a Triage inbox item awaiting human assignment. The server seeds an
+ADVISORY category suggestion in the background (INBOX_AUTO_SUGGEST); the human
+picks the final tracker at promote time. No tracker records are auto-created
+and the old `needs_review` path is retired for email — emails are never
+committed straight into CAD Dev (or any other tracker) anymore.
+
+Payload per message: title <- Subject (falling back to the first non-empty
+body line), body <- the composed "Subject: / From: / body" block (sender info
+rides in the body — the capture API has no requested_by field), priority
+Medium, source_ref <- Message-ID so retries dedupe server-side (a 200 with
+the existing row instead of a 201).
+
+After the inbox item is created, any whitelisted MIME attachments
+(PDF / DWG / DXF / PNG / JPG / XLSX / DOCX) are POSTed to
+`/api/v1/attachments/inbox_items/<item_id>` so the operator sees the
+referenced files when they assign the item.
 
 Designed to run as a short-lived systemd user service triggered by a timer
 (every 5 minutes). Exits 0 when no messages are waiting; exits non-zero on
@@ -26,8 +38,10 @@ Environment:
                        message)
   TASKTRACK_URL        default "http://127.0.0.1:5050"
   TASKTRACK_TOKEN      required — matches TASKTRACK_TOKEN_TRIAGE on the
-                       server (legacy single-secret TASKTRACK_TOKEN also
-                       still works during deprecation)
+                       server; both the inbox capture endpoint and the
+                       attachments upload accept the triage scope (legacy
+                       single-secret TASKTRACK_TOKEN also still works
+                       during deprecation)
 """
 
 from __future__ import annotations
@@ -90,8 +104,22 @@ def _strip_html(html: str) -> str:
     return text.strip()
 
 
-def _compose_intake_text(msg: EmailMessage) -> tuple[str, str]:
-    """Return (raw_text_for_triage, sender_display)."""
+# Server-side cap on inbox_items.title — the capture endpoint truncates
+# silently at 256, we just match it so what we log is what gets stored.
+_TITLE_MAX = 256
+
+
+def _compose_inbox_fields(msg: EmailMessage) -> tuple[str, str, str]:
+    """Return (title, body_block, sender_display) for the inbox capture.
+
+    title: the Subject header, falling back to the first non-empty body
+    line (sanely truncated to the server's 256-char cap), falling back to
+    "Email from <sender>" for subject-less, body-less mail.
+
+    body_block: the same composed "Subject: / From: / body" block the old
+    triage path sent — sender identity stays inside the body since the
+    capture API has no requested_by field.
+    """
     subject = (msg.get("Subject") or "").strip()
     from_raw = msg.get("From") or ""
     sender_name, sender_addr = email.utils.parseaddr(from_raw)
@@ -105,18 +133,40 @@ def _compose_intake_text(msg: EmailMessage) -> tuple[str, str]:
     if body:
         parts.append("")
         parts.append(body)
-    return "\n".join(parts).strip(), sender_display
+    body_block = "\n".join(parts).strip()
+
+    title = subject
+    if not title:
+        for line in body.splitlines():
+            line = line.strip()
+            if line:
+                title = line
+                break
+    if not title and sender_display:
+        title = f"Email from {sender_display}"
+    return title[:_TITLE_MAX], body_block, sender_display
 
 
-def _post_triage(url: str, token: str, text: str, requested_by: str) -> dict:
+def _post_inbox(url: str, token: str, title: str, body: str,
+                source_ref: str) -> dict:
+    """Capture one email as a Triage inbox item.
+
+    Returns the inbox-item dict (201 on create; 200 with the existing row
+    when (source, source_ref) already landed — safe retry after a crash
+    between POST and the IMAP \\Seen store). The server runs the ADVISORY
+    category suggestion in the background; we never call /suggest and we
+    never create tracker records from here.
+    """
     payload = {
-        "text": text,
-        "commit": True,
+        "title": title,
+        "body": body,
         "source": "email",
-        "requested_by": requested_by,
+        "priority": "Medium",
     }
+    if source_ref:
+        payload["source_ref"] = source_ref
     resp = requests.post(
-        url.rstrip("/") + "/api/v1/triage",
+        url.rstrip("/") + "/api/v1/inbox",
         headers={"Content-Type": "application/json", "X-Token": token},
         json=payload,
         timeout=120,
@@ -255,25 +305,31 @@ def main() -> int:
                 continue
             raw = data[0][1]
             msg = email.message_from_bytes(raw, policy=email.policy.default)
-            text, sender = _compose_intake_text(msg)
-            if not text:
+            title, body_block, sender = _compose_inbox_fields(msg)
+            if not body_block:
                 LOG.info("skipping empty message id=%s", msg_id)
                 conn.store(msg_id, "+FLAGS", "\\Seen")
                 continue
+            # Message-ID dedupes retries server-side via (source, source_ref).
+            source_ref = (msg.get("Message-ID") or "").strip()[:128]
             try:
-                result = _post_triage(tt_url, tt_token, text, sender)
+                item = _post_inbox(tt_url, tt_token, title, body_block,
+                                   source_ref)
             except Exception as exc:  # noqa: BLE001 — log and keep message unread
-                LOG.error("triage POST failed for id=%s: %s", msg_id, exc)
+                LOG.error("inbox capture POST failed for id=%s: %s", msg_id, exc)
                 continue
-            task_id = result.get("task_id")
-            target_table = result.get("target_table")
-            LOG.info("id=%s -> task_id=%s table=%s model=%s",
-                     msg_id, task_id, target_table, result.get("model"))
+            item_id = item.get("id")
+            # suggested_table is null right after capture (the server's
+            # auto-suggest runs in the background); it's only populated
+            # here when a dedupe returned an already-suggested row.
+            suggested = item.get("suggested_table")
+            LOG.info("id=%s -> inbox_item=%s suggestion=%s sender=%s",
+                     msg_id, item_id, suggested or "pending", sender)
 
-            # Best-effort attachment upload. We've already created the task,
-            # so attachment failures don't roll anything back — they just
-            # leave the operator without the file (visible in the log).
-            if task_id and target_table:
+            # Best-effort attachment upload. We've already created the inbox
+            # item, so attachment failures don't roll anything back — they
+            # just leave the operator without the file (visible in the log).
+            if item_id:
                 for filename, ctype, blob in _iter_attachments(msg):
                     if len(blob) > max_attachment_bytes:
                         LOG.warning(
@@ -281,7 +337,7 @@ def main() -> int:
                             filename, len(blob), max_attachment_bytes,
                         )
                         continue
-                    _post_attachment(tt_url, tt_token, target_table, task_id,
+                    _post_attachment(tt_url, tt_token, "inbox_items", item_id,
                                      filename, ctype, blob)
 
             conn.store(msg_id, "+FLAGS", "\\Seen")

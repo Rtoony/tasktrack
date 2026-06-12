@@ -342,6 +342,33 @@
   .triage-cue-needs-review { color:#92400e; border-color:rgba(146,64,14,0.35); background:#fffbeb; }
   .triage-cue-promoted { color:#065f46; border-color:rgba(6,95,70,0.35); background:#ecfdf5; }
   .triage-route-cell { display:flex; flex-direction:column; gap:0.24rem; color:var(--text-muted); font-size:0.74rem; min-width:120px; }
+  /* ── AI suggestion chips (Triage+Assignment) ── */
+  .triage-suggest-chip { gap:0.3rem; cursor:default; }
+  .suggest-high { color:#065f46; border-color:rgba(6,95,70,0.35); background:#ecfdf5; }
+  .suggest-medium { color:#92400e; border-color:rgba(146,64,14,0.35); background:#fffbeb; }
+  .suggest-low { color:var(--text-muted); border-color:var(--border); background:var(--bg); }
+  .suggest-dot { width:0.42rem; height:0.42rem; border-radius:50%; flex:none; display:inline-block; }
+  .suggest-dot-high { background:#24a148; }
+  .suggest-dot-medium { background:#f1c21b; }
+  .suggest-dot-low { background:#a8a8a8; }
+  .triage-suggest-btn { align-self:flex-start; border:1px dashed var(--border); background:var(--surface); color:var(--accent); border-radius:999px; padding:0.08rem 0.5rem; font-size:0.66rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+  .triage-suggest-btn:hover { border-color:var(--accent); background:var(--bg); }
+  .triage-suggest-btn:disabled { color:var(--text-light); cursor:wait; }
+  /* ── Assignment modal (Triage+Assignment) ──
+     .modal.assign-modal beats the later plain .modal max-width rule. */
+  .modal.assign-modal { max-width:680px; }
+  .assign-target-chips { display:flex; flex-wrap:wrap; gap:0.35rem; margin-bottom:0.85rem; }
+  .assign-chip { display:inline-flex; align-items:center; gap:0.32rem; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:999px; padding:0.28rem 0.72rem; font-size:0.74rem; font-weight:600; cursor:pointer; }
+  .assign-chip:hover { border-color:var(--accent); color:var(--text); }
+  .assign-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .assign-chip:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .assign-ai-line { font-size:0.76rem; color:var(--text-muted); background:var(--bg); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:var(--radius); padding:0.45rem 0.6rem; margin-bottom:0.85rem; }
+  .assign-footnote { font-size:0.72rem; color:var(--text-light); margin-top:0.85rem; }
+  .assign-req-star { color:#da1e28; }
+  .field-invalid label { color:#da1e28; }
+  .field-invalid input, .field-invalid textarea, .field-invalid select { border-color:#da1e28; outline:1px solid #da1e28; }
+  .toast.toast-link { pointer-events:auto; }
+  .toast-link-btn { background:none; border:none; color:#78a9ff; font-weight:600; cursor:pointer; font-size:0.8rem; padding:0; margin-left:0.6rem; text-decoration:underline; font-family:inherit; }
   .triage-check-col { width:2rem; }
   .triage-check-col input[type=checkbox],.triage-check-cell input[type=checkbox] { cursor:pointer; accent-color:var(--accent); }
   .triage-bulk-bar { display:flex; align-items:center; gap:0.45rem; padding:0.2rem 0.55rem; border:1px solid var(--border); background:var(--accent-light); }
@@ -1901,6 +1928,7 @@
         <button class="btn btn-sm" type="button" id="promote-btn" onclick="doPromote()">Go</button>
       </span>
       <button class="btn btn-export" type="button" id="meeting-packet-btn" onclick="openMeetingPacket()" style="display:none;">Meeting Packet</button>
+      <button class="btn btn-export" type="button" id="drawer-assign-btn" style="display:none;">Assign &rarr;</button>
       <button class="btn btn-primary" onclick="saveRecord()">Save</button>
     </div>
   </div>
@@ -1939,28 +1967,30 @@
   </div>
 </div>
 
-<!-- ── Triage Promote Modal ───────────────────── -->
+<!-- ── Triage Assignment Modal (Triage+Assignment unification) ───────── -->
 <div class="modal-overlay" id="promote-overlay">
-  <div class="modal" style="max-width:420px">
+  <div class="modal assign-modal">
     <div class="modal-header">
-      <h3>Promote to tracker</h3>
-      <button class="modal-close" onclick="closeTriagePromote()">&times;</button>
+      <div>
+        <h3>Assign to tracker</h3>
+        <div class="drawer-eyebrow">AI suggestions are advisory &mdash; you have final say.</div>
+      </div>
+      <button class="modal-close" onclick="closeTriagePromote()" aria-label="Close assignment modal">&times;</button>
     </div>
     <div class="modal-body">
       <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.85rem">
-        Send <strong id="promote-title" style="color:var(--text)"></strong> to:
+        Assign <strong id="promote-title" style="color:var(--text)"></strong> to:
       </p>
-      <div class="field">
-        <label>Target tracker</label>
-        <select id="promote-target"></select>
-      </div>
-      <p style="font-size:0.75rem;color:var(--text-light);margin-top:0.85rem">
-        The triage item will be archived and a new record created in the chosen tracker. Body, priority, and due date are carried over where the target supports them.
+      <div class="assign-target-chips" id="assign-target-chips" role="radiogroup" aria-label="Target tracker"></div>
+      <div class="assign-ai-line" id="assign-ai-line" style="display:none"></div>
+      <div id="assign-fields"></div>
+      <p class="assign-footnote">
+        Review and edit the fields above, then assign. The triage item is archived and a new record is created in the chosen tracker &mdash; no review flag, you just reviewed it.
       </p>
     </div>
     <div class="modal-footer">
       <button class="btn btn-cancel" onclick="closeTriagePromote()">Cancel</button>
-      <button class="btn btn-primary" id="promote-go-btn">Promote</button>
+      <button class="btn btn-primary" id="promote-go-btn">Assign</button>
     </div>
   </div>
 </div>
@@ -2159,7 +2189,24 @@ const STANDALONE_TAB = {{ standalone_tab|tojson }};
 const SHELL_BRAND = {{ brand_name|tojson }};
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
-function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500); }
+let toastTimer = null;
+function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('toast-link'); t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2500); }
+/* Toast variant with a clickable action (e.g., link to a just-created
+   record). pointer-events are enabled only for this variant via the
+   .toast-link class so plain toasts never intercept clicks. */
+function toastWithLink(msg, linkLabel, onClick) {
+  const t = document.getElementById('toast');
+  t.replaceChildren(document.createTextNode(msg));
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toast-link-btn';
+  btn.textContent = linkLabel;
+  btn.addEventListener('click', () => { t.classList.remove('show','toast-link'); onClick(); });
+  t.appendChild(btn);
+  t.classList.add('show','toast-link');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show','toast-link'), 6000);
+}
 function today() { return new Date().toISOString().split('T')[0]; }
 
 // Priority row accents (feedback #19): tint + left bar so urgency scans without reading badges.
@@ -5579,15 +5626,49 @@ function makeCalendarDateCell(r, field) {
 
 /* ── Triage-specific helpers ──────────────────────────────────────────── */
 
+/* Single source of truth for the assignment modal's target chips and the
+   route-cell suggestion labels. All 8 assignment targets — the four core
+   trackers plus the four internal (personal_items) category queues. */
 const TRIAGE_PROMOTE_TARGETS = [
-  { table: 'project_work_tasks', label: 'Project Tasks', tab: 'project' },
-  { table: 'work_tasks',         label: 'CAD Dev',       tab: 'work' },
-  { table: 'training_tasks',     label: 'Training',      tab: 'training' },
+  { table: 'project_work_tasks', label: 'Project Tasks',   tab: 'project' },
+  { table: 'work_tasks',         label: 'CAD Dev',         tab: 'work' },
+  { table: 'training_tasks',     label: 'Training',        tab: 'training' },
+  { table: 'personnel_issues',   label: 'Incident Report', tab: 'personnel' },
   { table: 'personal_items',     label: 'Follow-up',       tab: 'personal_husband', category: 'Follow-up' },
   { table: 'personal_items',     label: 'Meetings',        tab: 'personal_father',  category: 'Meetings' },
-  { table: 'personal_items',     label: 'Office',         tab: 'personal_house',   category: 'Office' },
+  { table: 'personal_items',     label: 'Office',          tab: 'personal_house',   category: 'Office' },
   { table: 'personal_items',     label: 'Assets',          tab: 'personal_cars',    category: 'Assets' },
 ];
+
+/* Mirror of app/config.py ALLOWED_TABLES for the assignment modal —
+   which fields each target accepts as promote overrides (bookkeeping
+   keys like needs_review/source/ai_* deliberately excluded; assignment
+   records never carry a review flag) and which are required. KEEP IN
+   SYNC with app/config.py. */
+const ASSIGN_TABLE_FIELDS = {
+  work_tasks: ['title','cad_skill_area','description','requested_by','request_reference','priority','status','due_date','notes','starter_note','clarifications_needed','software','project_number','project_id'],
+  project_work_tasks: ['project_name','title','project_number','billing_phase','engineer','task_description','priority','status','due_at','scheduled_completion_at','time_required_minutes','notes','scope_notes','progress_notes','confirmation_notes','completion_notes','project_id','engineer_id'],
+  training_tasks: ['title','trainees','requested_by','skill_area','training_goals','additional_context','priority','status','due_date','notes','project_number','project_id','trainee_ids'],
+  personnel_issues: ['person_name','observed_by','cad_skill_area','issue_description','incident_context','recommended_training','severity','status','reported_date','follow_up_date','resolution_notes','project_number','project_id','person_id','estimated_time_loss_minutes','immediate_solution','skill_category_id','person_ids'],
+  personal_items: ['title','category','body','priority','status','due_date'],
+};
+const ASSIGN_REQUIRED = {
+  work_tasks: ['title'],
+  project_work_tasks: ['project_name','title','project_number','task_description'],
+  training_tasks: ['title'],
+  personnel_issues: ['issue_description'],
+  personal_items: ['title','category'],
+};
+
+/* Where the generic carry slots (title/body/priority/due) land per target —
+   mirrors the carry logic in POST /api/v1/inbox/<id>/promote. */
+const ASSIGN_CARRY_FIELDS = {
+  work_tasks:         { title:'title', body:'description',      priority:'priority', due:'due_date' },
+  project_work_tasks: { title:'title', body:'task_description', priority:'priority', due:'due_at' },
+  training_tasks:     { title:'title', body:'training_goals',   priority:'priority', due:'due_date' },
+  personnel_issues:   { title:'',      body:'issue_description', priority:'severity', due:'follow_up_date' },
+  personal_items:     { title:'title', body:'body',             priority:'priority', due:'due_date' },
+};
 
 const TRIAGE_SOURCE_META = {
   'remarkable-ocr': { label:'Paper/OCR', tone:'amber' },
@@ -5659,13 +5740,93 @@ function makeTriageSourceCell(r) {
   td.appendChild(wrap);
   return td;
 }
+/* ── Advisory AI suggestion helpers (Triage+Assignment) ──────────────────
+   inbox rows carry suggested_table / suggestion_json / suggested_at via
+   the generic list API. Suggestions are ADVISORY: they tint the Route
+   cell and pre-select the assignment modal target, nothing more. */
+function triageSuggestion(r) {
+  const raw = r?.suggestion_json;
+  if (!raw) return null;
+  let s = raw;
+  if (typeof raw === 'string') {
+    try { s = JSON.parse(raw); } catch { return null; }
+  }
+  return (s && typeof s === 'object' && s.target_table) ? s : null;
+}
+function assignConfidence(suggestion) {
+  const c = String(suggestion?.confidence || '').toLowerCase();
+  return ['high','medium','low'].includes(c) ? c : 'low';
+}
+function assignSpecIndexFor(table, category) {
+  return TRIAGE_PROMOTE_TARGETS.findIndex(t =>
+    t.table === table && (t.table !== 'personal_items' || t.category === (category || 'Follow-up')));
+}
+/* The TRIAGE_PROMOTE_TARGETS entry matching a row's stored suggestion
+   (suggestion_json first, denormalized suggested_table as fallback). */
+function triageSuggestedSpec(r) {
+  const suggestion = triageSuggestion(r);
+  const table = suggestion?.target_table || r?.suggested_table || '';
+  if (!table) return null;
+  const idx = assignSpecIndexFor(table, suggestion?.category);
+  if (idx < 0) return null;
+  return { ...TRIAGE_PROMOTE_TARGETS[idx], idx, suggestion };
+}
+function makeTriageSuggestChip(spec) {
+  const conf = assignConfidence(spec.suggestion);
+  const chip = document.createElement('span');
+  chip.className = 'triage-chip triage-suggest-chip suggest-' + conf;
+  const dot = document.createElement('span');
+  dot.className = 'suggest-dot suggest-dot-' + conf;
+  chip.appendChild(dot);
+  chip.appendChild(document.createTextNode('→ ' + spec.label));
+  const rationale = String(spec.suggestion?.rationale || '').trim();
+  chip.title = (rationale ? 'AI: ' + rationale + ' · ' : 'AI suggestion · ') + conf + ' confidence';
+  return chip;
+}
+function makeTriageSuggestButton(r) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'triage-suggest-btn';
+  btn.textContent = 'Suggest';
+  btn.title = 'Ask the AI to suggest a target tracker and draft fields (advisory only)';
+  btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    btn.disabled = true;
+    btn.textContent = 'Suggesting…';
+    const res = await api('POST', '/api/v1/inbox/' + r.id + '/suggest', {});
+    if (res && !res.error && res.inbox_item) {
+      Object.assign(r, res.inbox_item);
+      const spec = triageSuggestedSpec(r);
+      toast(spec ? 'AI suggests ' + spec.label : 'suggestion stored');
+      loadTable('triage');
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Suggest';
+      toast(res?.error ? res.error + (res.detail ? ' — ' + res.detail : '') : 'suggest failed');
+    }
+  });
+  return btn;
+}
 function makeTriageRouteCell(r) {
   const td = document.createElement('td');
   const wrap = document.createElement('div'); wrap.className = 'triage-route-cell';
   const route = document.createElement('span');
-  route.textContent = triageIsPromoted(r) ? formatPromotedTarget(r) : 'Awaiting route';
-  wrap.appendChild(route);
-  if (!triageIsPromoted(r)) wrap.appendChild(makeTriageChip('Promote next', 'triage-cue-needs-review'));
+  if (triageIsPromoted(r)) {
+    route.textContent = formatPromotedTarget(r);
+    wrap.appendChild(route);
+  } else {
+    const spec = triageSuggestedSpec(r);
+    if (spec) {
+      route.textContent = 'Suggested: ' + spec.label;
+      wrap.appendChild(route);
+      wrap.appendChild(makeTriageSuggestChip(spec));
+    } else {
+      route.textContent = 'Awaiting route';
+      wrap.appendChild(route);
+      wrap.appendChild(makeTriageChip('Promote next', 'triage-cue-needs-review'));
+      wrap.appendChild(makeTriageSuggestButton(r));
+    }
+  }
   td.appendChild(wrap);
   return td;
 }
@@ -5780,38 +5941,255 @@ function makeTriageActions(r) {
   return td;
 }
 
-function openTriagePromote(r) {
-  const overlay = document.getElementById('promote-overlay');
-  document.getElementById('promote-title').textContent = r.title || '';
-  const sel = document.getElementById('promote-target');
-  sel.replaceChildren();
-  TRIAGE_PROMOTE_TARGETS.forEach((t, idx) => {
-    const opt = document.createElement('option');
-    // Use the array index as the option value so we can dispatch by full
-    // target spec (table + optional category) instead of just table name.
-    opt.value = String(idx);
-    opt.textContent = t.label;
-    sel.appendChild(opt);
-  });
-  document.getElementById('promote-go-btn').onclick = async () => {
-    const target = TRIAGE_PROMOTE_TARGETS[Number(sel.value)];
-    if (!target) return;
-    const payload = { target_table: target.table };
-    if (target.category) payload.overrides = { category: target.category };
-    const res = await api('POST','/api/v1/inbox/'+r.id+'/promote', payload);
-    if (res && !res.error) {
-      toast('promoted to ' + target.label);
-      closeTriagePromote();
-      loadTable('triage');
-      loadTable(target.tab);
-      loadDashboard();
-    } else if (res?.error) {
-      toast(res.error);
-    }
-  };
-  overlay.classList.add('open');
+/* ── Assignment modal (Triage+Assignment unification) ────────────────────
+   The SYSTEM suggests, the HUMAN has final say here. Target chips come
+   from TRIAGE_PROMOTE_TARGETS (single source); the field form reuses the
+   FORMS/renderField machinery, subset to what the target's ALLOWED_TABLES
+   config accepts. Submitting POSTs the reviewed field set as promote
+   overrides — the created record carries NO needs_review flag. */
+let assignState = null;
+
+function assignSuggestionFieldsFor(spec, suggestion) {
+  // Suggestion-drafted fields apply only to the suggested target
+  // (table + category for the internal queues).
+  if (!suggestion || suggestion.target_table !== spec.table) return null;
+  if (spec.table === 'personal_items' && (suggestion.category || 'Follow-up') !== spec.category) return null;
+  return (suggestion.fields && typeof suggestion.fields === 'object') ? suggestion.fields : {};
 }
-function closeTriagePromote() { document.getElementById('promote-overlay').classList.remove('open'); }
+
+function assignDataForSpec(spec) {
+  const carry = assignState.carry;
+  const map = ASSIGN_CARRY_FIELDS[spec.table] || {};
+  const data = {};
+  if (map.title && carry.title) data[map.title] = carry.title;
+  if (map.body && carry.body) data[map.body] = carry.body;
+  if (map.priority && carry.priority) {
+    // Backend parity: only a plain Low/Medium/High priority lands in severity.
+    if (map.priority !== 'severity' || ['Low','Medium','High'].includes(carry.priority)) {
+      data[map.priority] = carry.priority;
+    }
+  }
+  if (map.due && carry.due) data[map.due] = carry.due;
+  if (spec.table === 'personnel_issues' && !data.issue_description) {
+    data.issue_description = carry.body || carry.title || '';
+  }
+  const sfields = assignSuggestionFieldsFor(spec, assignState.suggestion);
+  if (sfields) {
+    Object.entries(sfields).forEach(([key, value]) => {
+      if (value == null || !String(value).trim()) return;
+      data[key] = value;
+    });
+  }
+  return data;
+}
+
+/* Capture the operator's edits to the generic carry slots before a target
+   switch so title/body/priority/due travel across chips. */
+function assignUpdateCarryFromForm(spec) {
+  const map = ASSIGN_CARRY_FIELDS[spec.table] || {};
+  const read = key => {
+    if (!key) return null;
+    const el = document.getElementById('f-' + key);
+    return el ? el.value : null;
+  };
+  const carry = assignState.carry;
+  const t = read(map.title); if (t !== null) carry.title = t;
+  const b = read(map.body); if (b !== null) carry.body = b;
+  const p = read(map.priority); if (p !== null) carry.priority = p;
+  const d = read(map.due); if (d !== null) carry.due = d;
+}
+
+const ASSIGN_SKIP_FIELD_TYPES = new Set(['attachments','links','project-map','placeholder-panel']);
+function assignFieldAllowed(spec, f) {
+  return !ASSIGN_SKIP_FIELD_TYPES.has(f.type)
+    && (ASSIGN_TABLE_FIELDS[spec.table] || []).includes(f.key);
+}
+
+function renderAssignField(f, value, requiredSet) {
+  const wrap = renderField(f, value);
+  if (requiredSet.has(f.key)) {
+    wrap.classList.add('assign-required');
+    const label = wrap.querySelector('label');
+    if (label) {
+      const star = document.createElement('span');
+      star.className = 'assign-req-star';
+      star.textContent = ' *';
+      label.appendChild(star);
+    }
+  }
+  return wrap;
+}
+
+function renderAssignFields() {
+  const spec = TRIAGE_PROMOTE_TARGETS[assignState.idx];
+  const host = document.getElementById('assign-fields');
+  host.replaceChildren();
+  // Required per app/config.py ALLOWED_TABLES; the internal queues'
+  // category requirement is satisfied by the chip itself.
+  const requiredSet = new Set((ASSIGN_REQUIRED[spec.table] || [])
+    .filter(key => key !== 'category' || !spec.category));
+  let data = assignDataForSpec(spec);
+  if (spec.tab === 'work') data = transformWorkForDisplay(data);
+  FORMS[spec.tab].forEach(f => {
+    if (f.key === '_row') {
+      const subs = f.fields.filter(sf => assignFieldAllowed(spec, sf));
+      if (!subs.length) return;
+      const row = document.createElement('div');
+      row.className = 'field-row';
+      subs.forEach(sf => row.appendChild(renderAssignField(sf, data[sf.key], requiredSet)));
+      host.appendChild(row);
+    } else if (assignFieldAllowed(spec, f)) {
+      host.appendChild(renderAssignField(f, data[f.key], requiredSet));
+    }
+  });
+}
+
+function renderAssignChips() {
+  const host = document.getElementById('assign-target-chips');
+  host.replaceChildren();
+  TRIAGE_PROMOTE_TARGETS.forEach((t, idx) => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'assign-chip' + (idx === assignState.idx ? ' active' : '');
+    chip.setAttribute('role', 'radio');
+    chip.setAttribute('aria-checked', idx === assignState.idx ? 'true' : 'false');
+    chip.textContent = t.label;
+    if (idx === assignState.suggestedIdx) {
+      const dot = document.createElement('span');
+      dot.className = 'suggest-dot suggest-dot-' + assignConfidence(assignState.suggestion);
+      chip.prepend(dot);
+      chip.title = 'AI-suggested target';
+    }
+    chip.addEventListener('click', () => setAssignTarget(idx));
+    host.appendChild(chip);
+  });
+}
+
+function setAssignTarget(idx) {
+  if (!assignState || idx === assignState.idx || !TRIAGE_PROMOTE_TARGETS[idx]) return;
+  assignUpdateCarryFromForm(TRIAGE_PROMOTE_TARGETS[assignState.idx]);
+  assignState.idx = idx;
+  renderAssignChips();
+  renderAssignFields();
+}
+
+function renderAssignAiLine() {
+  const line = document.getElementById('assign-ai-line');
+  const suggestion = assignState.suggestion;
+  if (!suggestion) { line.style.display = 'none'; line.textContent = ''; return; }
+  const spec = assignState.suggestedIdx >= 0 ? TRIAGE_PROMOTE_TARGETS[assignState.suggestedIdx] : null;
+  const rationale = String(suggestion.rationale || '').trim();
+  line.textContent = 'AI: '
+    + (rationale || ('suggests ' + (spec ? spec.label : suggestion.target_table)))
+    + ' · ' + assignConfidence(suggestion);
+  line.style.display = '';
+}
+
+function assignClearInvalid() {
+  document.querySelectorAll('#assign-fields .field-invalid')
+    .forEach(el => el.classList.remove('field-invalid'));
+}
+
+function assignMarkInvalid(keys) {
+  let first = null;
+  (keys || []).forEach(key => {
+    const el = document.getElementById('f-' + key);
+    const wrap = el ? el.closest('.field') : null;
+    if (wrap) wrap.classList.add('field-invalid');
+    if (el && !first) first = el;
+  });
+  if (first && typeof first.focus === 'function') first.focus();
+}
+
+function assignFieldLabel(spec, key) {
+  const def = FORMS[spec.tab]
+    .flatMap(f => f.key === '_row' ? f.fields : [f])
+    .find(f => f.key === key);
+  return def ? def.label : key;
+}
+
+async function submitAssignment() {
+  if (!assignState) return;
+  const spec = TRIAGE_PROMOTE_TARGETS[assignState.idx];
+  assignClearInvalid();
+  let raw = getFormData(spec.tab);
+  if (spec.tab === 'work') raw = transformWorkForSave(raw);
+  const allowed = new Set(ASSIGN_TABLE_FIELDS[spec.table] || []);
+  const overrides = {};
+  Object.entries(raw).forEach(([key, value]) => {
+    if (!allowed.has(key)) return;
+    if (value == null || !String(value).trim()) return;  // empty → backend carry applies
+    overrides[key] = value;
+  });
+  if (spec.category) overrides.category = spec.category;
+  // Client-side mirror of the server's required-field validation.
+  const missing = (ASSIGN_REQUIRED[spec.table] || [])
+    .filter(key => !String(overrides[key] || '').trim());
+  if (missing.length) {
+    assignMarkInvalid(missing);
+    toast('Required: ' + missing.map(key => assignFieldLabel(spec, key)).join(', '));
+    return;
+  }
+  const go = document.getElementById('promote-go-btn');
+  go.disabled = true;
+  const res = await api('POST', '/api/v1/inbox/' + assignState.item.id + '/promote', {
+    target_table: spec.table,
+    overrides,
+  });
+  go.disabled = false;
+  if (res && !res.error && res.promoted_to) {
+    closeTriagePromote();
+    const createdId = res.promoted_to.id;
+    toastWithLink('Assigned to ' + spec.label + ' #' + createdId, 'View record', () => {
+      activateTab(spec.tab);
+      editRecord(spec.tab, createdId);
+    });
+    loadTable('triage');
+    loadTable(spec.tab);
+    loadDashboard();
+  } else if (res && Array.isArray(res.missing) && res.missing.length) {
+    // Structured 400 — highlight exactly the fields the server flagged.
+    assignMarkInvalid(res.missing);
+    toast('Missing required fields: ' + res.missing.map(key => assignFieldLabel(spec, key)).join(', '));
+  } else {
+    toast(res?.error || 'assignment failed');
+  }
+}
+
+function openTriagePromote(r) {
+  // The record drawer and the assignment form both render f-<key> field
+  // ids — close the drawer first so getElementById hits the right form.
+  if (document.getElementById('modal-overlay').classList.contains('open')) closeModal();
+  const suggestion = triageSuggestion(r);
+  const suggestedTable = suggestion?.target_table || r.suggested_table || '';
+  const suggestedIdx = suggestedTable ? assignSpecIndexFor(suggestedTable, suggestion?.category) : -1;
+  assignState = {
+    item: r,
+    suggestion,
+    suggestedIdx,
+    // Pre-select the AI-suggested target; fall back to Project Tasks.
+    idx: suggestedIdx >= 0 ? suggestedIdx : 0,
+    carry: {
+      title: r.title || '',
+      body: r.body || '',
+      priority: r.priority || '',
+      due: r.due_date || '',
+    },
+  };
+  document.getElementById('promote-title').textContent = r.title || '';
+  renderAssignChips();
+  renderAssignAiLine();
+  renderAssignFields();
+  const go = document.getElementById('promote-go-btn');
+  go.disabled = false;
+  go.onclick = submitAssignment;
+  document.getElementById('promote-overlay').classList.add('open');
+}
+function closeTriagePromote() {
+  document.getElementById('promote-overlay').classList.remove('open');
+  document.getElementById('assign-fields')?.replaceChildren();
+  assignState = null;
+}
 
 function formatDateTime(d) {
   try {
@@ -7534,8 +7912,20 @@ function openModal(table,data) {
   // Promote / Escalate dropdown — only meaningful on existing records.
   renderPromoteDropdown(table);
   renderMeetingPacketButton(table, data || {});
+  renderDrawerAssignButton(table, data || {});
 
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+/* Triage drawer → assignment modal handoff. Shown only for un-promoted
+   triage items; closes the drawer first (the assignment form reuses the
+   same f-<key> field ids). */
+function renderDrawerAssignButton(table, data) {
+  const btn = document.getElementById('drawer-assign-btn');
+  if (!btn) return;
+  const show = table === 'triage' && data && data.id && !triageIsPromoted(data);
+  btn.style.display = show ? 'inline-flex' : 'none';
+  btn.onclick = show ? () => { closeModal(); openTriagePromote(data); } : null;
 }
 
 function openMeetingPacketForEvent(eventId) {
@@ -7637,6 +8027,7 @@ async function doPromote() {
 function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
   renderMeetingPacketButton('', {});
+  renderDrawerAssignButton('', {});
   const feedbackBtn = document.getElementById('record-feedback-btn');
   if (feedbackBtn) feedbackBtn.style.display = 'none';
   document.getElementById('modal-meta')?.replaceChildren();
