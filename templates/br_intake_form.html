@@ -130,6 +130,9 @@
   .next li:last-child{border-bottom:0}
   .next li::before{content:counter(s);position:absolute;left:0;top:7px;width:24px;height:24px;border-radius:50%;background:var(--br-navy);color:#fff;font-size:12px;font-weight:600;display:grid;place-items:center}
   .pagefoot{max-width:760px;margin:0 auto;padding:0 20px 40px;font-size:11px;color:var(--faint);font-family:var(--font-mono);text-align:center}
+  .backlink{max-width:760px;margin:0 auto;padding:0 20px 40px;font-size:11px;font-family:var(--font-mono);text-align:center}
+  .backlink a{color:var(--faint);text-decoration:none}
+  .backlink a:hover{color:var(--br-navy);text-decoration:underline}
   @media(max-width:640px){ .typegrid{grid-template-columns:1fr 1fr} .row{grid-template-columns:1fr} .sso .who{display:none} }
 </style>
 <script>
@@ -155,6 +158,7 @@
 </head>
 <body>
 <div id="root"></div>
+<div class="backlink"><a href="/">&larr; Back to TaskTrack</a></div>
 <script src="{{ url_for('static', filename='js/br-intake.bundle.js') }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
