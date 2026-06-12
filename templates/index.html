@@ -81,6 +81,8 @@
   .kanban-lane-body { padding:0.5rem; display:flex; flex-direction:column; gap:0.45rem; overflow-y:auto; max-height:calc(100vh - 240px); }
   .kanban-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.55rem 0.65rem; cursor:pointer; transition:transform 0.1s, border-color 0.15s; }
   .kanban-card:hover { border-color:var(--accent); transform:translateY(-1px); }
+  /* Disabled "Promoted" action reads as done, not broken */
+  .btn.btn-done:disabled { opacity:0.45; cursor:not-allowed; text-decoration:line-through; }
   /* Priority accents (feedback #19) */
   .kanban-card.row-pri-high { box-shadow:inset 3px 0 0 var(--danger); background:color-mix(in srgb, var(--danger-light) 30%, var(--bg)); }
   .kanban-card.row-pri-medium { box-shadow:inset 3px 0 0 #f1c21b; background:color-mix(in srgb, var(--warn-light) 28%, var(--bg)); }
@@ -5927,10 +5929,12 @@ function makeTriageActions(r) {
 
   const promote = document.createElement('button');
   const promoted = triageIsPromoted(r);
-  promote.className = promoted ? 'btn btn-cancel' : 'btn btn-ghost';
-  promote.textContent = 'Promote';
+  promote.className = promoted ? 'btn btn-cancel btn-done' : 'btn btn-ghost';
+  promote.textContent = promoted ? 'Promoted' : 'Promote';
   promote.disabled = promoted;
-  if (!promoted) {
+  if (promoted) {
+    promote.title = 'Already promoted — see the Route column for the created record';
+  } else {
     promote.addEventListener('click',()=>openTriagePromote(r));
   }
   td.appendChild(promote);
