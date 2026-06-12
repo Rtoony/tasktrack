@@ -83,9 +83,10 @@
   .kanban-card:hover { border-color:var(--accent); transform:translateY(-1px); }
   /* Disabled "Promoted" action reads as done, not broken */
   .btn.btn-done:disabled { opacity:0.45; cursor:not-allowed; text-decoration:line-through; }
-  /* Priority accents (feedback #19) */
+  /* Priority accents (feedback #19, Low added in #28; 'None' stays accent-free) */
   .kanban-card.row-pri-high { box-shadow:inset 3px 0 0 var(--danger); background:color-mix(in srgb, var(--danger-light) 30%, var(--bg)); }
   .kanban-card.row-pri-medium { box-shadow:inset 3px 0 0 #f1c21b; background:color-mix(in srgb, var(--warn-light) 28%, var(--bg)); }
+  .kanban-card.row-pri-low { box-shadow:inset 3px 0 0 var(--success); background:color-mix(in srgb, var(--success-light) 28%, var(--bg)); }
   .kanban-card-title { font-size:0.82rem; font-weight:500; color:var(--text); line-height:1.3; }
   .kanban-card-meta { margin-top:0.4rem; display:flex; flex-wrap:wrap; gap:0.35rem; font-size:0.68rem; color:var(--text-muted); }
   .kanban-card-desc { margin-top:0.45rem; color:var(--text-muted); font-size:0.72rem; line-height:1.35; }
@@ -309,6 +310,9 @@
   tr.row-pri-medium td { background:color-mix(in srgb, var(--warn-light) 34%, var(--surface)); }
   tr.row-pri-medium td:first-child { box-shadow:inset 3px 0 0 #f1c21b; }
   tr.row-pri-medium:hover td { background:color-mix(in srgb, var(--warn-light) 58%, var(--surface)); }
+  tr.row-pri-low td { background:color-mix(in srgb, var(--success-light) 34%, var(--surface)); }
+  tr.row-pri-low td:first-child { box-shadow:inset 3px 0 0 var(--success); }
+  tr.row-pri-low:hover td { background:color-mix(in srgb, var(--success-light) 58%, var(--surface)); }
   tr.overdue td { background:var(--danger-light); }
   tr.overdue:hover td { background:color-mix(in srgb, var(--danger-light) 86%, var(--surface)); }
 
@@ -455,6 +459,15 @@
   .feedback-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
   .feedback-context { background:#161616; color:#c6c6c6; border-radius:var(--radius); padding:0.65rem; font-family:'IBM Plex Mono',monospace; font-size:0.68rem; line-height:1.45; max-height:120px; overflow:auto; white-space:pre-wrap; }
   .feedback-status { margin-right:auto; color:var(--text-muted); font-size:0.78rem; }
+  .feedback-dropzone { border:1.5px dashed var(--border); border-radius:var(--radius); padding:0.9rem 0.8rem; text-align:center; cursor:pointer; transition:border-color 0.15s ease, background 0.15s ease; }
+  .feedback-dropzone:hover, .feedback-dropzone:focus-visible { border-color:var(--accent); }
+  .feedback-dropzone.drag-over { border-color:var(--accent); background:var(--accent-light); }
+  .feedback-dropzone-copy { font-size:0.75rem; color:var(--text-muted); pointer-events:none; }
+  .feedback-dropzone-browse { color:var(--accent); font-weight:600; text-decoration:underline; }
+  .feedback-file-list { list-style:none; margin:0.45rem 0 0; padding:0; }
+  .feedback-file-list li { display:flex; align-items:center; justify-content:space-between; gap:0.5rem; font-size:0.72rem; color:var(--text); padding:0.25rem 0.35rem; border-bottom:1px solid var(--border); }
+  .feedback-file-list li:last-child { border-bottom:0; }
+  .feedback-file-remove { background:none; border:0; color:var(--danger); cursor:pointer; font-size:0.7rem; font-weight:600; padding:0.1rem 0.3rem; }
   .feedback-modal.feedback-shake { animation:feedbackShake 0.3s ease; }
   @keyframes feedbackShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-7px)} 40%,80%{transform:translateX(7px)} }
   @media (max-width:720px) {
@@ -945,6 +958,7 @@
             <option value="Medium" selected>Medium</option>
             <option value="High">High</option>
             <option value="Low">Low</option>
+            <option value="None">None</option>
           </select>
         </div>
         <input id="mobile-quick-file" class="mobile-quick-file" type="file" accept="image/*,.pdf,.dwg,.dxf,.xlsx,.csv,.txt" aria-label="Optional attachment">
@@ -1090,6 +1104,7 @@
                     <label>Priority lock</label>
                     <select id="preset-priority">
                       <option value="">Auto (let AI decide)</option>
+                      <option value="None">None</option>
                       <option value="Low">Low</option>
                       <option value="Medium">Medium</option>
                       <option value="High">High</option>
@@ -1204,6 +1219,7 @@
               <div class="field">
                 <label>Priority <span id="intake-priority-lock-tag" class="priority-lock-tag" style="display:none">locked by preset</span></label>
                 <select id="intake-field-priority">
+                  <option value="None">None</option>
                   <option value="Low">Low</option>
                   <option value="Medium" selected>Medium</option>
                   <option value="High">High</option>
@@ -1355,7 +1371,7 @@
       </select>
       <select class="filter-select" id="filter-triage-priority" onchange="loadTable('triage')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <select class="filter-select" id="filter-triage-source" onchange="loadTable('triage')">
         <option value="">All Sources</option>
@@ -1505,9 +1521,12 @@
         <option value="Not Started">Not Started</option><option value="In Progress">In Progress</option>
         <option value="On Hold">On Hold</option><option value="Complete">Complete</option>
       </select>
+      <select class="filter-select" id="filter-work-category" onchange="loadTable('work')">
+        <option value="">All Categories</option>
+      </select>
       <select class="filter-select" id="filter-work-priority" onchange="loadTable('work')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-work-overdue" onchange="loadTable('work')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/intake/request?type=cad" target="_blank" rel="noopener">Submit Form</a>
@@ -1517,6 +1536,7 @@
     <div class="table-wrap">
       <table><thead><tr>
         <th data-col="title" data-table="work">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="category" data-table="work">Category <span class="sort-arrow">&#9650;</span></th>
         <th data-col="cad_skill_area" data-table="work">CAD Skill Area <span class="sort-arrow">&#9650;</span></th>
         <th data-col="requested_by" data-table="work">Requested By <span class="sort-arrow">&#9650;</span></th>
         <th data-col="description" data-table="work">Requested Change <span class="sort-arrow">&#9650;</span></th>
@@ -1547,7 +1567,7 @@
       </select>
       <select class="filter-select" id="filter-project-priority" onchange="loadTable('project')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <input class="filter-select" id="filter-project-number" type="text" placeholder="Project #" inputmode="numeric" maxlength="7" oninput="loadTable('project')" style="width:105px" aria-label="Filter project tasks by project number">
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-project-overdue" onchange="loadTable('project')" style="margin-right:3px">Overdue only</label>
@@ -1603,7 +1623,7 @@
       </select>
       <select class="filter-select" id="filter-training-priority" onchange="loadTable('training')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-training-overdue" onchange="loadTable('training')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/intake/request?type=training" target="_blank" rel="noopener">Submit Form</a>
@@ -1740,7 +1760,7 @@
       </select>
       <select class="filter-select" id="filter-personal_husband-priority" onchange="loadTable('personal_husband')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_husband-overdue" onchange="loadTable('personal_husband')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
@@ -1777,7 +1797,7 @@
       </select>
       <select class="filter-select" id="filter-personal_father-priority" onchange="loadTable('personal_father')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_father-overdue" onchange="loadTable('personal_father')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
@@ -1814,7 +1834,7 @@
       </select>
       <select class="filter-select" id="filter-personal_house-priority" onchange="loadTable('personal_house')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_house-overdue" onchange="loadTable('personal_house')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
@@ -1851,7 +1871,7 @@
       </select>
       <select class="filter-select" id="filter-personal_cars-priority" onchange="loadTable('personal_cars')">
         <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
+        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
       <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_cars-overdue" onchange="loadTable('personal_cars')" style="margin-right:3px">Overdue only</label>
       <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
@@ -1892,16 +1912,23 @@
       <div class="field"><label>Details</label><textarea id="feedback-body" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
       <div class="feedback-grid">
         <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
-        <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
+        <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option><option>None</option></select></div>
       </div>
       <div class="field"><label>Card / component (optional)</label><input id="feedback-component" type="text" placeholder="Example: sidebar, project card, triage row"></div>
-      <div class="field"><label>Screenshots / files (optional)</label><input id="feedback-file" type="file" multiple accept="image/png,image/jpeg,image/jpg,application/pdf"><div class="fk-hint" id="feedback-file-hint" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;">Attach, paste, or drop screenshots here.</div></div>
+      <div class="field"><label>Screenshots / files (optional)</label>
+        <div class="feedback-dropzone" id="feedback-dropzone" role="button" tabindex="0" aria-label="Attach screenshots or files">
+          <input id="feedback-file" type="file" multiple accept="image/png,image/jpeg,image/jpg,application/pdf" style="display:none">
+          <div class="feedback-dropzone-copy">Drag &amp; drop screenshots here, paste from clipboard, or <span class="feedback-dropzone-browse">browse files</span></div>
+        </div>
+        <ul class="feedback-file-list" id="feedback-file-list"></ul>
+        <div class="fk-hint" id="feedback-file-hint" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;">PNG, JPG, or PDF.</div>
+      </div>
       <div class="field"><label>Captured context</label><pre class="feedback-context" id="feedback-context-preview">{}</pre></div>
     </div>
     <div class="modal-footer">
       <span class="feedback-status" id="feedback-status"></span>
       <button class="btn btn-cancel" type="button" onclick="closeFeedbackModal({force:true})">Cancel</button>
-      <button class="btn btn-primary" type="button" onclick="submitFeedback()">Save Feedback</button>
+      <button class="btn btn-primary" type="button" id="feedback-submit" onclick="submitFeedback()">Save Feedback</button>
     </div>
   </div>
 </div>
@@ -2211,11 +2238,13 @@ function toastWithLink(msg, linkLabel, onClick) {
 }
 function today() { return new Date().toISOString().split('T')[0]; }
 
-// Priority row accents (feedback #19): tint + left bar so urgency scans without reading badges.
+// Priority row accents (feedback #19/#28): tint + left bar so urgency scans
+// without reading badges. 'None' (and blank) deliberately gets no accent.
 function priorityRowClasses(r) {
   const pri = String(r.priority || r.severity || '').toLowerCase();
   if (pri === 'high' || pri === 'critical') return ['row-pri-high'];
   if (pri === 'medium') return ['row-pri-medium'];
+  if (pri === 'low') return ['row-pri-low'];
   return [];
 }
 
@@ -2599,8 +2628,8 @@ function openFeedbackModal(target='') {
   document.getElementById('feedback-priority').value = 'Medium';
   document.getElementById('feedback-component').value = componentLabel || '';
   document.getElementById('feedback-file').value = '';
-  const fileHint = document.getElementById('feedback-file-hint');
-  if (fileHint) fileHint.textContent = 'Attach, paste, or drop screenshots here.';
+  feedbackSavedRowId = null;
+  renderFeedbackFileList();
   // Snapshot the prefilled values (component label from a record row, etc.)
   // so feedbackHasDraft() only counts user-typed deltas as a draft.
   feedbackOpenSnapshot = feedbackFieldSnapshot();
@@ -2651,6 +2680,7 @@ function closeFeedbackModal(options={}) {
   overlay.classList.remove('open');
   feedbackTargetContext = null;
   feedbackOpenSnapshot = null;
+  feedbackSavedRowId = null;
 }
 
 function setFeedbackFiles(files) {
@@ -2658,12 +2688,49 @@ function setFeedbackFiles(files) {
   if (!input || !files || !files.length) return;
   const dt = new DataTransfer();
   Array.from(input.files || []).forEach(file => dt.items.add(file));
+  let rejected = 0;
   Array.from(files).forEach(file => {
     if (/^image\//.test(file.type || '') || file.type === 'application/pdf') dt.items.add(file);
+    else rejected++;
   });
   input.files = dt.files;
+  renderFeedbackFileList(rejected);
+}
+
+function removeFeedbackFile(idx) {
+  const input = document.getElementById('feedback-file');
+  if (!input) return;
+  const dt = new DataTransfer();
+  Array.from(input.files || []).forEach((file, i) => { if (i !== idx) dt.items.add(file); });
+  input.files = dt.files;
+  renderFeedbackFileList();
+}
+
+function renderFeedbackFileList(rejected=0) {
+  const input = document.getElementById('feedback-file');
+  const list = document.getElementById('feedback-file-list');
   const hint = document.getElementById('feedback-file-hint');
-  if (hint) hint.textContent = input.files.length + ' file' + (input.files.length === 1 ? '' : 's') + ' attached.';
+  if (!input || !list) return;
+  list.replaceChildren();
+  Array.from(input.files || []).forEach((file, idx) => {
+    const li = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = file.name + ' (' + Math.max(1, Math.round(file.size / 1024)) + ' KB)';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'feedback-file-remove';
+    btn.textContent = 'Remove';
+    btn.setAttribute('aria-label', 'Remove ' + file.name);
+    btn.addEventListener('click', e => { e.stopPropagation(); removeFeedbackFile(idx); });
+    li.appendChild(name);
+    li.appendChild(btn);
+    list.appendChild(li);
+  });
+  if (hint) {
+    const n = input.files?.length || 0;
+    hint.textContent = (n ? n + ' file' + (n === 1 ? '' : 's') + ' attached.' : 'PNG, JPG, or PDF.')
+      + (rejected ? ' ' + rejected + ' skipped (PNG, JPG, or PDF only).' : '');
+  }
 }
 
 async function uploadFeedbackAttachment(recordId) {
@@ -2678,40 +2745,61 @@ async function uploadFeedbackAttachment(recordId) {
       body: fd,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || 'Attachment upload failed');
+    if (!res.ok) throw new Error((data.error || 'Attachment upload failed') + ' — ' + file.name);
   }
 }
 
+let feedbackSubmitInFlight = false;
+// Set once the feedback row POST succeeds. A later Save press (e.g. after an
+// attachment failure) reuses this row instead of filing a duplicate — the
+// create-then-retry path produced three copies of feedback #24 before this.
+let feedbackSavedRowId = null;
+
 async function submitFeedback() {
+  if (feedbackSubmitInFlight) return;
+  const statusEl = document.getElementById('feedback-status');
+  const btn = document.getElementById('feedback-submit');
   const title = document.getElementById('feedback-title').value.trim();
   if (!title) {
-    document.getElementById('feedback-status').textContent = 'Title is required.';
+    statusEl.textContent = 'Title is required.';
     return;
   }
-  await loadFeedbackAppContext();
-  const context = feedbackContextPayload();
-  const component = document.getElementById('feedback-component').value.trim();
-  const payload = {
-    title,
-    body: document.getElementById('feedback-body').value.trim(),
-    feedback_type: document.getElementById('feedback-type').value,
-    priority: document.getElementById('feedback-priority').value,
-    status: 'New',
-    page_url: context.url,
-    tab: context.tab,
-    component_label: component,
-    context_json: JSON.stringify(context),
-    source: 'in-app',
-  };
-  document.getElementById('feedback-status').textContent = 'Saving...';
+  feedbackSubmitInFlight = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  statusEl.textContent = 'Saving...';
   try {
-    const row = await api('POST', '/api/v1/feedback_items', payload);
-    if (!row || row.error) throw new Error(row?.error || 'Feedback save failed');
-    await uploadFeedbackAttachment(row.id);
+    if (!feedbackSavedRowId) {
+      await loadFeedbackAppContext();
+      const context = feedbackContextPayload();
+      const component = document.getElementById('feedback-component').value.trim();
+      const payload = {
+        title,
+        body: document.getElementById('feedback-body').value.trim(),
+        feedback_type: document.getElementById('feedback-type').value,
+        priority: document.getElementById('feedback-priority').value,
+        status: 'New',
+        page_url: context.url,
+        tab: context.tab,
+        component_label: component,
+        context_json: JSON.stringify(context),
+        source: 'in-app',
+      };
+      const row = await api('POST', '/api/v1/feedback_items', payload);
+      if (!row || row.error) throw new Error(row?.error || 'Feedback save failed');
+      feedbackSavedRowId = row.id;
+    }
+    await uploadFeedbackAttachment(feedbackSavedRowId);
+    const savedId = feedbackSavedRowId;
+    feedbackSavedRowId = null;
     closeFeedbackModal({force:true});
-    toast('Feedback saved #' + row.id);
+    toast('Feedback saved #' + savedId);
   } catch (err) {
-    document.getElementById('feedback-status').textContent = err.message;
+    statusEl.textContent = feedbackSavedRowId
+      ? 'Feedback #' + feedbackSavedRowId + ' is saved, but attachments failed: ' + err.message + ' Fix or remove the files and press Save again.'
+      : err.message;
+  } finally {
+    feedbackSubmitInFlight = false;
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Feedback'; }
   }
 }
 
@@ -2736,6 +2824,20 @@ function initFeedbackWidget() {
   const overlay = document.getElementById('feedback-overlay');
   if (!overlay) return;
   populateFeedbackTypeOptions();
+  const dropzone = document.getElementById('feedback-dropzone');
+  const fileInput = document.getElementById('feedback-file');
+  if (dropzone && fileInput) {
+    dropzone.addEventListener('click', e => {
+      if (e.target === fileInput) return; // programmatic input.click() bubbles back here
+      fileInput.click();
+    });
+    dropzone.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
+    fileInput.addEventListener('change', () => renderFeedbackFileList());
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+  }
   overlay.addEventListener('click', e => { if (e.target === e.currentTarget) closeFeedbackModal(); });
   overlay.addEventListener('paste', e => {
     const files = Array.from(e.clipboardData?.files || []);
@@ -2747,6 +2849,7 @@ function initFeedbackWidget() {
   overlay.addEventListener('dragover', e => { e.preventDefault(); });
   overlay.addEventListener('drop', e => {
     e.preventDefault();
+    if (dropzone) dropzone.classList.remove('drag-over');
     setFeedbackFiles(e.dataTransfer?.files || []);
   });
   document.addEventListener('keydown', e => {
@@ -4226,7 +4329,7 @@ function coreSetText(id, value) {
 function coreStatusTone(value) {
   const v = String(value || '').toLowerCase();
   if (['high','critical','overdue','closed'].includes(v)) return 'red';
-  if (['complete','done','resolved'].includes(v)) return 'green';
+  if (['complete','done','resolved','low'].includes(v)) return 'green';
   if (['review','needs review'].includes(v)) return 'purple';
   if (['on hold','medium','due soon'].includes(v)) return 'amber';
   if (['in progress','new'].includes(v)) return 'blue';
@@ -4855,6 +4958,10 @@ async function loadTable(table) {
   }
   const pField = table==='personnel'?'severity':'priority';
   if (priorityFilter) filtered = filtered.filter(r => r[pField] === priorityFilter);
+  if (table === 'work') {
+    const categoryFilter = document.getElementById('filter-work-category')?.value || '';
+    if (categoryFilter) filtered = filtered.filter(r => r.category === categoryFilter);
+  }
   if (sourceFilter && table === 'triage') {
     filtered = filtered.filter(r => String(r.source || '').toLowerCase().includes(sourceFilter.toLowerCase()));
   }
@@ -4902,6 +5009,7 @@ async function loadTable(table) {
     if (table==='work') {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
+      tr.appendChild(makeCell(r.category,'cell-supporting'));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
       tr.appendChild(makeCell(r.requested_by,'cell-supporting'));
       tr.appendChild(makeCell(descriptionPreview(r.description),'cell-desc'));
@@ -5177,7 +5285,7 @@ function makeCalendarAgendaCard(r) {
    changes via drag-drop between lanes or the inline status select. */
 let projectViewMode = 'table';
 const PROJECT_LANES = ['Not Started', 'In Progress', 'Pending Confirmation', 'Complete'];
-let PRIORITY_RANK = { High: 0, Medium: 1, Low: 2 };
+let PRIORITY_RANK = { High: 0, Medium: 1, Low: 2, None: 3 };
 function updatePriorityRank(rows) {
   const normalized = normalizeManagedOptions(rows, FALLBACK_TASK_PRIORITY_OPTIONS);
   if (!normalized.length) return;
@@ -5648,7 +5756,7 @@ const TRIAGE_PROMOTE_TARGETS = [
    records never carry a review flag) and which are required. KEEP IN
    SYNC with app/config.py. */
 const ASSIGN_TABLE_FIELDS = {
-  work_tasks: ['title','cad_skill_area','description','requested_by','request_reference','priority','status','due_date','notes','starter_note','clarifications_needed','software','project_number','project_id'],
+  work_tasks: ['title','category','cad_skill_area','description','requested_by','request_reference','priority','status','due_date','notes','starter_note','clarifications_needed','software','project_number','project_id'],
   project_work_tasks: ['project_name','title','project_number','billing_phase','engineer','task_description','priority','status','due_at','scheduled_completion_at','time_required_minutes','notes','scope_notes','progress_notes','confirmation_notes','completion_notes','project_id','engineer_id'],
   training_tasks: ['title','trainees','requested_by','skill_area','training_goals','additional_context','priority','status','due_date','notes','project_number','project_id','trainee_ids'],
   personnel_issues: ['person_name','observed_by','cad_skill_area','issue_description','incident_context','recommended_training','severity','status','reported_date','follow_up_date','resolution_notes','project_number','project_id','person_id','estimated_time_loss_minutes','immediate_solution','skill_category_id','person_ids'],
@@ -6775,6 +6883,7 @@ function workspaceAddCalendarEvent() {
 
 /* ── Modal forms ───────────────────────────── */
 const FALLBACK_TASK_PRIORITY_OPTIONS = [
+  { value: 'None', label: 'None' },
   { value: 'Low', label: 'Low' },
   { value: 'Medium', label: 'Medium', is_default: true },
   { value: 'High', label: 'High' },
@@ -6806,6 +6915,7 @@ const INCIDENT_SEVERITY_SELECT = {
 const FORMS = {
   work:[
     {key:'title',label:'Task Title',type:'text',required:true},
+    {key:'category',label:'Category',type:'endpoint-select',endpoint:'/api/v1/options/work_category',valueKey:'value',displayKey:'label',emptyLabel:'— choose category —',hint:'What kind of work this is (CAD Standards Portal, LISP / Automation, ...). Admin-managed list.'},
     {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose CAD skill area —',hint:'Admin-managed list from Admin Home → Managed Dropdowns.'},
     {key:'description',label:'Requested Change',type:'textarea'},
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
@@ -7018,6 +7128,7 @@ function populateManagedOptionControls() {
   });
   populateManagedSelect(document.getElementById('preset-priority'), 'task_priority', { emptyLabel: 'Auto (let AI decide)', defaultValue: '' });
   populateManagedSelect(document.getElementById('filter-personnel-priority'), 'incident_severity', { emptyLabel: 'All Impact Levels' });
+  populateManagedSelect(document.getElementById('filter-work-category'), 'work_category', { emptyLabel: 'All Categories', defaultValue: '' });
 }
 
 function normalizeProjectNumberCandidate(value) {

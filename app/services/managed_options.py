@@ -263,9 +263,23 @@ DEFAULT_OPTION_SETS: list[dict[str, Any]] = [
         "surface": "Tasks, Intake, Feedback",
         "description": "Priority labels used by task, intake, and feedback workflows. Backend defaults still expect Low/Medium/High until workflow validation is fully dynamic.",
         "options": [
+            _option("None", order=5, metadata={"rank": 40, "tone": "muted"}),
             _option("Low", order=10, metadata={"rank": 30, "tone": "success"}),
             _option("Medium", order=20, metadata={"is_default": True, "rank": 20, "tone": "warning"}),
             _option("High", order=30, metadata={"rank": 10, "tone": "danger"}),
+        ],
+    },
+    {
+        "key": "work_category",
+        "label": "CAD Dev Categories",
+        "surface": "CAD Dev",
+        "description": "Work-stream categories for the CAD Dev tracker (what kind of work this is). CAD Skill Area remains the discipline/skill axis.",
+        "options": [
+            _option("CAD Standards Portal", order=10),
+            _option("LISP / Automation", order=20),
+            _option("Drawing Setup / Templates", order=30),
+            _option("Production Support", order=40),
+            _option("Other", order=990),
         ],
     },
     {

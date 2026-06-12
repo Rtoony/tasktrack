@@ -272,3 +272,39 @@ def test_list_and_delete_still_require_session(client, temp_app, patched_minio, 
         headers={"X-Token": "test-triage-token"},
     )
     assert r.status_code in (401, 302)
+
+
+# ── Credential resolution (feedback #27) ─────────────────────────────────
+
+def test_config_falls_back_to_minio_root_creds(monkeypatch):
+    """MINIO_ACCESS_KEY/SECRET_KEY win, but the root credentials the vault
+    injects for the container itself are an accepted fallback."""
+    for var in ("MINIO_ACCESS_KEY", "MINIO_SECRET_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("MINIO_ROOT_USER", "root-user")
+    monkeypatch.setenv("MINIO_ROOT_PASSWORD", "root-pass")
+    cfg = att_svc._config()
+    assert cfg.access_key == "root-user"
+    assert cfg.secret_key == "root-pass"
+
+
+def test_config_treats_literal_null_as_unset(monkeypatch):
+    """The vault injector renders missing fields as the string 'null' —
+    that must read as unconfigured (503), not as a credential."""
+    monkeypatch.setenv("MINIO_ACCESS_KEY", "null")
+    monkeypatch.setenv("MINIO_SECRET_KEY", "null")
+    monkeypatch.setenv("MINIO_ROOT_USER", "null")
+    monkeypatch.setenv("MINIO_ROOT_PASSWORD", "null")
+    with pytest.raises(att_svc.AttachmentError) as exc:
+        att_svc._config()
+    assert exc.value.status_code == 503
+
+
+def test_config_prefers_dedicated_access_keys(monkeypatch):
+    monkeypatch.setenv("MINIO_ACCESS_KEY", "dedicated")
+    monkeypatch.setenv("MINIO_SECRET_KEY", "dedicated-secret")
+    monkeypatch.setenv("MINIO_ROOT_USER", "root-user")
+    monkeypatch.setenv("MINIO_ROOT_PASSWORD", "root-pass")
+    cfg = att_svc._config()
+    assert cfg.access_key == "dedicated"
+    assert cfg.secret_key == "dedicated-secret"

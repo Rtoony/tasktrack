@@ -8,6 +8,7 @@ ALLOWED_TABLES = {
     "work_tasks": {
         "fields": [
             "title",
+            "category",
             "cad_skill_area",
             "description",
             "requested_by",

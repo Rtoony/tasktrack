@@ -72,7 +72,7 @@ def test_dashboard_includes_operator_triage_queue_affordances(auth_client):
     assert "voice-memo" in html
     assert "Awaiting route" in html
     assert "Promote next" in html
-    assert "promote.textContent = 'Promote'" in html
+    assert "promote.textContent = promoted ? 'Promoted' : 'Promote'" in html
     assert "del.textContent='Delete'" in html
 
 

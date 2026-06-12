@@ -100,13 +100,27 @@ class _MinioConfig:
     region: str
 
 
+def _env(*names: str) -> str:
+    """First non-empty env var among names. The literal strings 'null'/'none'
+    count as unset — the vault injector renders missing vault fields as
+    'null', and treating that as a real credential produces auth failures
+    that are much harder to diagnose than a clean 503."""
+    for name in names:
+        val = (os.environ.get(name) or "").strip()
+        if val and val.lower() not in ("null", "none"):
+            return val
+    return ""
+
+
 def _config() -> _MinioConfig:
     cfg = _MinioConfig(
-        endpoint=os.environ.get("MINIO_ENDPOINT", "http://127.0.0.1:9000"),
-        access_key=os.environ.get("MINIO_ACCESS_KEY", ""),
-        secret_key=os.environ.get("MINIO_SECRET_KEY", ""),
-        bucket=os.environ.get("MINIO_BUCKET", "tasktrack-attachments"),
-        region=os.environ.get("MINIO_REGION", "us-east-1"),
+        endpoint=_env("MINIO_ENDPOINT") or "http://127.0.0.1:9000",
+        # Dedicated access keys win; fall back to the root credentials the
+        # vault already injects for the MinIO container itself.
+        access_key=_env("MINIO_ACCESS_KEY", "MINIO_ROOT_USER"),
+        secret_key=_env("MINIO_SECRET_KEY", "MINIO_ROOT_PASSWORD"),
+        bucket=_env("MINIO_BUCKET") or "tasktrack-attachments",
+        region=_env("MINIO_REGION") or "us-east-1",
     )
     if not cfg.access_key or not cfg.secret_key:
         raise AttachmentError(

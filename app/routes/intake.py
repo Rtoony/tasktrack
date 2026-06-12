@@ -98,7 +98,7 @@ _TYPE_META = {
         "required": ("details",),
     },
 }
-_VALID_PRIORITIES = {"Low", "Medium", "High"}
+_VALID_PRIORITIES = {"None", "Low", "Medium", "High"}
 _VALID_SEVERITIES = {"Low", "Medium", "High", "Critical"}
 
 

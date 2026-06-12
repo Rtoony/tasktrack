@@ -125,7 +125,9 @@ def test_migration_downgrade_removes_columns(tmp_path, monkeypatch):
     monkeypatch.setenv("TASKTRACK_DATABASE_URL", f"sqlite:///{db_path}")
     cfg = _alembic_cfg()
     command.upgrade(cfg, "head")
-    command.downgrade(cfg, "-1")
+    # Explicit target (not "-1"): this test owns the b9e4a7c3d2f8 downgrade
+    # path; later migrations on top of it shouldn't break the assertion.
+    command.downgrade(cfg, "6f0b3c2d4e5a")
     cols = _inbox_columns(db_path)
     assert not {"suggested_table", "suggestion_json", "suggested_at"} & cols
     command.upgrade(cfg, "head")  # round-trips back up

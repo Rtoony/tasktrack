@@ -164,13 +164,15 @@ def test_managed_option_defaults_include_metadata(auth_client):
     priorities = auth_client.get("/api/v1/options/task_priority")
     assert priorities.status_code == 200
     priority_rows = priorities.get_json()
-    assert [row["value"] for row in priority_rows] == ["Low", "Medium", "High"]
+    assert [row["value"] for row in priority_rows] == ["None", "Low", "Medium", "High"]
     medium = next(row for row in priority_rows if row["value"] == "Medium")
     high = next(row for row in priority_rows if row["value"] == "High")
+    none_row = next(row for row in priority_rows if row["value"] == "None")
     assert medium["is_default"] is True
     assert medium["tone"] == "warning"
     assert medium["metadata"]["rank"] == 20
     assert high["metadata"]["rank"] == 10
+    assert none_row["metadata"]["rank"] == 40
 
     severities = auth_client.get("/api/v1/options/incident_severity")
     assert severities.status_code == 200

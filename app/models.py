@@ -116,6 +116,10 @@ class WorkTask(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # Work stream (CAD Standards Portal, LISP / Automation, ...) — vocabulary
+    # lives in the managed option set `work_category`. cad_skill_area stays
+    # the discipline/skill axis; category is the kind-of-work axis.
+    category: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     description: Mapped[str] = mapped_column(Text, server_default=text("''"))
     requested_by: Mapped[str] = mapped_column(Text, server_default=text("''"))

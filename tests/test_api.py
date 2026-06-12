@@ -389,3 +389,21 @@ def test_csv_export_streams_header_and_rows(auth_client):
 def test_csv_export_rejects_unknown_table(auth_client):
     r = auth_client.get("/api/v1/nope/export.csv")
     assert r.status_code == 400
+
+
+def test_work_task_category_round_trips(auth_client):
+    """Feedback #24: CAD Dev tasks carry a work-stream category."""
+    r = auth_client.post("/api/v1/work_tasks", json={
+        "title": "Portal nav rework",
+        "category": "CAD Standards Portal",
+    })
+    assert r.status_code == 201
+    record_id = r.get_json()["id"]
+
+    r = auth_client.get(f"/api/v1/work_tasks/{record_id}")
+    assert r.get_json()["category"] == "CAD Standards Portal"
+
+    r = auth_client.put(f"/api/v1/work_tasks/{record_id}", json={"category": "LISP / Automation"})
+    assert r.status_code == 200
+    r = auth_client.get(f"/api/v1/work_tasks/{record_id}")
+    assert r.get_json()["category"] == "LISP / Automation"

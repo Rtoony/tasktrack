@@ -136,12 +136,14 @@ def _triage_build_user_message(raw_text, presets, target):
     label = TRIAGE_TARGET_LABELS.get(target, "CAD Development")
     hints.append(f"Target tracker: {label}")
     locked_priority = (presets.get("priority") or "").strip().title()
-    if locked_priority in ("Low", "Medium", "High"):
+    if locked_priority in ("None", "Low", "Medium", "High"):
         hints.append(f"Priority is LOCKED to {locked_priority} — return exactly this value.")
     locked_skill = (presets.get("cad_skill_area") or presets.get("skill_area") or "").strip()
     if locked_skill:
         key = "CAD skill area" if target != "training_tasks" else "Training skill area"
         hints.append(f"{key} is: {locked_skill}")
+    if target == "work_tasks" and (presets.get("category") or "").strip():
+        hints.append(f"Work category is: {presets['category'].strip()}")
     if (presets.get("requested_by") or "").strip():
         hints.append(f"Requested by: {presets['requested_by'].strip()}")
     if (presets.get("source") or "").strip():
@@ -357,7 +359,7 @@ def triage_plan_to_payload(plan, raw_text, model, target, presets):
             "clarifications_needed": json.dumps(plan.get("missingInfo") or []),
             "software": json.dumps(plan.get("software") or []),
         }
-        for key in ("cad_skill_area", "requested_by", "request_reference", "due_date", "notes"):
+        for key in ("category", "cad_skill_area", "requested_by", "request_reference", "due_date", "notes"):
             val = _triage_preset_str(presets, key)
             if val:
                 payload[key] = val
