@@ -185,7 +185,10 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
             rows.append(payload)
 
     rows.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-    rows = rows[:limit]
+    # audit #4: count over the FULL matched set, then truncate for the payload —
+    # the old code sliced first, so the "N need review" headline undercounted
+    # whenever matches exceeded the (small) limit.
+    matched_count = len(rows)
     by_source = {source: 0 for source in source_values}
     by_table = {table: 0 for table in INTAKE_REPORT_TABLES}
     review_count = 0
@@ -194,6 +197,7 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         by_table[row["table"]] = by_table.get(row["table"], 0) + 1
         if row.get("needs_review"):
             review_count += 1
+    rows = rows[:limit]
 
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -205,7 +209,9 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         },
         "summary": {
             "count": len(rows),
-            "needs_review_count": review_count,
+            "matched_count": matched_count,            # audit #4: total before the display limit
+            "truncated": matched_count > len(rows),
+            "needs_review_count": review_count,        # counted over the full matched set
             "by_source": by_source,
             "by_table": by_table,
         },

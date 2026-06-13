@@ -272,6 +272,13 @@ def capture():
             payload["task_description"] = body
         elif body and "notes" in ALLOWED_TABLES[target_table]["fields"]:
             payload["notes"] = body
+        elif body and "body" in ALLOWED_TABLES[target_table]["fields"]:
+            payload["body"] = body  # audit #7: personal_items uses 'body' — was silently dropped
+        # audit #7: personal_items requires a category; map it (default Follow-up)
+        # so a direct-route into the Internal queue doesn't hard-400.
+        if "category" in ALLOWED_TABLES[target_table]["fields"]:
+            _cat = (data.get("category") or "").strip()
+            payload["category"] = _cat if _cat in ("Follow-up", "Meetings", "Office", "Assets") else "Follow-up"
         if priority and "priority" in ALLOWED_TABLES[target_table]["fields"]:
             payload["priority"] = priority
         if due_date:

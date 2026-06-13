@@ -194,6 +194,13 @@ def _check_schema_matches_models(db_path: str) -> None:
     engine = create_engine(f"sqlite:///{db_path}")
     insp = inspect(engine)
     live_tables = set(insp.get_table_names())
+    # audit #30: a brand-new/empty DB (no overlap with model tables) is not
+    # "drift" — let `alembic upgrade head` create it instead of fail-louding.
+    # Genuine partial drift (some expected tables present, others missing) still raises.
+    if live_tables.isdisjoint({t.name for t in Base.metadata.tables.values()}):
+        LOG.info("schema check: fresh DB (no model tables present) — run `alembic upgrade head`")
+        engine.dispose()
+        return
     issues = []
     for table in Base.metadata.tables.values():
         if table.name not in live_tables:

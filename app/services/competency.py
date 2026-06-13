@@ -203,6 +203,18 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
         if category_score is None:
             category_score = float(manual_latest.score)
 
+    # audit #8: an EXPLICIT override (a 'manual' dimension or an official baseline /
+    # manual override) is authoritative — it must win even when task dimensions
+    # already produced a computed category_score. Preliminary ratings are excluded
+    # so drafts don't override the computed score.
+    override_rows = [
+        r for r in observed_rows
+        if r.dimension_slug == "manual" or r.source_kind in ("manual_override", "official_baseline")
+    ]
+    if override_rows:
+        latest_override = max(override_rows, key=lambda r: (_parse_dt(r.observed_at) or now, r.id or 0))
+        category_score = float(latest_override.score)
+
     if category_score is None:
         return None
 
