@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
+from .csv_safe import csv_safe
 from .competency import confidence_band, dimensions_for_category
 
 LOW_SCORE_THRESHOLD = 2.0
@@ -316,7 +317,10 @@ def competency_report_csv(packet: dict) -> str:
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
     writer.writeheader()
-    writer.writerows(packet.get("csv_rows") or [])
+    # audit #14: neutralise CSV-formula injection in any free-text cell.
+    writer.writerows(
+        {k: csv_safe(v) for k, v in row.items()} for row in (packet.get("csv_rows") or [])
+    )
     return output.getvalue()
 
 

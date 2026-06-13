@@ -569,6 +569,7 @@ def _portfolio_summary(reports: list[dict]) -> dict:
             "open_total": open_total,
         },
         "action_projects": action_projects[:8],
+        "action_projects_full": list(action_projects),  # audit #5: CSV export uses the full queue, not the 8-item talking-points cap
     }
 
 

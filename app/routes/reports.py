@@ -13,6 +13,7 @@ from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
 from ..services.agenda import today_agenda
+from ..services.csv_safe import csv_safe
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
@@ -1229,13 +1230,15 @@ def portfolio_actions_csv():
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=fields)
     writer.writeheader()
-    for row in packet.get("summary", {}).get("action_projects", []):
+    # audit #5: export the FULL action queue, not the 8-item on-screen cap.
+    _summary = packet.get("summary", {})
+    for row in _summary.get("action_projects_full") or _summary.get("action_projects", []):
         project_number = row.get("project_number") or ""
         payload = {key: row.get(key, "") for key in fields}
         payload["project_report_url"] = f"/reports/project?project_number={project_number}"
         payload["workspace_url"] = f"/?workspace={project_number}"
         payload["map_url"] = f"/?map_project={project_number}"
-        writer.writerow(payload)
+        writer.writerow({k: csv_safe(v) for k, v in payload.items()})  # audit #14
     return Response(
         output.getvalue(),
         mimetype="text/csv",

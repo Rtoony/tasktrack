@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import InboxItem, PersonalItem, ProjectWorkTask, TrainingTask, WorkTask
+from .csv_safe import csv_safe
 
 INTAKE_REPORT_TABLES = {
     "work_tasks": {
@@ -224,7 +225,7 @@ def intake_report_csv(packet: dict) -> str:
     writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
     writer.writeheader()
     for row in packet.get("rows", []):
-        writer.writerow({field: row.get(field, "") for field in CSV_FIELDS})
+        writer.writerow({field: csv_safe(row.get(field, "")) for field in CSV_FIELDS})  # audit #14
     return output.getvalue()
 
 
