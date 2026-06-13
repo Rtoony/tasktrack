@@ -44,6 +44,29 @@ def test_ai_instructions_requires_bot_token(client):
     assert client.get("/api/v1/ai-instructions").status_code == 401
 
 
+def test_ai_instructions_skips_archived_parent(client, temp_app, with_bot_token):
+    # #42 (pre-merge): an AI-dev comment on an ARCHIVED parent task is stale — the
+    # feed Hermes pulls must drop it but keep instructions on active records.
+    from datetime import datetime
+    from app.models import Comment, WorkTask
+    with temp_app.app_context():
+        sess = get_session()
+        active = WorkTask(title="active parent")
+        archived = WorkTask(title="archived parent", archived_at=datetime(2026, 1, 1, 12, 0, 0))
+        sess.add(active)
+        sess.add(archived)
+        sess.commit()
+        sess.add(Comment(table_name="work_tasks", record_id=active.id, user_name="Josh",
+                         body="build the active thing", audience="ai-dev"))
+        sess.add(Comment(table_name="work_tasks", record_id=archived.id, user_name="Josh",
+                         body="build the archived thing", audience="ai-dev"))
+        sess.commit()
+    body = client.get("/api/v1/ai-instructions", headers={"X-Token": BOT_TOKEN}).get_json()
+    bodies = [i["body"] for i in body["instructions"]]
+    assert "build the active thing" in bodies
+    assert "build the archived thing" not in bodies
+
+
 def test_ai_instructions_lists_only_ai_dev_comments(client, temp_app, with_bot_token):
     # feedback #42: the bot pulls only audience='ai-dev' comments (not normal ones).
     from app.models import Comment

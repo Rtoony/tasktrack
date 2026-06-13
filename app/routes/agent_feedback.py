@@ -25,7 +25,7 @@ from .. import limiter
 from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import ActivityLog, Comment, FeedbackItem, to_dict
-from ..services.tickets import done_statuses_for_table
+from ..services.tickets import TABLE_MODELS, done_statuses_for_table
 from ..tokens import check_scoped_token
 
 bp = Blueprint("agent_feedback", __name__)
@@ -141,10 +141,23 @@ def list_ai_instructions():
             stmt = stmt.where(Comment.record_id == int(record_id))
         except (TypeError, ValueError):
             return jsonify({"error": "record_id must be an integer"}), 400
-    stmt = stmt.order_by(Comment.created_at.desc()).limit(limit)
+    stmt = stmt.order_by(Comment.created_at.desc())
 
-    instructions = [
-        {
+    # #42 (pre-merge review): skip AI-dev comments whose parent record has been
+    # archived — an archived task's instructions are stale, so Hermes shouldn't pull
+    # them. Filter then cap (so archived rows don't eat the limit).
+    def _parent_archived(comment) -> bool:
+        Model = TABLE_MODELS.get(comment.table_name)
+        if Model is None or "archived_at" not in {col.name for col in Model.__table__.columns}:
+            return False
+        parent = sess.get(Model, comment.record_id)
+        return parent is not None and parent.archived_at is not None
+
+    instructions = []
+    for c in sess.execute(stmt).scalars().all():
+        if _parent_archived(c):
+            continue
+        instructions.append({
             "id": c.id,
             "table_name": c.table_name,
             "record_id": c.record_id,
@@ -152,9 +165,9 @@ def list_ai_instructions():
             "body": c.body,
             "created_at": str(c.created_at) if c.created_at else None,
             "record_url": f"/?tab={c.table_name}&record={c.record_id}",
-        }
-        for c in sess.execute(stmt).scalars().all()
-    ]
+        })
+        if len(instructions) >= limit:
+            break
     return jsonify({
         "generated_at": _utcnow_naive().isoformat(timespec="seconds") + "Z",
         "filter": {"table": table or None, "record_id": record_id, "limit": limit},
