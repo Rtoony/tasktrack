@@ -91,7 +91,11 @@ def _serialize(row: CalendarEvent) -> dict:
 
 def _base_rows() -> list[CalendarEvent]:
     sess = get_session()
-    rows = sess.scalars(select(CalendarEvent).order_by(CalendarEvent.start_at.asc())).all()
+    # #38: archived events stay out of every calendar surface (upcoming/range/etc.).
+    rows = sess.scalars(
+        select(CalendarEvent).where(CalendarEvent.archived_at.is_(None))
+        .order_by(CalendarEvent.start_at.asc())
+    ).all()
     return [row for row in rows if _visible_to_current_user(row)]
 
 

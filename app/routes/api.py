@@ -149,6 +149,14 @@ def _dashboard_activity_dict(sess, row: ActivityLog) -> dict:
     return payload
 
 
+def _exclude_archived(stmt, Model):
+    """feedback #38: hide soft-archived rows from active/default surfaces. Models
+    without an archived_at column (inbox/feedback) are returned unchanged."""
+    if "archived_at" in {c.name for c in Model.__table__.columns}:
+        return stmt.where(Model.archived_at.is_(None))
+    return stmt
+
+
 @bp.route("/api/v1/dashboard")
 @login_required
 def dashboard_stats():
@@ -157,7 +165,7 @@ def dashboard_stats():
     for table, cfg in ALLOWED_TABLES.items():
         Model = TABLE_MODELS[table]
         model_rows = [
-            r for r in sess.scalars(select(Model)).all()
+            r for r in sess.scalars(_exclude_archived(select(Model), Model)).all()  # #38: skip archived
             if _record_visible_to_current_user(table, r)
         ]
         all_rows = [_record_to_current_user_dict(table, r) for r in model_rows]
@@ -238,33 +246,35 @@ def dashboard_stats():
 # projections + UNION-shape don't translate cleanly to ORM and the
 # JS frontend reads the aliased keys (source/label/detail/...).
 
+# #38: `archived_at IS NULL AND (...)` — the OR-group MUST be parenthesised or OR
+# precedence would let archived rows through on all but the last predicate.
 _SEARCH_SQLS = (
     text(
         "SELECT id, 'work_tasks' as source, title as label, description as detail, "
         "priority, status, due_date FROM work_tasks "
-        "WHERE title LIKE :p ESCAPE '\\' OR cad_skill_area LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (title LIKE :p ESCAPE '\\' OR cad_skill_area LIKE :p ESCAPE '\\' "
         "OR description LIKE :p ESCAPE '\\' OR requested_by LIKE :p ESCAPE '\\' "
-        "OR request_reference LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
+        "OR request_reference LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
     text(
         "SELECT id, 'project_work_tasks' as source, title as label, "
         "task_description as detail, priority, status, due_at as due_date "
         "FROM project_work_tasks "
-        "WHERE project_name LIKE :p ESCAPE '\\' OR title LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (project_name LIKE :p ESCAPE '\\' OR title LIKE :p ESCAPE '\\' "
         "OR project_number LIKE :p ESCAPE '\\' OR engineer LIKE :p ESCAPE '\\' "
         "OR task_description LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
         "OR scope_notes LIKE :p ESCAPE '\\' OR progress_notes LIKE :p ESCAPE '\\' "
-        "OR confirmation_notes LIKE :p ESCAPE '\\' OR completion_notes LIKE :p ESCAPE '\\' "
+        "OR confirmation_notes LIKE :p ESCAPE '\\' OR completion_notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
     text(
         "SELECT id, 'training_tasks' as source, title as label, "
         "training_goals as detail, priority, status, due_date FROM training_tasks "
-        "WHERE title LIKE :p ESCAPE '\\' OR trainees LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (title LIKE :p ESCAPE '\\' OR trainees LIKE :p ESCAPE '\\' "
         "OR requested_by LIKE :p ESCAPE '\\' OR skill_area LIKE :p ESCAPE '\\' "
         "OR training_goals LIKE :p ESCAPE '\\' OR additional_context LIKE :p ESCAPE '\\' "
-        "OR notes LIKE :p ESCAPE '\\' "
+        "OR notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
 )
@@ -289,7 +299,7 @@ def _search_personnel_issues(sess, pattern: str) -> list[dict]:
             PersonnelIssue.recommended_training.ilike(pattern, escape="\\"),
             PersonnelIssue.resolution_notes.ilike(pattern, escape="\\"),
         )
-    ).order_by(PersonnelIssue.id.desc()).limit(20)
+    ).where(PersonnelIssue.archived_at.is_(None)).order_by(PersonnelIssue.id.desc()).limit(20)  # #38
     return [
         {
             "id": row.id,
@@ -315,7 +325,7 @@ def _search_calendar_events(sess, pattern: str) -> list[dict]:
             CalendarEvent.project_number.ilike(pattern, escape="\\"),
             CalendarEvent.location.ilike(pattern, escape="\\"),
         )
-    )
+    ).where(CalendarEvent.archived_at.is_(None))  # #38
     if user_id is None:
         stmt = stmt.where(CalendarEvent.visibility != "private")
     else:
@@ -354,7 +364,7 @@ def _search_personal_items(sess, pattern: str) -> list[dict]:
             PersonalItem.body.ilike(pattern, escape="\\"),
             PersonalItem.source_ref.ilike(pattern, escape="\\"),
         )
-    ).order_by(PersonalItem.id.desc()).limit(20)
+    ).where(PersonalItem.archived_at.is_(None)).order_by(PersonalItem.id.desc()).limit(20)  # #38
     return [
         {
             "id": row.id,
@@ -546,7 +556,7 @@ def export_csv(table):
     sess = get_session()
     Model = TABLE_MODELS[table]
     rows = [
-        r for r in sess.scalars(select(Model).order_by(Model.id)).all()
+        r for r in sess.scalars(_exclude_archived(select(Model).order_by(Model.id), Model)).all()  # #38: archived excluded
         if _record_detail_visible_to_current_user(table, r)
     ]
     if not rows:

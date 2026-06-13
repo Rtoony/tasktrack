@@ -5098,7 +5098,9 @@ async function loadTable(table) {
   const tbody = document.getElementById('tbody-'+table);
   const empty = document.getElementById('empty-'+table);
   const countEl = document.getElementById('count-'+table);
-  if (countEl) {
+  // #38: while the "Archived" view is on, `data` is only archived rows — don't let
+  // it overwrite the tab badge (which should keep reflecting the active queue).
+  if (countEl && !archivedViewOn(table)) {
     // Triage count = the active queue (New + In Progress) regardless of which
     // status filter the user has selected.
     // Internal queue counts = active queue (New + In Progress) within the

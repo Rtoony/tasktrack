@@ -408,6 +408,8 @@ def meeting_packet_batch_report(sess: Session, *, days: int = 14, limit: int = 1
     for row in sorted(rows, key=_calendar_sort_key):
         if _status(to_dict(row) or {}) in done_statuses_for_table("calendar_events"):
             continue
+        if getattr(row, "archived_at", None) is not None:  # #38
+            continue
         if not record_visible_to_user("calendar_events", row, user_id):
             continue
         if row.visibility == "private" and not include_private:

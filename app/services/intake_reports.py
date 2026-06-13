@@ -177,6 +177,8 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         Model = cfg["model"]
         stmt = select(Model).where(Model.source.in_(source_values))
         for row in sess.scalars(stmt).all():
+            if getattr(row, "archived_at", None) is not None:  # #38: archived rows out of intake report
+                continue
             created = _parse_dt(getattr(row, "created_at", None))
             if created is None or created < since:  # audit #25: NULL/unparseable also out-of-window
                 continue

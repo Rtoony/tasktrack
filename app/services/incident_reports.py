@@ -183,7 +183,9 @@ def incident_report(sess: Session, *, filters: dict | None = None,
     since = now - timedelta(days=days)
 
     rows = sess.scalars(
-        select(PersonnelIssue).order_by(PersonnelIssue.reported_date.desc(), PersonnelIssue.id.desc())
+        select(PersonnelIssue)
+        .where(PersonnelIssue.archived_at.is_(None))  # #38: archived incidents drop out of the report
+        .order_by(PersonnelIssue.reported_date.desc(), PersonnelIssue.id.desc())
     ).all()
 
     incidents: list[dict] = []

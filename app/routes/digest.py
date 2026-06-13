@@ -119,6 +119,8 @@ def digest():
         for row in sess.scalars(select(Model)).all():
             if getattr(row, "status", None) in done:
                 continue
+            if getattr(row, "archived_at", None) is not None:  # #38: archived isn't active work
+                continue
             counts["active"] += 1
             if due_field is None:
                 continue
@@ -217,6 +219,8 @@ def monthly():
         done = done_statuses_for_table(table)
         for row in sess.scalars(select(Model)).all():
             if getattr(row, "status", None) in done:
+                continue
+            if getattr(row, "archived_at", None) is not None:  # #38
                 continue
             active += 1
             if due_field is None:

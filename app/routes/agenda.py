@@ -126,6 +126,8 @@ def _read_tasktrack(sess, window_start: datetime, window_end: datetime) -> list[
     for row in sess.scalars(select(CalendarEvent)).all():
         if (row.status or "").lower() in _DONE:
             continue
+        if getattr(row, "archived_at", None) is not None:  # #38
+            continue
         if getattr(row, "visibility", "") == "private":
             continue
         start = _parse_iso(row.start_at)

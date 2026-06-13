@@ -389,6 +389,25 @@ def test_hard_delete_removes_even_from_archived_view(auth_client):
     assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks?archived=1").get_json()]
 
 
+def test_archived_excluded_from_dashboard_search_and_export(auth_client):
+    # #38 leak-fix: archived rows must drop out of the active surfaces that bypass
+    # list_records — the dashboard stats, global search, and CSV export.
+    rid = _make_work_task(auth_client, title="ZephyrArchiveProbe", due_date="2020-01-01", priority="High")
+
+    def work_overdue_ids():
+        return [r["id"] for r in auth_client.get("/api/v1/dashboard").get_json()["stats"]["work_tasks"]["overdue_items"]]
+    def search_work_ids():
+        return [r["id"] for r in auth_client.get("/api/v1/search?q=ZephyrArchiveProbe").get_json() if r.get("source") == "work_tasks"]
+    def in_csv():
+        return "ZephyrArchiveProbe" in auth_client.get("/api/v1/work_tasks/export.csv").data.decode("utf-8")
+
+    assert rid in work_overdue_ids() and rid in search_work_ids() and in_csv()
+    assert auth_client.post(f"/api/v1/work_tasks/{rid}/archive").status_code == 200
+    assert rid not in work_overdue_ids()
+    assert rid not in search_work_ids()
+    assert not in_csv()
+
+
 # ── Cycle status ──────────────────────────────────────────────────────────
 
 def test_cycle_status_advances_through_flow(auth_client):
