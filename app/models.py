@@ -142,6 +142,8 @@ class WorkTask(Base):
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
     # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
     project_id: Mapped[int | None] = mapped_column(Integer)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
 
 class ProjectWorkTask(Base):
@@ -175,6 +177,8 @@ class ProjectWorkTask(Base):
     # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
     project_id: Mapped[int | None] = mapped_column(Integer)
     engineer_id: Mapped[int | None] = mapped_column(Integer)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
 
 class TrainingTask(Base):
@@ -204,6 +208,8 @@ class TrainingTask(Base):
     # (kept as TEXT so the generic CRUD/AI paths don't choke on a list type).
     project_id: Mapped[int | None] = mapped_column(Integer)
     trainee_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
 
 class PersonnelIssue(Base):
@@ -243,6 +249,8 @@ class PersonnelIssue(Base):
     # `person_id` (above) becomes the convenience "primary person" and
     # is auto-populated from person_ids[0] if set.
     person_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
 
 class PersonalItem(Base):
@@ -270,6 +278,8 @@ class PersonalItem(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_personal_items_category", "category"),
@@ -385,6 +395,8 @@ class CalendarEvent(Base):
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_calendar_events_start_at", "start_at"),

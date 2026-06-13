@@ -610,6 +610,13 @@ def list_records(table):
         stmt = select(Model).order_by(rank, Model.id)
     else:
         stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
+    # feedback #38: archived rows are hidden from the default view (retained in the
+    # DB for long-term analysis); ?archived=1 lists ONLY archived rows for review.
+    if "archived_at" in {c.name for c in Model.__table__.columns}:
+        if request.args.get("archived") == "1":
+            stmt = stmt.where(Model.archived_at.is_not(None))
+        else:
+            stmt = stmt.where(Model.archived_at.is_(None))
     rows = [r for r in sess.scalars(stmt).all() if _record_detail_visible_to_current_user(table, r)]
     return jsonify([to_dict(r) for r in rows])
 
@@ -732,5 +739,55 @@ def delete_record(table, record_id):
     log_activity(sess, table, record_id, "deleted", new=label)
     sess.commit()
     return jsonify({"deleted": record_id})
+
+
+def _archivable_model(table):
+    """Return (Model, error_response). Model has an archived_at column, else 400."""
+    if table not in ALLOWED_TABLES:
+        return None, (jsonify({"error": "Invalid table"}), 400)
+    Model = TABLE_MODELS[table]
+    if "archived_at" not in {c.name for c in Model.__table__.columns}:
+        return None, (jsonify({"error": f"{table} is not archivable"}), 400)
+    return Model, None
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/archive", methods=["POST"])
+@login_required
+def archive_record(table, record_id):
+    """feedback #38: soft-archive a record (retained in the DB; hidden by default)."""
+    Model, err = _archivable_model(table)
+    if err:
+        return err
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    if row.archived_at is None:
+        row.archived_at = datetime.utcnow()
+        log_activity(sess, table, record_id, "archived",
+                     new=getattr(row, "title", None) or getattr(row, "person_name", "") or "")
+        sess.commit()
+        sess.refresh(row)
+    return jsonify(to_dict(row))
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/unarchive", methods=["POST"])
+@login_required
+def unarchive_record(table, record_id):
+    """feedback #38: restore an archived record to the active view."""
+    Model, err = _archivable_model(table)
+    if err:
+        return err
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    if row.archived_at is not None:
+        row.archived_at = None
+        log_activity(sess, table, record_id, "unarchived",
+                     new=getattr(row, "title", None) or getattr(row, "person_name", "") or "")
+        sess.commit()
+        sess.refresh(row)
+    return jsonify(to_dict(row))
 
 

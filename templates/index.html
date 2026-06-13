@@ -271,6 +271,8 @@
 
   /* ── Filter bar ──────────────────────────── */
   .filter-bar { display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; }
+  /* #38: per-tracker "Show archived" toggle. */
+  .archived-toggle { display:flex; align-items:center; gap:0.25rem; font-size:0.72rem; color:var(--text-muted); white-space:nowrap; cursor:pointer; user-select:none; }
   .section-title { font-size:1.05rem; font-weight:600; letter-spacing:-0.01em; margin-right:auto; }
   .section-heading { margin-right:auto; min-width:220px; }
   .section-subtitle { font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem; }
@@ -1513,6 +1515,7 @@
         <h2 class="section-title">CAD Dev</h2>
         <div class="section-subtitle">Track requested CAD changes, the discipline involved, and the follow-up context behind the work.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-work-archived" onchange="loadTable('work')"> Archived</label>
       <select class="filter-select" id="filter-work-status" onchange="loadTable('work')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1557,6 +1560,7 @@
         <h2 class="section-title">Project Tasks</h2>
         <div class="section-subtitle">Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-project-archived" onchange="loadTable('project')"> Archived</label>
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1613,6 +1617,7 @@
         <h2 class="section-title">Training</h2>
         <div class="section-subtitle">Plan and track targeted training work by staff member, skill area, goals, and follow-up context.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-training-archived" onchange="loadTable('training')"> Archived</label>
       <select class="filter-select" id="filter-training-status" onchange="loadTable('training')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1653,6 +1658,7 @@
         <h2 class="section-title">Capabilities</h2>
         <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personnel-archived" onchange="loadTable('personnel')"> Archived</label>
       <select class="filter-select" id="filter-personnel-status" onchange="loadTable('personnel')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1690,6 +1696,7 @@
         <h2 class="section-title">Calendar</h2>
         <div class="section-subtitle">Internal meetings, milestones, report deadlines, prep blocks, and project-linked reminders.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-calendar-archived" onchange="loadTable('calendar')"> Archived</label>
       <select class="filter-select" id="filter-calendar-status" onchange="loadTable('calendar')">
         <option value="">All Statuses</option>
         <option value="scheduled">Scheduled</option><option value="tentative">Tentative</option>
@@ -1755,6 +1762,7 @@
         <option value="Follow-up">Follow-up</option><option value="Meetings">Meetings</option>
         <option value="Office">Office</option><option value="Assets">Assets</option>
       </select>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personal-archived" onchange="loadTable('personal')"> Archived</label>
       <select class="filter-select" id="filter-personal-status" onchange="loadTable('personal')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1846,6 +1854,7 @@
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
       <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger-ghost" type="button" id="drawer-delete-btn" style="display:none;" onclick="drawerDeleteCurrent()" title="Permanently delete this record (archive instead to keep it)">Delete</button>
       <span id="promote-wrap" style="display:none; margin-right:auto;">
         <select id="promote-select" class="filter-select" style="margin-right:0.4rem;">
           <option value="">Promote / Escalate →</option>
@@ -5013,7 +5022,7 @@ function wireRecordRow(tr, table, row) {
 /* ── Load Table (with filters) ─────────────── */
 async function loadTable(table) {
   const st = sortState[table];
-  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order);
+  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order+(archivedViewOn(table)?'&archived=1':''));
   if (!data) return;
   tableCache[table] = data;
 
@@ -6505,6 +6514,30 @@ function formatDateTime(d) {
   }
 }
 
+// #38 Archive: the core trackers carry an archived_at column. The main view's
+// destructive button becomes "Archive" (soft, reversible, retained); hard Delete
+// moves into the record drawer. A per-tracker "Show archived" toggle flips the view.
+const ARCHIVABLE_TABS = new Set(['work', 'project', 'training', 'personnel', 'calendar', 'personal']);
+function archivedViewOn(table) {
+  return !!document.getElementById('filter-' + table + '-archived')?.checked;
+}
+async function archiveRecord(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/archive');
+  if (r && !r.error) { toast(itemLabel(table) + ' archived'); loadTable(table); if (table === 'calendar') loadDashboard(); }
+}
+async function unarchiveRecord(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/unarchive');
+  if (r && !r.error) { toast(itemLabel(table) + ' restored'); loadTable(table); if (table === 'calendar') loadDashboard(); }
+}
+function drawerDeleteCurrent() {
+  if (!editingTable || !editingId) return;
+  const t = editingTable, id = editingId;
+  const d = window.__currentModalData || {};
+  const title = d.title || d.person_name || ('#' + id);
+  closeModal();
+  confirmDelete(t, id, title);
+}
+
 function makeActions(table, id, label, row = {}) {
   const td = document.createElement('td'); td.className='cell-actions';
   if (row.project_number || row.project_id) {
@@ -6533,9 +6566,26 @@ function makeActions(table, id, label, row = {}) {
   td.appendChild(feedback);
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.type='button'; edit.textContent='Edit';
   edit.addEventListener('click', ev => { ev.stopPropagation(); editRecord(table,id); });
-  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
-  del.addEventListener('click', ev => { ev.stopPropagation(); confirmDelete(table,id,label); });
-  td.appendChild(edit); td.appendChild(del);
+  td.appendChild(edit);
+  // #38: archivable trackers show Archive (or Restore in the archived view) on the
+  // main row; hard Delete lives inside the drawer. Non-archivable rows keep Delete.
+  if (ARCHIVABLE_TABS.has(table)) {
+    if (archivedViewOn(table)) {
+      const restore = document.createElement('button'); restore.className='btn btn-ghost'; restore.type='button'; restore.textContent='Restore';
+      restore.title = 'Restore to the active view';
+      restore.addEventListener('click', ev => { ev.stopPropagation(); unarchiveRecord(table,id); });
+      td.appendChild(restore);
+    } else {
+      const arch = document.createElement('button'); arch.className='btn btn-danger-ghost'; arch.type='button'; arch.textContent='Archive';
+      arch.title = 'Archive (kept for the record; permanent delete is inside the task)';
+      arch.addEventListener('click', ev => { ev.stopPropagation(); archiveRecord(table,id); });
+      td.appendChild(arch);
+    }
+  } else {
+    const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
+    del.addEventListener('click', ev => { ev.stopPropagation(); confirmDelete(table,id,label); });
+    td.appendChild(del);
+  }
   return td;
 }
 
@@ -8220,8 +8270,17 @@ function openModal(table,data) {
   renderPromoteDropdown(table);
   renderMeetingPacketButton(table, data || {});
   renderDrawerAssignButton(table, data || {});
+  renderDrawerDeleteButton(table, data || {});
 
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+// #38: hard delete lives inside the drawer for archivable trackers (the main view
+// uses Archive). Shown only for an existing record.
+function renderDrawerDeleteButton(table, data) {
+  const btn = document.getElementById('drawer-delete-btn');
+  if (!btn) return;
+  btn.style.display = (ARCHIVABLE_TABS.has(table) && data && data.id) ? 'inline-flex' : 'none';
 }
 
 /* Triage drawer → assignment modal handoff. Shown only for un-promoted

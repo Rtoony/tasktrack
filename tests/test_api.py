@@ -360,6 +360,35 @@ def test_comment_audience_ai_dev_round_trips(auth_client):
     assert by_body["bogus"] == ""
 
 
+# ── Archive (#38) ──────────────────────────────────────────────────────────
+
+def test_archive_hides_from_default_list_and_unarchive_restores(auth_client):
+    rid = _make_work_task(auth_client, title="To archive")
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/archive")
+    assert r.status_code == 200 and r.get_json()["archived_at"]
+    # hidden from the default view, retained + visible under ?archived=1
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks?archived=1").get_json()]
+
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/unarchive")
+    assert r.status_code == 200 and r.get_json()["archived_at"] is None
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+
+
+def test_archive_rejects_non_archivable_table(auth_client):
+    # feedback_items has no archived_at column → 400 before any record lookup.
+    assert auth_client.post("/api/v1/feedback_items/1/archive").status_code == 400
+
+
+def test_hard_delete_removes_even_from_archived_view(auth_client):
+    rid = _make_work_task(auth_client, title="To delete")
+    assert auth_client.delete(f"/api/v1/work_tasks/{rid}").status_code == 200
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks?archived=1").get_json()]
+
+
 # ── Cycle status ──────────────────────────────────────────────────────────
 
 def test_cycle_status_advances_through_flow(auth_client):
