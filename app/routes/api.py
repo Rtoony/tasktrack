@@ -622,11 +622,15 @@ def list_records(table):
         stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
     # feedback #38: archived rows are hidden from the default view (retained in the
     # DB for long-term analysis); ?archived=1 lists ONLY archived rows for review.
-    if "archived_at" in {c.name for c in Model.__table__.columns}:
+    cols = {c.name for c in Model.__table__.columns}
+    if "archived_at" in cols:
         if request.args.get("archived") == "1":
             stmt = stmt.where(Model.archived_at.is_not(None))
         else:
             stmt = stmt.where(Model.archived_at.is_(None))
+    # feedback #44: ?follow_up=1 narrows to flagged ("starred") tasks only.
+    if request.args.get("follow_up") == "1" and "follow_up" in cols:
+        stmt = stmt.where(Model.follow_up == 1)
     rows = [r for r in sess.scalars(stmt).all() if _record_detail_visible_to_current_user(table, r)]
     return jsonify([to_dict(r) for r in rows])
 
@@ -798,6 +802,26 @@ def unarchive_record(table, record_id):
                      new=getattr(row, "title", None) or getattr(row, "person_name", "") or "")
         sess.commit()
         sess.refresh(row)
+    return jsonify(to_dict(row))
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/follow-up", methods=["POST"])
+@login_required
+def toggle_follow_up(table, record_id):
+    """feedback #44: flip a task's follow-up flag (a star)."""
+    if table not in ALLOWED_TABLES:
+        return jsonify({"error": "Invalid table"}), 400
+    Model = TABLE_MODELS[table]
+    if "follow_up" not in {c.name for c in Model.__table__.columns}:
+        return jsonify({"error": f"{table} does not support follow-up"}), 400
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    row.follow_up = 0 if row.follow_up else 1
+    log_activity(sess, table, record_id, "follow_up", new=str(row.follow_up))
+    sess.commit()
+    sess.refresh(row)
     return jsonify(to_dict(row))
 
 

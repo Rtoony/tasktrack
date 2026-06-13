@@ -144,6 +144,8 @@ class WorkTask(Base):
     project_id: Mapped[int | None] = mapped_column(Integer)
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class ProjectWorkTask(Base):
@@ -179,6 +181,8 @@ class ProjectWorkTask(Base):
     engineer_id: Mapped[int | None] = mapped_column(Integer)
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class TrainingTask(Base):
@@ -210,6 +214,8 @@ class TrainingTask(Base):
     trainee_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class PersonnelIssue(Base):
@@ -251,6 +257,8 @@ class PersonnelIssue(Base):
     person_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class PersonalItem(Base):
@@ -280,6 +288,8 @@ class PersonalItem(Base):
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
     __table_args__ = (
         Index("idx_personal_items_category", "category"),
@@ -397,6 +407,8 @@ class CalendarEvent(Base):
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
     __table_args__ = (
         Index("idx_calendar_events_start_at", "start_at"),

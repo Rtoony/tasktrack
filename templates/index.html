@@ -1479,6 +1479,7 @@
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
         <option value="technical" selected>Engineering + Drafting</option>
         <option value="engineer">Engineers</option>
+        <option value="engineer in training">Engineers-in-Training</option>
         <option value="drafter">Drafters</option>
       </select>
       <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
@@ -1516,6 +1517,7 @@
         <div class="section-subtitle">Track requested CAD changes, the discipline involved, and the follow-up context behind the work.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-work-archived" onchange="loadTable('work')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-work-followup" onchange="loadTable('work')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-work-status" onchange="loadTable('work')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1561,6 +1563,7 @@
         <div class="section-subtitle">Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-project-archived" onchange="loadTable('project')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-project-followup" onchange="loadTable('project')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1618,6 +1621,7 @@
         <div class="section-subtitle">Plan and track targeted training work by staff member, skill area, goals, and follow-up context.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-training-archived" onchange="loadTable('training')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-training-followup" onchange="loadTable('training')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-training-status" onchange="loadTable('training')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1659,6 +1663,7 @@
         <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personnel-archived" onchange="loadTable('personnel')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-personnel-followup" onchange="loadTable('personnel')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-personnel-status" onchange="loadTable('personnel')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1697,6 +1702,7 @@
         <div class="section-subtitle">Internal meetings, milestones, report deadlines, prep blocks, and project-linked reminders.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-calendar-archived" onchange="loadTable('calendar')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) items"><input type="checkbox" id="filter-calendar-followup" onchange="loadTable('calendar')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-calendar-status" onchange="loadTable('calendar')">
         <option value="">All Statuses</option>
         <option value="scheduled">Scheduled</option><option value="tentative">Tentative</option>
@@ -1763,6 +1769,7 @@
         <option value="Office">Office</option><option value="Assets">Assets</option>
       </select>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personal-archived" onchange="loadTable('personal')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) items"><input type="checkbox" id="filter-personal-followup" onchange="loadTable('personal')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-personal-status" onchange="loadTable('personal')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -3454,8 +3461,11 @@ function visibleCompetencyEmployees() {
   const roleFilter = document.getElementById('comp-role-filter')?.value || 'technical';
   return (compState.employees || []).filter(e => {
     const role = String(e.role || '').toLowerCase();
+    // #52: Engineer-in-Training is a technical role — counts in the default
+    // "Engineering + Drafting" view and has its own filter. Canonical role value:
+    // "engineer in training" (lowercase free-text, set per-employee via the registry).
     const roleOk = roleFilter === 'technical'
-      ? (role === 'engineer' || role === 'drafter')
+      ? (role === 'engineer' || role === 'drafter' || role === 'engineer in training')
       : role === roleFilter;
     return roleOk && (!nameFilter || e.display_name.toLowerCase().includes(nameFilter));
   });
@@ -4956,7 +4966,7 @@ function wireRecordRow(tr, table, row) {
 /* ── Load Table (with filters) ─────────────── */
 async function loadTable(table) {
   const st = sortState[table];
-  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order+(archivedViewOn(table)?'&archived=1':''));
+  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order+(archivedViewOn(table)?'&archived=1':'')+(followUpViewOn(table)?'&follow_up=1':''));
   if (!data) return;
   tableCache[table] = data;
 
@@ -6470,6 +6480,14 @@ async function unarchiveRecord(table, id) {
   const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/unarchive');
   if (r && !r.error) { toast(itemLabel(table) + ' restored'); loadTable(table); if (table === 'calendar') loadDashboard(); }
 }
+// #44: follow-up flag (a star). Same core trackers as archive carry the column.
+function followUpViewOn(table) {
+  return !!document.getElementById('filter-' + table + '-followup')?.checked;
+}
+async function toggleFollowUp(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/follow-up');
+  if (r && !r.error) loadTable(table);
+}
 function drawerDeleteCurrent() {
   if (!editingTable || !editingId) return;
   const t = editingTable, id = editingId;
@@ -6508,6 +6526,16 @@ function makeActions(table, id, label, row = {}) {
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.type='button'; edit.textContent='Edit';
   edit.addEventListener('click', ev => { ev.stopPropagation(); editRecord(table,id); });
   td.appendChild(edit);
+  // #44: a follow-up star — filled when flagged, click to toggle. Doubles as the
+  // at-a-glance indicator; the per-tracker "★ Follow-ups" filter lists flagged tasks.
+  if (ARCHIVABLE_TABS.has(table)) {
+    const star = document.createElement('button'); star.className='btn btn-ghost'; star.type='button';
+    star.textContent = row.follow_up ? '★' : '☆';
+    star.title = row.follow_up ? 'Following up — click to clear the flag' : 'Flag as a follow-up';
+    star.setAttribute('aria-label', star.title);
+    star.addEventListener('click', ev => { ev.stopPropagation(); toggleFollowUp(table, id); });
+    td.appendChild(star);
+  }
   // #38: archivable trackers show Archive (or Restore in the archived view) on the
   // main row; hard Delete lives inside the drawer. Non-archivable rows keep Delete.
   if (ARCHIVABLE_TABS.has(table)) {

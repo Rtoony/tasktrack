@@ -382,6 +382,26 @@ def test_archive_rejects_non_archivable_table(auth_client):
     assert auth_client.post("/api/v1/feedback_items/1/archive").status_code == 400
 
 
+def test_follow_up_toggle_and_filter(auth_client):
+    # feedback #44: toggle the follow-up star and list flagged tasks via ?follow_up=1.
+    rid = _make_work_task(auth_client, title="Star me")
+
+    def followed_ids():
+        return [x["id"] for x in auth_client.get("/api/v1/work_tasks?follow_up=1").get_json()]
+
+    assert rid not in followed_ids()
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/follow-up")
+    assert r.status_code == 200 and r.get_json()["follow_up"] == 1
+    assert rid in followed_ids()
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/follow-up")
+    assert r.status_code == 200 and r.get_json()["follow_up"] == 0
+    assert rid not in followed_ids()
+
+
+def test_follow_up_rejects_unsupported_table(auth_client):
+    assert auth_client.post("/api/v1/feedback_items/1/follow-up").status_code == 400
+
+
 def test_hard_delete_removes_even_from_archived_view(auth_client):
     rid = _make_work_task(auth_client, title="To delete")
     assert auth_client.delete(f"/api/v1/work_tasks/{rid}").status_code == 200
