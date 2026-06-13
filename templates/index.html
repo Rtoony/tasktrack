@@ -5004,9 +5004,11 @@ async function loadTable(table) {
   // actionable rows rise to the top of their band (priority > due > status).
   const _sortCol = (sortState[table] || {}).col;
   if (_sortCol === 'priority' || _sortCol === 'severity') {
-    const ORDER = _sortCol === 'severity'
-      ? ['Critical', 'High', 'Medium', 'Low', 'None']
-      : ['High', 'Medium', 'Low', 'None'];
+    // reaudit (low): include 'Critical' on the priority axis too — the server
+    // (_PRIORITY_SORT_ORDER) ranks both axes against the same Critical-first order,
+    // so if an admin adds 'Critical' to the managed task_priority set, the client
+    // re-sort must agree instead of pinning those rows last (indexOf -1).
+    const ORDER = ['Critical', 'High', 'Medium', 'Low', 'None'];
     const flow = TRACKER_STATUS_FLOW[table] || [];
     const isDesc = (sortState[table] || {}).order === 'desc';
     // reaudit #4: mirror the server (api.py list_records) — bake the direction

@@ -284,6 +284,55 @@ def test_promote_creates_target_record_and_archives_inbox(client, with_token, te
         assert wt.description == "see drawing E-501"
 
 
+def test_promote_applies_ai_drafted_optional_fields(client, with_token, temp_app):
+    # reaudit #6: suggestion_to_payload is now wired into promote — an AI-drafted
+    # optional field (beyond the generic title/body/priority/due carries) lands when
+    # the suggestion targets the same table and the field isn't already supplied.
+    import json as _json
+    client.post("/api/v1/inbox",
+                json={"title": "Automate xref binder", "body": "batch bind xrefs", "source": "voice"},
+                headers={"X-Token": INBOX_TOKEN})
+    with temp_app.app_context():
+        sess = get_session()
+        item = sess.query(InboxItem).first()
+        item.suggestion_json = _json.dumps({
+            "target_table": "work_tasks",
+            "fields": {"category": "LISP / Automation"},
+        })
+        sess.commit()
+        item_id = item.id
+    _login(client)
+    r = client.post(f"/api/v1/inbox/{item_id}/promote", json={"target_table": "work_tasks"})
+    assert r.status_code == 201, r.data
+    new_id = r.get_json()["promoted_to"]["id"]
+    with temp_app.app_context():
+        assert get_session().get(WorkTask, new_id).category == "LISP / Automation"
+
+
+def test_promote_client_override_beats_ai_draft(client, with_token, temp_app):
+    # reaudit #6: the AI draft only fills empty fields — client overrides still win.
+    import json as _json
+    client.post("/api/v1/inbox",
+                json={"title": "x", "body": "y", "source": "voice"},
+                headers={"X-Token": INBOX_TOKEN})
+    with temp_app.app_context():
+        sess = get_session()
+        item = sess.query(InboxItem).first()
+        item.suggestion_json = _json.dumps({
+            "target_table": "work_tasks",
+            "fields": {"category": "LISP / Automation"},
+        })
+        sess.commit()
+        item_id = item.id
+    _login(client)
+    r = client.post(f"/api/v1/inbox/{item_id}/promote",
+                    json={"target_table": "work_tasks", "overrides": {"category": "CAD Standards Portal"}})
+    assert r.status_code == 201, r.data
+    new_id = r.get_json()["promoted_to"]["id"]
+    with temp_app.app_context():
+        assert get_session().get(WorkTask, new_id).category == "CAD Standards Portal"
+
+
 def test_promote_rejects_self(client, with_token, temp_app):
     client.post("/api/v1/inbox", json={"title": "x", "source": "t"},
                 headers={"X-Token": INBOX_TOKEN})

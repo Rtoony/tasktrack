@@ -495,6 +495,25 @@ def promote(item_id):
     if "source" in cfg["fields"]:
         payload["source"] = f"inbox:{item.source}"
 
+    # reaudit #6: seed the AI-drafted optional fields from the stored suggestion so a
+    # non-SPA promote applies them too (suggestion_to_payload's docstring promised
+    # this, but nothing called it). Only fills fields not already carried, and only
+    # when the suggestion targets the SAME table being promoted to — the generic
+    # carries above and the client overrides below both still win.
+    if item.suggestion_json:
+        try:
+            _suggestion = json.loads(item.suggestion_json)
+        except (ValueError, TypeError):
+            _suggestion = None
+        if isinstance(_suggestion, dict) and (_suggestion.get("target_table") or "").strip() == target_table:
+            try:
+                _drafted = triage_svc.suggestion_to_payload(_suggestion, raw_text=item.body or item.title or "")
+            except (ValueError, KeyError):
+                _drafted = {}
+            for _k, _v in _drafted.items():
+                if _k in cfg["fields"] and not str(payload.get(_k) or "").strip():
+                    payload[_k] = _v
+
     # Caller-supplied field overrides land last (the assignment modal
     # sends the full reviewed field set here).
     overrides = data.get("overrides") or {}

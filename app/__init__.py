@@ -194,10 +194,14 @@ def _check_schema_matches_models(db_path: str) -> None:
     engine = create_engine(f"sqlite:///{db_path}")
     insp = inspect(engine)
     live_tables = set(insp.get_table_names())
-    # audit #30: a brand-new/empty DB (no overlap with model tables) is not
-    # "drift" — let `alembic upgrade head` create it instead of fail-louding.
-    # Genuine partial drift (some expected tables present, others missing) still raises.
-    if live_tables.isdisjoint({t.name for t in Base.metadata.tables.values()}):
+    # audit #30: a brand-new/empty DB (never migrated) is not "drift" — let
+    # `alembic upgrade head` create it instead of fail-louding.
+    # reaudit (low): only treat it as fresh when there are NO model tables AND the DB
+    # was never stamped (no alembic_version). A stamped DB whose model tables have all
+    # been dropped out-of-band is catastrophic destruction, not a fresh DB — fall
+    # through so the drift loop fails loud. Genuine partial drift still raises.
+    model_table_names = {t.name for t in Base.metadata.tables.values()}
+    if live_tables.isdisjoint(model_table_names) and "alembic_version" not in live_tables:
         LOG.info("schema check: fresh DB (no model tables present) — run `alembic upgrade head`")
         engine.dispose()
         return
