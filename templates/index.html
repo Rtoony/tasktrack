@@ -10,6 +10,8 @@
 <link rel="apple-touch-icon" href="/pwa-icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/MarkerCluster.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/MarkerCluster.Default.css">
 <style>
   /* Carbon/IBM Plex palette. The first GUI redesign pass moves TaskTrack
      from the older dark-only look to a flat, dense Carbon Gray-10 shell
@@ -1940,6 +1942,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/vendor/leaflet/leaflet.markercluster.js"></script>
 <script>
 /* Leaflet expects its marker images at L.Icon.Default.imagePath. We vendor
    them under /static/vendor/leaflet/images so the default Marker icon works
@@ -3849,6 +3852,7 @@ async function refreshHealthPill() {
 let mapInstance = null;
 let mapLayer = null;
 let mapHullLayer = null;
+let mapClusterLayer = null;  // map clustering: markerClusterGroup wrapping the pins
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
 let mapProjectFocus = { id: '', number: '' };
@@ -4009,6 +4013,7 @@ async function reloadMap(fit) {
     geo = await res.json();
   } catch (e) { geo = { features: [] }; }
 
+  if (mapClusterLayer) { mapClusterLayer.remove(); mapClusterLayer = null; }
   if (mapLayer) { mapLayer.remove(); mapLayer = null; }
   const features = (geo.features || []);
 
@@ -4071,7 +4076,17 @@ async function reloadMap(fit) {
         '</div>';
       layer.bindPopup(html);
     },
-  }).addTo(mapInstance);
+  });
+  // Map clustering: group nearby project pins into a count bubble so dense areas stay
+  // readable; declusters automatically as you zoom in (full pins by zoom 18).
+  mapClusterLayer = L.markerClusterGroup({
+    chunkedLoading: true,
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    disableClusteringAtZoom: 18,
+  });
+  mapClusterLayer.addLayer(mapLayer);
+  mapClusterLayer.addTo(mapInstance);
 
   if (fit || mapLayer.getLayers().length) {
     try { mapInstance.fitBounds(mapLayer.getBounds(), { padding: [24, 24] }); } catch (e) {}
