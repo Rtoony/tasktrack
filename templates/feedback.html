@@ -139,7 +139,7 @@ details.context-raw summary { cursor:pointer; color:var(--muted); font-size:0.72
       <form class="detail" id="feedback-form">
         <input type="hidden" id="feedback-id">
         <div class="field"><label>Title</label><input class="input" id="feedback-title" required></div>
-        <div class="field"><label>Details</label><textarea id="feedback-body" placeholder="Please describe the issue or idea. Include steps to reproduce if it's a bug."></textarea></div>
+        <div class="field"><label>Details</label><textarea id="feedback-body" spellcheck="true" placeholder="Please describe the issue or idea. Include steps to reproduce if it's a bug."></textarea></div>
         <div class="form-grid">
           <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
           <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
@@ -151,11 +151,11 @@ details.context-raw summary { cursor:pointer; color:var(--muted); font-size:0.72
           <div class="field"><label>Tags</label><input class="input" id="feedback-tags" placeholder="testing, sidebar, copy"></div>
         </div>
         <div class="field"><label>Page URL</label><input class="input" id="feedback-page"></div>
-        <div class="field"><label>Resolution Notes</label><textarea id="feedback-resolution" placeholder="Codex: what changed, commit reference, test result, or exact question for Josh."></textarea></div>
+        <div class="field"><label>Resolution Notes</label><textarea id="feedback-resolution" spellcheck="true" placeholder="Codex: what changed, commit reference, test result, or exact question for Josh."></textarea></div>
         <div class="field"><label>Captured Context</label><div class="context-summary" id="feedback-context-summary"><div class="panel-sub">No captured context summary yet.</div></div><details class="context-raw"><summary>View raw context JSON</summary><pre class="context-box" id="feedback-context">{}</pre></details></div>
         <div class="field"><label>Screenshot / Attachment</label><div class="drop-zone" id="feedback-drop-zone">Paste, drop, or choose screenshots/PDFs for the selected feedback item.</div><input class="input" type="file" id="feedback-file" accept="image/png,image/jpeg,image/jpg,application/pdf" multiple><div class="panel-sub" id="feedback-file-hint">No staged files.</div><div class="attachments" id="feedback-attachments"></div></div>
         <div class="field"><label>Activity</label><div class="comments" id="feedback-activity"><div class="panel-sub">Save or select feedback to view activity.</div></div></div>
-        <div class="field"><label>Discussion</label><div class="comments" id="feedback-comments"><div class="panel-sub">Save or select feedback to discuss it.</div></div><textarea id="feedback-comment-body" placeholder="Add a note for Codex or Josh. Example: 'Still broken on Chromebook' or 'Need clarification on expected behavior.'"></textarea><div style="display:flex;justify-content:flex-end;margin-top:.4rem"><button class="btn btn-ghost" type="button" onclick="addFeedbackComment()">Add Comment</button></div></div>
+        <div class="field"><label>Discussion</label><div class="comments" id="feedback-comments"><div class="panel-sub">Save or select feedback to discuss it.</div></div><textarea id="feedback-comment-body" spellcheck="true" placeholder="Add a note for Codex or Josh. Example: 'Still broken on Chromebook' or 'Need clarification on expected behavior.'"></textarea><div style="display:flex;justify-content:flex-end;margin-top:.4rem"><button class="btn btn-ghost" type="button" onclick="addFeedbackComment()">Add Comment</button></div></div>
         <div style="display:flex;gap:.5rem;justify-content:space-between;flex-wrap:wrap">
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
             <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Needs Info')">Needs Info</button>
