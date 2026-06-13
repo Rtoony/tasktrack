@@ -121,7 +121,19 @@ def test_admin_workflow_project_uses_standalone_shell(admin_client):
     assert 'Full Tracker' in html
     assert 'const STANDALONE_TAB = "project";' in html
     assert 'id="sec-project"' in html
-    assert 'if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;' in html
+    # audit #6: guard now compares the aliased standalone key
+    assert 'if (!section || (!btn && effectiveStandalone !== tabName)) return false;' in html
+
+
+def test_admin_workflow_personal_standalone_resolves_not_blank(admin_client):
+    """Audit #6: after the #14 consolidation the legacy per-category personal
+    workflow views must alias to the live 'personal' section, not render blank."""
+    r = admin_client.get("/admin/workflow/personal_husband")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert 'const STANDALONE_TAB = "personal_husband";' in html
+    assert 'id="sec-personal"' in html  # consolidated section exists
+    assert "LEGACY_PERSONAL[STANDALONE_TAB] ? 'personal'" in html  # the alias guard
 
 
 def test_admin_workflow_redirects_regular_user(auth_client):
