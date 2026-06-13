@@ -144,7 +144,9 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             bucket["preliminary"].add(slug)
         elif row.source_kind == "official_baseline":
             bucket["baseline"].add(slug)
-    cat_dim_counts = {c.id: len(dimensions_for_category(c)) for c in categories}
+    # Valid dimension slugs per category — counts are intersected with these so an
+    # off-catalog/stale slug can never push coverage above total_dimensions.
+    cat_dim_slugs = {c.id: {d.slug for d in dimensions_for_category(c)} for c in categories}
 
     employee_rows = []
     all_csv_rows = []
@@ -168,9 +170,10 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             status = _cell_status(score_row, prelim, baseline)
             # Fable per-task coverage for this (employee, category) cell.
             _dm = dim_markers.get((emp.id, cat.id), {"preliminary": set(), "baseline": set()})
-            _total_dims = cat_dim_counts.get(cat.id, 0)
-            _prelim_dims = len(_dm["preliminary"])
-            _baselined_dims = len(_dm["baseline"])
+            _valid_dims = cat_dim_slugs.get(cat.id, set())
+            _total_dims = len(_valid_dims)
+            _prelim_dims = len(_dm["preliminary"] & _valid_dims)
+            _baselined_dims = len(_dm["baseline"] & _valid_dims)
             visible_score = float(score_row.score) if score_row is not None else None
 
             if visible_score is not None:

@@ -141,7 +141,9 @@ def list_ai_instructions():
             stmt = stmt.where(Comment.record_id == int(record_id))
         except (TypeError, ValueError):
             return jsonify({"error": "record_id must be an integer"}), 400
-    stmt = stmt.order_by(Comment.created_at.desc())
+    # Bound the scan so a pathological ai-dev comment volume can't be fully
+    # materialised; the result is still capped at `limit` after the archived filter.
+    stmt = stmt.order_by(Comment.created_at.desc()).limit(max(limit * 5, limit))
 
     # #42 (pre-merge review): skip AI-dev comments whose parent record has been
     # archived — an archived task's instructions are stale, so Hermes shouldn't pull
