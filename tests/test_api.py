@@ -407,3 +407,32 @@ def test_work_task_category_round_trips(auth_client):
     assert r.status_code == 200
     r = auth_client.get(f"/api/v1/work_tasks/{record_id}")
     assert r.get_json()["category"] == "LISP / Automation"
+
+
+def test_priority_sort_is_urgency_ranked_not_alphabetical(auth_client):
+    """#47: sorting by priority ranks High > Medium > Low > None, not A-Z."""
+    # Insert out of order, with the 'None' priority and a blank.
+    _make_work_task(auth_client, title="lo", priority="Low")
+    _make_work_task(auth_client, title="hi", priority="High")
+    _make_work_task(auth_client, title="none", priority="None")
+    _make_work_task(auth_client, title="med", priority="Medium")
+
+    asc = auth_client.get("/api/v1/work_tasks?sort=priority&order=asc").get_json()
+    ranks = [row["priority"] for row in asc if row["priority"] in ("High", "Medium", "Low", "None")]
+    # High first, None last — and NOT alphabetical (which would put High, Low, Medium, None).
+    assert ranks == sorted(ranks, key=lambda p: ["High", "Medium", "Low", "None"].index(p))
+    assert ranks[0] == "High" and ranks[-1] == "None"
+
+    desc = auth_client.get("/api/v1/work_tasks?sort=priority&order=desc").get_json()
+    dranks = [row["priority"] for row in desc if row["priority"] in ("High", "Medium", "Low", "None")]
+    assert dranks[0] == "None" and dranks[-1] == "High"
+
+
+def test_severity_sort_ranks_critical_first(auth_client):
+    """#47: the same urgency rank serves incident severity (Critical on top)."""
+    auth_client.post("/api/v1/personnel_issues", json={"issue_description": "a", "severity": "Low"})
+    auth_client.post("/api/v1/personnel_issues", json={"issue_description": "b", "severity": "Critical"})
+    auth_client.post("/api/v1/personnel_issues", json={"issue_description": "c", "severity": "Medium"})
+    rows = auth_client.get("/api/v1/personnel_issues?sort=severity&order=asc").get_json()
+    sev = [r["severity"] for r in rows if r.get("severity") in ("Critical", "High", "Medium", "Low")]
+    assert sev[0] == "Critical"

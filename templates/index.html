@@ -3385,7 +3385,10 @@ function activateTab(tabName, options={}) {
   section.classList.add('active');
   if (currentTab === 'dashboard') loadDashboard();
   if (currentTab === 'map') initOrRefreshMap();
-  if (currentTab === 'competency') loadCompetency();
+  // #49: opening the Competency tab always returns to the matrix, not the
+  // last-viewed scorecard. Reset here (tab-switch only) — NOT inside
+  // loadCompetency(), which post-save reloads rely on to keep the selection.
+  if (currentTab === 'competency') { compScorecardEmpId = null; compSelected = null; loadCompetency(); }
   if (API_MAP[currentTab]) loadTable(currentTab);
   if (options.history !== false) pushShellHistory(currentTab);
   return true;
@@ -3435,6 +3438,13 @@ function employeeShortName(emp) {
   const words = raw.split(/\s+/).filter(Boolean);
   if (words.length <= 1) return raw || 'Employee';
   return words[0] + ' ' + words[words.length - 1];
+}
+// #29: drop the credential/initials suffix that follows a comma (e.g.
+// "Ryan Gleason, P.E." -> "Ryan Gleason") for DISPLAY only. Operates on the
+// stored requested_by/observed_by STRING, keeps full given+middle+surname,
+// and must never touch an <option> value (would break the #33 default match).
+function formatPersonName(value) {
+  return String(value || '').replace(/,.*/, '').trim();
 }
 function employeeAvatarHtml(emp, size) {
   const initials = esc(employeeInitials(emp));
@@ -5011,9 +5021,9 @@ async function loadTable(table) {
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
       tr.appendChild(makeCell(r.category,'cell-supporting'));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
-      tr.appendChild(makeCell(r.requested_by,'cell-supporting'));
+      tr.appendChild(makeCell(formatPersonName(r.requested_by),'cell-supporting'));
       tr.appendChild(makeCell(descriptionPreview(r.description),'cell-desc'));
-      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeActions(table,r.id,r.title,r));
@@ -5021,10 +5031,10 @@ async function loadTable(table) {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeProjectNumberCell(r.project_number, r.project_id));
       tr.appendChild(makeCell(r.billing_phase,'cell-supporting'));
-      tr.appendChild(makeCell(r.engineer,'cell-supporting'));
+      tr.appendChild(makeCell(formatPersonName(r.engineer),'cell-supporting'));
       tr.appendChild(makeCell(r.project_name,'cell-supporting'));
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
-      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_at));
       tr.appendChild(makeDateCell(r.scheduled_completion_at));
@@ -5034,9 +5044,9 @@ async function loadTable(table) {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'AI') : ''));
       tr.appendChild(makeCell(r.trainees,'cell-supporting'));
-      tr.appendChild(makeCell(r.requested_by,'cell-supporting'));
+      tr.appendChild(makeCell(formatPersonName(r.requested_by),'cell-supporting'));
       tr.appendChild(makeCell(r.skill_area,'cell-supporting'));
-      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeActions(table,r.id,r.title,r));
@@ -5056,7 +5066,7 @@ async function loadTable(table) {
       tr.appendChild(makeTriageCheckCell(r));
       tr.appendChild(makeTriageTitleCell(r));
       tr.appendChild(makeTriageSourceCell(r));
-      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
@@ -5065,15 +5075,15 @@ async function loadTable(table) {
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'intake') : ''));
-      tr.appendChild(makeStatusBadge(r.priority));
+      tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
       tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='personnel') {
-      tr.appendChild(makeCell(r.person_name,'cell-title'));
+      tr.appendChild(makeCell(formatPersonName(r.person_name),'cell-title'));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
-      tr.appendChild(makeStatusBadge(r.severity));
+      tr.appendChild(makeClickablePriority(table,r,'severity'));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.reported_date));
       tr.appendChild(makeActions(table,r.id,r.person_name,r));
@@ -5655,6 +5665,64 @@ function makeStatusSelect(table, r, compact) {
 function makeClickableStatus(table,r) {
   const td = document.createElement('td');
   td.appendChild(makeStatusSelect(table, r));
+  return td;
+}
+
+function prioritySelectClass(val, compact) {
+  // Reuse the priority badge palette (badge-high/medium/low; None/blank falls
+  // to the neutral base .badge) so the inline select keeps the same color cue.
+  const cls = String(val || 'none').toLowerCase().replace(/\s+/g,'-');
+  return 'badge badge-'+cls+' status-select'+(compact ? ' status-select-sm' : '');
+}
+
+// #30: inline-editable priority/severity cell, mirroring makeStatusSelect.
+// Options come from the managed set (task_priority / incident_severity) via the
+// FK cache, with the static fallback so a row renders synchronously even before
+// the options fetch resolves. An out-of-set current value stays selectable.
+function makePrioritySelect(table, r, field) {
+  field = field || 'priority';
+  const setKey = field === 'severity' ? 'incident_severity' : 'task_priority';
+  const options = normalizeManagedOptions(
+    FK_OPTION_CACHE['/api/v1/options/' + setKey],
+    MANAGED_OPTION_FALLBACKS[setKey] || []
+  );
+  const current = r[field] || '';
+  const sel = document.createElement('select');
+  sel.className = prioritySelectClass(current);
+  sel.title = 'Change ' + field;
+  sel.setAttribute('aria-label', itemLabel(table) + ' ' + field);
+  const values = options.map(o => managedOptionValue(o));
+  const list = (current && !values.includes(current)) ? [{ value: current, label: current }, ...options] : options;
+  list.forEach(o => {
+    const opt = document.createElement('option');
+    opt.value = managedOptionValue(o);
+    opt.textContent = managedOptionLabel(o);
+    if (opt.value === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+  sel.addEventListener('click', ev => ev.stopPropagation());
+  sel.addEventListener('keydown', ev => ev.stopPropagation());
+  sel.addEventListener('change', async () => {
+    const next = sel.value;
+    sel.disabled = true;
+    const updated = await api('PUT','/api/v1/'+API_MAP[table]+'/'+r.id, { [field]: next });
+    sel.disabled = false;
+    if (updated && !updated.error) {
+      r[field] = updated[field];
+      sel.className = prioritySelectClass(updated[field]);
+      toast(itemLabel(table) + ' ' + field + ' updated to ' + (updated[field] || 'None'));
+      loadTable(table);  // refresh row accents + re-apply priority sort
+    } else {
+      sel.value = current;
+      toast(updated?.error || (field + ' update failed'));
+    }
+  });
+  return sel;
+}
+
+function makeClickablePriority(table, r, field) {
+  const td = document.createElement('td');
+  td.appendChild(makePrioritySelect(table, r, field));
   return td;
 }
 
@@ -7245,12 +7313,22 @@ function renderField(f,value) {
     input=document.createElement('select'); input.id='f-'+f.key;
     const empty=document.createElement('option'); empty.value=''; empty.textContent=f.placeholder || '— choose employee —';
     input.appendChild(empty);
+    // #33: on a NEW record with no preset, default the "Requested By" field to
+    // the logged-in user (name match, credentials ignored). Scoped to
+    // requested_by so engineer/reporter fields are never wrongly pre-filled.
+    const defaultName = (!editingId && !String(value || '').trim() && f.key === 'requested_by')
+      ? formatPersonName(document.getElementById('core-greeting')?.dataset.user || '').toLowerCase()
+      : '';
     loadFkOptions('/api/v1/employees').then(rows => {
       rows.forEach(r => {
         const opt=document.createElement('option');
         opt.value=r.display_name || '';
-        opt.textContent=[r.display_name, r.title || r.role].filter(Boolean).join(' · ');
-        if (String(value).trim().toLowerCase()===String(opt.value).trim().toLowerCase()) opt.selected=true;
+        // #29: strip the credential suffix from the LABEL only; value keeps the
+        // full stored name so it matches what gets saved.
+        opt.textContent=[formatPersonName(r.display_name), r.title || r.role].filter(Boolean).join(' · ');
+        const optName = String(opt.value).trim().toLowerCase();
+        if (String(value).trim().toLowerCase()===optName) opt.selected=true;
+        else if (defaultName && formatPersonName(opt.value).toLowerCase()===defaultName) opt.selected=true;
         input.appendChild(opt);
       });
     });
@@ -8167,6 +8245,21 @@ async function saveRecord() {
   toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
 }
 
+// #31: Ctrl/Cmd+Enter saves+closes the record drawer, mirroring the blue Save
+// button. Scoped to the record overlay being open so it never fires over the
+// feedback or assignment modals (each owns its own keys).
+function initRecordModalShortcuts() {
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay && overlay.classList.contains('open')) {
+        e.preventDefault();
+        saveRecord();
+      }
+    }
+  });
+}
+
 /* ── AI Intake tab ───────────────────────────────────────────────────── */
 let intakePreviewState = null;
 
@@ -8606,6 +8699,7 @@ async function applyStartupRouteState() {
 initFeedbackTelemetry();
 initIntake();
 initFeedbackWidget();
+initRecordModalShortcuts();
 loadFeedbackAppContext();
 initProjectCommand();
 initProjectTaskFilters();

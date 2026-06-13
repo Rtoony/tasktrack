@@ -9,7 +9,7 @@ import io
 from datetime import date, datetime, timedelta
 
 from flask import Blueprint, Response, jsonify, request, session
-from sqlalchemy import desc, or_, select, text
+from sqlalchemy import case, desc, or_, select, text
 
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
@@ -560,6 +560,14 @@ def export_csv(table):
 
 # ── CRUD ───────────────────────────────────────────────────────────────────
 
+# Urgency order for categorical priority/severity sorting (feedback #47).
+# Index = rank (lower sorts first on ascending). Unknown/blank values fall to
+# the end. Covers both axes: priority uses High/Medium/Low/None, severity adds
+# Critical at the top. Keep aligned with the managed task_priority /
+# incident_severity option sets and the client PRIORITY_RANK in index.html.
+_PRIORITY_SORT_ORDER = ("Critical", "High", "Medium", "Low", "None")
+
+
 @bp.route("/api/v1/<table>", methods=["GET"])
 @login_required
 def list_records(table):
@@ -575,7 +583,19 @@ def list_records(table):
         sort = "id"
     sess = get_session()
     sort_col = getattr(Model, sort)
-    stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
+    # Priority/severity are categorical, not alphabetical: rank them by urgency
+    # (feedback #47). One unified map serves both — priority is High>Med>Low>None,
+    # severity is Critical>High>Med>Low; blanks/unknowns sort last on asc.
+    # Tie-break on id so the order is stable within a rank.
+    if sort in ("priority", "severity"):
+        rank = case(
+            *[(sort_col == value, idx) for idx, value in enumerate(_PRIORITY_SORT_ORDER)],
+            else_=len(_PRIORITY_SORT_ORDER),
+        )
+        rank = desc(rank) if order == "desc" else rank
+        stmt = select(Model).order_by(rank, Model.id)
+    else:
+        stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
     rows = [r for r in sess.scalars(stmt).all() if _record_detail_visible_to_current_user(table, r)]
     return jsonify([to_dict(r) for r in rows])
 
