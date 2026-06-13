@@ -2673,10 +2673,11 @@ async function captureFeedbackScreenshot() {
   const status = document.getElementById('feedback-status');
   const btn = document.getElementById('feedback-screenshot-btn');
   const overlay = document.getElementById('feedback-overlay');
+  if (btn && btn.disabled) return;  // hardening: re-entry guard against rapid double-click
+  if (btn) btn.disabled = true;
   let lib;
   try { lib = await loadHtml2Canvas(); }
-  catch { if (status) status.textContent = 'Screenshot tool failed to load — drag & drop a file instead.'; return; }
-  if (btn) btn.disabled = true;
+  catch { if (status) status.textContent = 'Screenshot tool failed to load — drag & drop a file instead.'; if (btn) btn.disabled = false; return; }
   if (status) status.textContent = 'Capturing…';
   const wasOpen = overlay && overlay.classList.contains('open');
   if (wasOpen) overlay.style.visibility = 'hidden';  // capture the view behind the form
@@ -3853,6 +3854,37 @@ let mapInstance = null;
 let mapLayer = null;
 let mapHullLayer = null;
 let mapClusterLayer = null;  // map clustering: markerClusterGroup wrapping the pins
+
+// Hardening: build map-popup content via DOM + addEventListener (raw project id/number
+// as JS args) instead of onclick string-literals. Embedding project_number in an inline
+// onclick was DOM-XSS — the HTML-entity decode of the attribute reopens the JS string.
+// displayHtml carries only escHtml-escaped HTML-context content; the [data-copy-pn]
+// code element and the action buttons get their handlers wired here.
+function projectPopupEl(displayHtml, p) {
+  const el = document.createElement('div');
+  el.innerHTML = displayHtml;
+  const id = Number(p.project_id || 0);
+  const num = p.project_number || '';
+  const copy = el.querySelector('[data-copy-pn]');
+  if (copy) copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(num).then(() => toast('project number copied')).catch(() => {});
+  });
+  const row = document.createElement('div');
+  row.style.cssText = 'margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap';
+  const mk = (label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText = 'border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer';
+    b.addEventListener('click', () => fn(id, num));
+    return b;
+  };
+  row.appendChild(mk('Workspace', openProjectWorkspaceSmart));
+  row.appendChild(mk('Focus', focusProjectOnMapSmart));
+  row.appendChild(mk('Report', openProjectReportSmart));
+  el.appendChild(row);
+  return el;
+}
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
 let mapProjectFocus = { id: '', number: '' };
@@ -4052,13 +4084,11 @@ async function reloadMap(fit) {
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
       const pin = p.pin_color ? `<span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:50%;background:${PIN_COLOR[p.pin_color] || '#94a3b8'};margin-right:0.3rem;vertical-align:middle"></span>${escHtml(p.pin_color)}` : '';
-      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
-      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
         '<div style="color:#555;margin-top:0.15rem">' +
-          '<code style="cursor:pointer" title="Click to copy" onclick="navigator.clipboard.writeText(\'' + escHtml(p.project_number).replace(/'/g, "\\'") + '\')">' + escHtml(p.project_number) + '</code>' +
+          '<code data-copy-pn="1" style="cursor:pointer" title="Click to copy">' + escHtml(p.project_number) + '</code>' +
           ' &middot; ' + escHtml(p.client || '—') +
         '</div>' +
         (p.component
@@ -4068,13 +4098,8 @@ async function reloadMap(fit) {
           '<span style="padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span>' +
           (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
         '</div>' +
-        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
-        '</div>' +
         '</div>';
-      layer.bindPopup(html);
+      layer.bindPopup(projectPopupEl(html, p));  // hardening: buttons/copy wired via DOM, not onclick strings
     },
   });
   // Map clustering: group nearby project pins into a count bubble so dense areas stay
@@ -4141,26 +4166,19 @@ async function reloadMapHulls() {
     },
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
-      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
-      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + ' <span style="color:var(--text-muted);font-weight:400">· area</span></div>' +
         '<div style="color:#555;margin-top:0.15rem">' +
-          '<code>' + escHtml(p.project_number) + '</code>' +
+          '<code data-copy-pn="1" style="cursor:pointer" title="Click to copy">' + escHtml(p.project_number) + '</code>' +
           ' &middot; ' + escHtml(p.client || '—') +
         '</div>' +
         '<div style="color:#555;margin-top:0.15rem;font-size:0.76rem">' +
           p.site_count + ' site' + (p.site_count === 1 ? '' : 's') + ' · ' + escHtml(p.display_status) +
         '</div>' +
         '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
-        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
-        '</div>' +
         '</div>';
-      layer.bindPopup(html);
+      layer.bindPopup(projectPopupEl(html, p));  // hardening: buttons/copy wired via DOM, not onclick strings
     },
   }).addTo(mapInstance);
   // Pins are added AFTER hulls in DOM order, so they naturally render
@@ -5114,9 +5132,9 @@ async function loadTable(table) {
   const tbody = document.getElementById('tbody-'+table);
   const empty = document.getElementById('empty-'+table);
   const countEl = document.getElementById('count-'+table);
-  // #38: while the "Archived" view is on, `data` is only archived rows — don't let
-  // it overwrite the tab badge (which should keep reflecting the active queue).
-  if (countEl && !archivedViewOn(table)) {
+  // #38/#44: while the "Archived" or "★ Follow-ups" view is on, `data` is a narrowed
+  // subset — don't let it overwrite the tab badge (which reflects the active queue).
+  if (countEl && !archivedViewOn(table) && !followUpViewOn(table)) {
     // Triage count = the active queue (New + In Progress) regardless of which
     // status filter the user has selected.
     // Internal queue counts = active queue (New + In Progress) within the
