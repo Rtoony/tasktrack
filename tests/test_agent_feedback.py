@@ -119,6 +119,19 @@ def test_terminal_status_sets_completed_at(client, temp_app, with_bot_token):
         assert get_session().get(FeedbackItem, fid).completed_at is not None
 
 
+def test_bot_reopen_clears_completed_at(client, temp_app, with_bot_token):
+    # audit #26 on the BOT path: reopening a terminal item to a non-done status
+    # must clear completed_at (the SPA path is covered in test_feedback; this isn't).
+    fid = _seed(temp_app, status="Fixed")
+    client.post(f"/api/v1/feedback/{fid}/status", json={"status": "Accepted"}, headers={"X-Token": BOT_TOKEN})
+    with temp_app.app_context():
+        assert get_session().get(FeedbackItem, fid).completed_at is not None
+    r = client.post(f"/api/v1/feedback/{fid}/status", json={"status": "Triaged"}, headers={"X-Token": BOT_TOKEN})
+    assert r.status_code == 200
+    with temp_app.app_context():
+        assert get_session().get(FeedbackItem, fid).completed_at is None
+
+
 def test_status_with_resolution_notes_logged(client, temp_app, with_bot_token):
     fid = _seed(temp_app, status="New")
     r = client.post(f"/api/v1/feedback/{fid}/status",

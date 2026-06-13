@@ -408,6 +408,27 @@ def test_archived_excluded_from_dashboard_search_and_export(auth_client):
     assert not in_csv()
 
 
+def test_archived_calendar_and_personal_excluded_from_search(auth_client):
+    # #38 leak-fix: lock the hand-written per-model ORM search exclusions for
+    # calendar_events and personal_items (work/project/training raw-SQL is covered above).
+    cal = auth_client.post("/api/v1/calendar_events", json={"title": "QuokkaArchiveCal", "start_at": "2026-07-01T10:00:00"})
+    assert cal.status_code in (200, 201), cal.get_json()
+    cal_id = cal.get_json()["id"]
+    per = auth_client.post("/api/v1/personal_items", json={"title": "QuokkaArchivePersonal", "category": "Follow-up"})
+    assert per.status_code in (200, 201), per.get_json()
+    per_id = per.get_json()["id"]
+
+    def search_ids(q, source):
+        return [r["id"] for r in auth_client.get(f"/api/v1/search?q={q}").get_json() if r.get("source") == source]
+
+    assert cal_id in search_ids("QuokkaArchiveCal", "calendar_events")
+    assert per_id in search_ids("QuokkaArchivePersonal", "personal_items")
+    assert auth_client.post(f"/api/v1/calendar_events/{cal_id}/archive").status_code == 200
+    assert auth_client.post(f"/api/v1/personal_items/{per_id}/archive").status_code == 200
+    assert cal_id not in search_ids("QuokkaArchiveCal", "calendar_events")
+    assert per_id not in search_ids("QuokkaArchivePersonal", "personal_items")
+
+
 # ── Cycle status ──────────────────────────────────────────────────────────
 
 def test_cycle_status_advances_through_flow(auth_client):

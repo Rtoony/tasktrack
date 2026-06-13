@@ -4975,7 +4975,12 @@ async function loadTable(table) {
     if (cat) filtered = filtered.filter(r => r.category === cat);
   }
   // "__active" = anything not in the tracker's done/closed statuses (default).
-  if (statusFilter === '__active') {
+  // #38 (pre-merge review): the Archived view must show EVERY archived row regardless
+  // of status — otherwise the default "Active" filter hides completed-then-archived
+  // rows and the archived list looks partially blank. Skip status filtering there.
+  if (archivedViewOn(table)) {
+    // no status narrowing in the archived view
+  } else if (statusFilter === '__active') {
     const doneStatuses = trackerDoneStatuses(table);
     filtered = filtered.filter(r => !doneStatuses.has(r.status));
   } else if (statusFilter) {
