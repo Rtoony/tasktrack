@@ -2849,7 +2849,7 @@ function updateMobileCounts(counts) {
   coreSetText('mobile-overdue-pill', mobileCompanionState.counts.overdue);
   coreSetText('mobile-review-pill', mobileCompanionState.counts.review);
   const todayTone = mobileCompanionState.counts.overdue ? 'danger' : '';
-  setMobileBadge('mobile-badge-today', mobileCompanionState.counts.overdue || mobileCompanionState.counts.open, todayTone);
+  setMobileBadge('mobile-badge-today', mobileTodayRowsFromCache().length, todayTone);  /* audit #28: badge the actual Today list, not whole-app open/overdue */
   setMobileBadge('mobile-badge-review', mobileCompanionState.counts.review, mobileCompanionState.counts.review ? 'warn' : '');
   renderMobilePaneChrome();
 }
@@ -3641,7 +3641,10 @@ function renderEmployeeScorecard() {
 function logCapabilityNoteFor(empId) {
   const emp = (compState.employees || []).find(e => e.id === empId);
   if (!emp) return;
-  openModal('personnel', { person_name: formatPersonName(emp.display_name) });
+  // audit #9: pass the employee id as the authoritative FK (person_ids JSON list)
+  // so a credentialed display_name ("Dyanna Stetina, P.E.") doesn't orphan the
+  // note via brittle exact-string matching.
+  openModal('personnel', { person_name: formatPersonName(emp.display_name), person_ids: JSON.stringify([emp.id]) });
 }
 
 function scoreOptions(value) {
@@ -4430,7 +4433,12 @@ function renderCoreTrackerCards(stats) {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'core-tracker-card';
-    card.addEventListener('click', () => document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click());
+    card.addEventListener('click', () => {
+      // audit #11: preserve the category drill-down — set the Personal category
+      // filter before opening the (now-unified) tab so the card lands scoped.
+      if (spec.category) { const cs = document.getElementById('filter-personal-category'); if (cs) cs.value = spec.category; }
+      document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click();
+    });
 
     const head = document.createElement('div');
     head.className = 'core-tracker-head';
@@ -4592,8 +4600,13 @@ function renderCoreRecentActivity(rows) {
     return;
   }
   visible.forEach(row => {
-    const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
-    item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
+    // audit #12: only rows whose table maps to a tab are openable; render the
+    // rest (e.g. feedback_items) as a static, non-clickable row instead of a
+    // button that looks interactive but does nothing.
+    const canOpen = !!CORE_TABLE_TO_TAB[row.table_name];
+    const item = document.createElement(canOpen ? 'button' : 'div');
+    if (canOpen) { item.type = 'button'; item.className = 'core-row'; item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id)); }
+    else { item.className = 'core-row core-row-static'; }
     const main = document.createElement('span'); main.className = 'core-row-main';
     const title = document.createElement('span'); title.className = 'core-row-title';
     title.textContent = (row.user_name || 'TaskTrack') + ' ' + coreActivityPhrase(row.action) + ' ' + (row.record_title || row.label || TABLE_LABELS[row.table_name] || row.table_name || 'record')
