@@ -1788,7 +1788,7 @@
 </div>
 
 <!-- ── Feedback Modal ─────────────────────────── -->
-<button class="feedback-fab" type="button" onclick="openFeedbackModal()">Feedback</button>
+<button class="feedback-fab" type="button" onclick="openFeedbackSmart()">Feedback</button>
 <div class="modal-overlay" id="feedback-overlay">
   <div class="modal feedback-modal">
     <div class="modal-header">
@@ -2489,6 +2489,51 @@ function openFeedbackForRecord(table, row = {}) {
 function openFeedbackForCurrentRecord() {
   if (!editingTable) { openFeedbackModal('record drawer'); return; }
   openFeedbackForRecord(editingTable, window.__currentModalData || { id: editingId });
+}
+
+// #53 feedback-everywhere: resolve the MOST SPECIFIC live context so the one global
+// FAB captures the right target wherever the user is — an open record drawer, the
+// project workspace, an employee scorecard, or (fallback) the active tab. The rich
+// page context (filters, sort, telemetry) is still captured by feedbackContextPayload.
+function resolveFeedbackTarget() {
+  // 1. A record drawer is open → target that record (most specific).
+  if (editingTable) {
+    return feedbackRecordContext(editingTable, window.__currentModalData || { id: editingId });
+  }
+  // 2. The project workspace overlay is open → target the project.
+  if (document.getElementById('workspace-overlay')?.classList.contains('open')
+      && typeof workspaceState !== 'undefined' && workspaceState?.project) {
+    const proj = workspaceState.project;
+    return {
+      component_label: ['Project Workspace', proj.project_number, proj.name].filter(Boolean).join(' · '),
+      tab: 'project',
+      table: 'project_work_tasks',
+      project_number: proj.project_number || '',
+    };
+  }
+  // 3. The employee scorecard is open → target that employee.
+  if (typeof compScorecardEmpId !== 'undefined' && compScorecardEmpId) {
+    const emp = ((typeof compState !== 'undefined' && compState.employees) || [])
+      .find(e => e.id === compScorecardEmpId);
+    return {
+      component_label: ['Competency scorecard',
+        emp ? formatPersonName(emp.display_name) : '#' + compScorecardEmpId].filter(Boolean).join(' · '),
+      tab: 'competency',
+      table: 'employees',
+      record_id: compScorecardEmpId,
+      record_title: emp ? emp.display_name : '',
+    };
+  }
+  // 4. Fallback: the active tab/section, so report/dashboard/map views still land a
+  //    useful component label instead of a bare generic capture.
+  const activeSection = document.querySelector('.section.active');
+  const heading = activeSection?.querySelector('h1,h2,.section-title,.dash-card-header')?.textContent?.trim() || '';
+  const label = heading || activeSection?.id?.replace(/^sec-/, '') || currentTab || '';
+  return label ? { component_label: label, tab: activeSection?.id?.replace(/^sec-/, '') || currentTab || '' } : '';
+}
+
+function openFeedbackSmart() {
+  openFeedbackModal(resolveFeedbackTarget());
 }
 
 function openFeedbackModal(target='') {
