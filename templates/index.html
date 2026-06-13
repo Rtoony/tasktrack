@@ -40,10 +40,7 @@
   body:has(.tab-btn.active[data-tab="training"])         { --accent:#198038; --accent-hover:#0e6027; --accent-light:#defbe6; }
   body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#da1e28; --accent-hover:#a2191f; --accent-light:#fff1f1; }
   body:has(.tab-btn.active[data-tab="calendar"])         { --accent:#007d79; --accent-hover:#005d5d; --accent-light:#d9fbfb; }
-  body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#9f1853; --accent-hover:#740937; --accent-light:#fff0f7; }
-  body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#8a3ffc; --accent-hover:#6929c4; --accent-light:#f6f2ff; }
-  body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#ba4e00; --accent-hover:#8a3800; --accent-light:#fff2e8; }
-  body:has(.tab-btn.active[data-tab="personal_cars"])    { --accent:#525252; --accent-hover:#393939; --accent-light:#e0e0e0; }
+  body:has(.tab-btn.active[data-tab="personal"])         { --accent:#9f1853; --accent-hover:#740937; --accent-light:#fff0f7; }
   /* Section heading colored bar — sits left of every section title to
      anchor the per-tab color in the content area. */
   .section-heading { position:relative; padding-left:0.85rem; }
@@ -907,10 +904,7 @@
       <button class="tab-btn" data-tab="competency" data-shell-title="Competency">Competency</button>
       {% endif %}
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Flow</span></span>
-      <button class="tab-btn" data-tab="personal_husband" data-shell-title="Follow-up">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
-      <button class="tab-btn" data-tab="personal_father" data-shell-title="Meetings">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
-      <button class="tab-btn" data-tab="personal_house" data-shell-title="Office">Office <span class="tab-count" id="count-personal_house">0</span></button>
-      <button class="tab-btn" data-tab="personal_cars" data-shell-title="Assets">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
+      <button class="tab-btn" data-tab="personal" data-shell-title="Personal">Personal <span class="tab-count" id="count-personal">0</span></button>
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Output</span></span>
       <a class="side-link" href="/intake" target="_blank" rel="noopener">Submission Forms</a>
       <a class="side-link" href="/feedback">Feedback</a>
@@ -1746,152 +1740,50 @@
   </section>
 
   <!-- ── INTERNAL — Follow-up ───────────────── -->
-  <section id="sec-personal_husband" class="section">
+  <section id="sec-personal" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Follow-up</h2>
-        <div class="section-subtitle">Internal follow-up items that do not belong in a project, CAD, training, or capability queue yet.</div>
+        <h2 class="section-title">Personal</h2>
+        <div class="section-subtitle">Internal follow-ups, meetings, office, and asset items that don't belong in a project, CAD, training, or capability queue yet.</div>
       </div>
-      <select class="filter-select" id="filter-personal_husband-status" onchange="loadTable('personal_husband')">
+      <select class="filter-select" id="filter-personal-category" onchange="loadTable('personal')">
+        <option value="" selected>All Categories</option>
+        <option value="Follow-up">Follow-up</option><option value="Meetings">Meetings</option>
+        <option value="Office">Office</option><option value="Assets">Assets</option>
+      </select>
+      <select class="filter-select" id="filter-personal-status" onchange="loadTable('personal')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
       </select>
-      <select class="filter-select" id="filter-personal_husband-priority" onchange="loadTable('personal_husband')">
+      <select class="filter-select" id="filter-personal-priority" onchange="loadTable('personal')">
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_husband-overdue" onchange="loadTable('personal_husband')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_husband')">+ Add Follow-up Item</button>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal-overdue" onchange="loadTable('personal')" style="margin-right:3px">Overdue only</label>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal', {category: document.getElementById('filter-personal-category')?.value || ''})">+ Add Personal Item</button>
     </div>
     <div class="table-wrap">
       <table><thead><tr>
-        <th data-col="title" data-table="personal_husband">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_husband">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_husband">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_husband">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_husband">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th data-col="title" data-table="personal">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="category" data-table="personal">Category <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal">Captured <span class="sort-arrow">&#9660;</span></th>
         <th></th>
-      </tr></thead><tbody id="tbody-personal_husband"></tbody></table>
-      <div class="empty-state" id="empty-personal_husband" style="display:none">
-        <div class="empty-title">Nothing in Follow-up yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Follow-up Item</strong> to capture something that belongs in this category.</p>
+      </tr></thead><tbody id="tbody-personal"></tbody></table>
+      <div class="empty-state" id="empty-personal" style="display:none">
+        <div class="empty-title">Nothing here yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Personal Item</strong> to capture an internal follow-up, meeting, office, or asset note.</p>
       </div>
     </div>
   </section>
 
   <!-- ── INTERNAL — Meetings ────────────────── -->
-  <section id="sec-personal_father" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Meetings</h2>
-        <div class="section-subtitle">Meeting prep, management follow-ups, and time-bound coordination notes.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_father-status" onchange="loadTable('personal_father')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_father-priority" onchange="loadTable('personal_father')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_father-overdue" onchange="loadTable('personal_father')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_father')">+ Add Meeting Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_father">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_father">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_father">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_father">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_father">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_father"></tbody></table>
-      <div class="empty-state" id="empty-personal_father" style="display:none">
-        <div class="empty-title">Nothing in Meetings yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Meeting Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── INTERNAL — Office ──────────────────── -->
-  <section id="sec-personal_house" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Office</h2>
-        <div class="section-subtitle">Office operations, workspace upkeep, and non-project administrative work.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_house-status" onchange="loadTable('personal_house')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_house-priority" onchange="loadTable('personal_house')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_house-overdue" onchange="loadTable('personal_house')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_house')">+ Add Office Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_house">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_house">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_house">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_house">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_house">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_house"></tbody></table>
-      <div class="empty-state" id="empty-personal_house" style="display:none">
-        <div class="empty-title">Nothing in Office yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Office Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── INTERNAL — Assets ──────────────────── -->
-  <section id="sec-personal_cars" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Assets</h2>
-        <div class="section-subtitle">Assets, equipment, tools, and other operational upkeep items.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_cars-status" onchange="loadTable('personal_cars')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_cars-priority" onchange="loadTable('personal_cars')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_cars-overdue" onchange="loadTable('personal_cars')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_cars')">+ Add Asset Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_cars">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_cars">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_cars">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_cars">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_cars">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_cars"></tbody></table>
-      <div class="empty-state" id="empty-personal_cars" style="display:none">
-        <div class="empty-title">Nothing in Assets yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Asset Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
+  <!-- personal_father/house/cars sections consolidated into #sec-personal (#14) -->
   </main>
 </div>
 
@@ -2045,22 +1937,17 @@ const API_MAP = {
   personnel:'personnel_issues',
   triage:'inbox_items',
   calendar:'calendar_events',
-  personal_husband:'personal_items',
-  personal_father:'personal_items',
-  personal_house:'personal_items',
-  personal_cars:'personal_items',
+  personal:'personal_items',
 };
 
 // Tab keys for the four internal queue views. They still use the legacy
 // personal_items table until a later migration renames the storage layer.
 // The category JSON below preserves existing rows while the UI uses neutral labels.
-const INTERNAL_QUEUE_TABS = ['personal_husband','personal_father','personal_house','personal_cars'];
-const INTERNAL_QUEUE_CATEGORIES = {
-  personal_husband:'Follow-up',
-  personal_father:'Meetings',
-  personal_house:'Office',
-  personal_cars:'Assets',
-};
+const INTERNAL_QUEUE_TABS = ['personal'];
+const PERSONAL_CATEGORIES = ['Follow-up','Meetings','Office','Assets'];
+// #14: the unified Personal tab derives category from the form/filter, not the
+// tab; INTERNAL_QUEUE_CATEGORIES kept empty for any legacy lookups.
+const INTERNAL_QUEUE_CATEGORIES = {};
 
 /* ── Markdown (tiny renderer; DOM-only, no innerHTML) ────────────────── */
 function appendInlineMd(parent, str) {
@@ -2175,14 +2062,14 @@ const CORE_TRACKERS = [
   { table:'work_tasks', label:'CAD Dev', tab:'work', key:'work' },
   { table:'training_tasks', label:'Training', tab:'training', key:'training' },
   { table:'personnel_issues', label:'Capabilities', tab:'personnel', key:'personnel' },
-  { table:'personal_items', label:'Follow-up', tab:'personal_husband', key:'personal', category:'Follow-up' },
-  { table:'personal_items', label:'Meetings', tab:'personal_father', key:'meetings', category:'Meetings' },
-  { table:'personal_items', label:'Office', tab:'personal_house', key:'office', category:'Office' },
-  { table:'personal_items', label:'Assets', tab:'personal_cars', key:'assets', category:'Assets' },
+  { table:'personal_items', label:'Follow-up', tab:'personal', key:'personal', category:'Follow-up' },
+  { table:'personal_items', label:'Meetings', tab:'personal', key:'meetings', category:'Meetings' },
+  { table:'personal_items', label:'Office', tab:'personal', key:'office', category:'Office' },
+  { table:'personal_items', label:'Assets', tab:'personal', key:'assets', category:'Assets' },
 ];
 const CORE_TABLE_TO_TAB = {
   work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
-  personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal_husband',
+  personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal',
   calendar_events:'calendar',
 };
 const TRACKER_STATUS_FLOW = {
@@ -2192,10 +2079,7 @@ const TRACKER_STATUS_FLOW = {
   personnel:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed'],
   triage:['New','In Progress','Done','Archived'],
   calendar:['scheduled','tentative','done','cancelled'],
-  personal_husband:['New','In Progress','Done','Archived'],
-  personal_father:['New','In Progress','Done','Archived'],
-  personal_house:['New','In Progress','Done','Archived'],
-  personal_cars:['New','In Progress','Done','Archived'],
+  personal:['New','In Progress','Done','Archived'],
 };
 const sortState = {
   work:{col:'id',order:'asc'},
@@ -2204,15 +2088,12 @@ const sortState = {
   personnel:{col:'id',order:'asc'},
   triage:{col:'created_at',order:'desc'},
   calendar:{col:'start_at',order:'asc'},
-  personal_husband:{col:'created_at',order:'desc'},
-  personal_father:{col:'created_at',order:'desc'},
-  personal_house:{col:'created_at',order:'desc'},
-  personal_cars:{col:'created_at',order:'desc'},
+  personal:{col:'created_at',order:'desc'},
 };
 let currentTab = 'dashboard', editingId = null, editingTable = null;
 let tableCache = {
   work:[], project:[], training:[], personnel:[],
-  triage:[], calendar:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
+  triage:[], calendar:[], personal:[],
 };
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 const SHELL_BRAND = {{ brand_name|tojson }};
@@ -2879,16 +2760,16 @@ const MOBILE_REVIEW_TRACKERS = [
   { tab:'work', table:'work_tasks', label:'CAD Dev' },
   { tab:'project', table:'project_work_tasks', label:'Project Tasks' },
   { tab:'training', table:'training_tasks', label:'Training' },
-  { tab:'personal_husband', table:'personal_items', label:'Follow-up', category:'Follow-up' },
-  { tab:'personal_father', table:'personal_items', label:'Meetings', category:'Meetings' },
-  { tab:'personal_house', table:'personal_items', label:'Office', category:'Office' },
-  { tab:'personal_cars', table:'personal_items', label:'Assets', category:'Assets' },
+  { tab:'personal', table:'personal_items', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal', table:'personal_items', label:'Meetings', category:'Meetings' },
+  { tab:'personal', table:'personal_items', label:'Office', category:'Office' },
+  { tab:'personal', table:'personal_items', label:'Assets', category:'Assets' },
 ];
 const MOBILE_TODAY_INTERNAL_TABS = [
-  { tab:'personal_husband', label:'Follow-up', category:'Follow-up' },
-  { tab:'personal_father', label:'Meetings', category:'Meetings' },
-  { tab:'personal_house', label:'Office', category:'Office' },
-  { tab:'personal_cars', label:'Assets', category:'Assets' },
+  { tab:'personal', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal', label:'Meetings', category:'Meetings' },
+  { tab:'personal', label:'Office', category:'Office' },
+  { tab:'personal', label:'Assets', category:'Assets' },
 ];
 
 function mobileShell() {
@@ -4308,7 +4189,7 @@ if (searchInput && searchResults) {
     searchInput.value = '';
     if (r.source === 'projects') { openProjectWorkspaceSmart(r.id, r.project_number); return; }
     const tabKey = r.source === 'personal_items'
-      ? (({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[r.category] || 'personal_husband')
+      ? 'personal'
       : {
           work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
           personnel_issues:'personnel', calendar_events:'calendar', inbox_items:'triage'
@@ -4736,7 +4617,7 @@ async function loadDashboard() {
 
 function intakeRowTab(row) {
   if (row.table === 'personal_items') {
-    return ({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[row.category] || 'personal_husband';
+    return 'personal';
   }
   return ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage'})[row.table] || '';
 }
@@ -4849,7 +4730,7 @@ function agendaTabForTable(table) {
     project_work_tasks: 'project',
     work_tasks: 'work',
     training_tasks: 'training',
-    personal_items: 'personal_husband',
+    personal_items: 'personal',
   }[table] || '';
 }
 
@@ -4951,9 +4832,9 @@ function trackerDoneStatuses(table) {
 }
 
 function trackerDisplayRowsForTab(table, rows) {
-  if (!INTERNAL_QUEUE_TABS.includes(table)) return rows || [];
-  const cat = INTERNAL_QUEUE_CATEGORIES[table];
-  return (rows || []).filter(r => r.category === cat);
+  // #14: the unified Personal tab shows all categories; the category dropdown
+  // does any narrowing in loadTable. No per-tab category restriction anymore.
+  return rows || [];
 }
 
 function ensureTrackerSummary(table) {
@@ -5066,9 +4947,10 @@ async function loadTable(table) {
 
   let filtered = data;
   let baseRows = trackerDisplayRowsForTab(table, data);
-  // Internal queues share the legacy personal_items table; filter to this tab's category.
-  if (INTERNAL_QUEUE_TABS.includes(table)) {
-    filtered = filtered.filter(r => r.category === INTERNAL_QUEUE_CATEGORIES[table]);
+  // #14: unified Personal tab — narrow by the category dropdown when one is picked.
+  if (table === 'personal') {
+    const cat = document.getElementById('filter-personal-category')?.value || '';
+    if (cat) filtered = filtered.filter(r => r.category === cat);
   }
   // "__active" = anything not in the tracker's done/closed statuses (default).
   if (statusFilter === '__active') {
@@ -5106,10 +4988,8 @@ async function loadTable(table) {
     } else if (table === 'calendar') {
       countEl.textContent = data.filter(r => r.status === 'scheduled' || r.status === 'tentative').length;
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
-      const cat = INTERNAL_QUEUE_CATEGORIES[table];
-      countEl.textContent = data.filter(r =>
-        r.category === cat && (r.status === 'New' || r.status === 'In Progress')
-      ).length;
+      // #14: count all active personal items (any category) in the badge.
+      countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
     } else {
       countEl.textContent = data.filter(isActiveCountRow).length;
     }
@@ -5186,6 +5066,7 @@ async function loadTable(table) {
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'intake') : ''));
+      tr.appendChild(makeCell(r.category,'cell-supporting'));  // #14 Category column
       tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
@@ -5724,10 +5605,7 @@ function itemLabel(table) {
     personnel: 'capability note',
     triage: 'triage item',
     calendar: 'calendar event',
-    personal_husband: 'follow-up item',
-    personal_father: 'meeting item',
-    personal_house: 'office item',
-    personal_cars: 'asset item',
+    personal: 'personal item',
   }[table] || 'record';
 }
 
@@ -5923,10 +5801,10 @@ const TRIAGE_PROMOTE_TARGETS = [
   { table: 'work_tasks',         label: 'CAD Dev',         tab: 'work' },
   { table: 'training_tasks',     label: 'Training',        tab: 'training' },
   { table: 'personnel_issues',   label: 'Incident Report', tab: 'personnel' },
-  { table: 'personal_items',     label: 'Follow-up',       tab: 'personal_husband', category: 'Follow-up' },
-  { table: 'personal_items',     label: 'Meetings',        tab: 'personal_father',  category: 'Meetings' },
-  { table: 'personal_items',     label: 'Office',          tab: 'personal_house',   category: 'Office' },
-  { table: 'personal_items',     label: 'Assets',          tab: 'personal_cars',    category: 'Assets' },
+  { table: 'personal_items',     label: 'Follow-up',       tab: 'personal', category: 'Follow-up' },
+  { table: 'personal_items',     label: 'Meetings',        tab: 'personal', category: 'Meetings' },
+  { table: 'personal_items',     label: 'Office',          tab: 'personal', category: 'Office' },
+  { table: 'personal_items',     label: 'Assets',          tab: 'personal', category: 'Assets' },
 ];
 
 /* Mirror of app/config.py ALLOWED_TABLES for the assignment modal —
@@ -7196,15 +7074,13 @@ const FORMS = {
 // saveRecord and openModal for the per-tab category preset/injection.
 const PERSONAL_FORM = [
   {key:'title',label:'Title',type:'text',required:true,placeholder:'What needs to happen?'},
+  {key:'category',label:'Category',type:'select',options:['Follow-up','Meetings','Office','Assets'],default:'Follow-up'},  // #14
   {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context.'},
   {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
   {key:'due_date',label:'Due Date',type:'date'},
   {key:'links',label:'Links',type:'links'},
 ];
-FORMS.personal_husband = PERSONAL_FORM;
-FORMS.personal_father  = PERSONAL_FORM;
-FORMS.personal_house   = PERSONAL_FORM;
-FORMS.personal_cars    = PERSONAL_FORM;
+FORMS.personal = PERSONAL_FORM;
 
 /* fk-select option cache. Populated lazily per endpoint; reused across
    modal opens so the user doesn't see a flash. */
@@ -7299,9 +7175,7 @@ function managedDefault(setKey, fallback='Medium') {
 function populateManagedOptionControls() {
   [
     'filter-triage-priority', 'filter-work-priority', 'filter-project-priority',
-    'filter-training-priority', 'filter-personal_husband-priority',
-    'filter-personal_father-priority', 'filter-personal_house-priority',
-    'filter-personal_cars-priority',
+    'filter-training-priority', 'filter-personal-priority',
   ].forEach(id => populateManagedSelect(document.getElementById(id), 'task_priority', { emptyLabel: 'All Priorities' }));
   ['mobile-quick-priority', 'intake-field-priority', 'feedback-priority'].forEach(id => {
     populateManagedSelect(document.getElementById(id), 'task_priority', { defaultValue: 'Medium' });
@@ -7656,10 +7530,7 @@ const AI_REVIEW_TABLES = {
   work: 'work_tasks',
   project: 'project_work_tasks',
   training: 'training_tasks',
-  personal_husband: 'personal_items',
-  personal_father: 'personal_items',
-  personal_house: 'personal_items',
-  personal_cars: 'personal_items',
+  personal: 'personal_items',
 };
 const AI_DESCRIPTION_FIELD = { work: 'description', project: 'task_description', training: 'training_goals' };
 
@@ -8191,10 +8062,7 @@ function openModal(table,data) {
     personnel:'Capability Entry',
     triage:'Triage Item',
     calendar:'Calendar Event',
-    personal_husband:'Follow-up Item',
-    personal_father:'Meeting Item',
-    personal_house:'Office Item',
-    personal_cars:'Asset Item',
+    personal:'Personal Item',
   };
   renderModalHeader(table, data || {}, labels);
   const body=document.getElementById('modal-body');
@@ -8351,9 +8219,9 @@ async function saveRecord() {
   let data=getFormData(table);
   if (!validateForm(table, data)) return;
   if (table === 'work') data = transformWorkForSave(data);
-  // Internal queues share the legacy personal_items table; inject the category
-  // implied by which tab opened the modal.
-  if (INTERNAL_QUEUE_TABS.includes(table)) data.category = INTERNAL_QUEUE_CATEGORIES[table];
+  // #14: Personal items carry an explicit category from the form select;
+  // default to Follow-up if somehow blank.
+  if (table === 'personal' && !data.category) data.category = 'Follow-up';
   if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
   else await api('POST','/api/v1/'+API_MAP[table],data);
   closeModal(); loadTable(table);
@@ -8834,7 +8702,7 @@ if (STANDALONE_TAB) {
   loadTable('triage');
   loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
   loadTable('calendar');
-  loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
+  loadTable('personal');
   applyStartupRouteState().finally(initShellHistory);
 }
 </script>
