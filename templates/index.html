@@ -951,7 +951,7 @@
           <div class="mobile-quick-title">Quick capture</div>
           <div class="mobile-quick-copy">Cheap inbox drop first. Add project context or a photo if useful; full triage can happen later.</div>
         </div>
-        <textarea id="mobile-quick-text" class="mobile-quick-textarea" placeholder="What needs to be remembered or triaged?"></textarea>
+        <textarea id="mobile-quick-text" spellcheck="true" class="mobile-quick-textarea" placeholder="What needs to be remembered or triaged?"></textarea>
         <div class="mobile-quick-row">
           <input id="mobile-quick-project" class="mobile-quick-input" type="text" inputmode="text" placeholder="Project # optional">
           <select id="mobile-quick-priority" class="mobile-quick-select" aria-label="Priority">
@@ -1086,7 +1086,7 @@
                 <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('cad_issue')">CAD Issue</button>
                 <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('training')">Training Need</button>
               </div>
-              <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
+              <textarea id="intake-input" spellcheck="true" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
               <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
 
               <div class="preset-panel" id="intake-preset-panel">
@@ -1202,13 +1202,13 @@
               <div class="starter-block" id="intake-starter-wrap" style="display:none">
                 <div class="starter-label">Start here &rarr;</div>
                 <div class="field" style="margin-bottom:0">
-                  <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
+                  <textarea id="intake-field-starter" spellcheck="true" rows="2" style="background:var(--surface)"></textarea>
                 </div>
               </div>
               <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
                 <div class="clarify-label">Questions to resolve</div>
                 <div class="field" style="margin-bottom:0">
-                  <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
+                  <textarea id="intake-field-clarify" spellcheck="true" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
                 </div>
               </div>
               <div class="field">
@@ -1909,7 +1909,7 @@
     <div class="modal-body">
       <p class="feedback-intro">Use this while testing: describe the problem or desired tweak, optionally attach a screenshot, and TaskTrack will keep the current page, tab, viewport, and browser context with the record.</p>
       <div class="field"><label>Title</label><input id="feedback-title" type="text" placeholder="Short label for the issue or tweak"></div>
-      <div class="field"><label>Details</label><textarea id="feedback-body" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
+      <div class="field"><label>Details</label><textarea id="feedback-body" spellcheck="true" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
       <div class="feedback-grid">
         <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
         <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option><option>None</option></select></div>
@@ -4317,6 +4317,54 @@ if (searchInput && searchResults) {
     document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
     setTimeout(() => editRecord(tabKey, r.id), 200);
   }
+  // #18: full results page — a roomy, grouped-by-tracker view of ALL matches
+  // (the API returns the full set, no LIMIT). Opened by Enter or the dropdown's
+  // "See all" row. Reuses the app's modal-overlay styling + openSearchResult nav.
+  async function openFullSearch(q) {
+    q = (q || '').trim();
+    if (q.length < 2) return;
+    searchCloseDropdown();
+    const data = await api('GET', '/api/v1/search?q=' + encodeURIComponent(q)) || [];
+    let ov = document.getElementById('search-full-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'search-full-overlay';
+      ov.className = 'modal-overlay';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') ov.classList.remove('open'); });
+    }
+    const groups = {};
+    data.forEach(r => { (groups[r.source] = groups[r.source] || []).push(r); });
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.maxWidth = '760px';
+    let h = '<div class="modal-header"><div><h3>Search results</h3><div class="drawer-eyebrow">' +
+      data.length + ' match' + (data.length === 1 ? '' : 'es') + ' for “' + esc(q) + '”</div></div>' +
+      '<button class="modal-close" type="button" aria-label="Close">&times;</button></div><div class="modal-body">';
+    if (!data.length) h += '<p style="color:var(--text-muted)">No matches.</p>';
+    Object.keys(groups).forEach(src => {
+      h += '<div style="margin-bottom:0.9rem"><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);font-weight:700;margin-bottom:0.35rem">' +
+        esc(TABLE_LABELS[src] || src) + ' (' + groups[src].length + ')</div>';
+      groups[src].forEach((r, i) => {
+        h += '<button class="search-full-item" data-src="' + esc(src) + '" data-idx="' + i + '" style="display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.65rem;margin-bottom:0.3rem;cursor:pointer;font:inherit">' +
+          '<div style="font-weight:600;font-size:0.82rem">' + esc(r.label) + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc((r.status || '') + (r.priority ? ' • ' + r.priority : '')) + '</div></button>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+    modal.innerHTML = h;
+    modal.querySelector('.modal-close').addEventListener('click', () => ov.classList.remove('open'));
+    Object.keys(groups).forEach(src => {
+      modal.querySelectorAll('.search-full-item[data-src="' + CSS.escape(src) + '"]').forEach(btn => {
+        const i = Number(btn.getAttribute('data-idx'));
+        btn.addEventListener('click', () => { ov.classList.remove('open'); openSearchResult(groups[src][i]); });
+      });
+    });
+    ov.replaceChildren(modal);
+    ov.classList.add('open');
+  }
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
     const q = searchInput.value.trim();
@@ -4340,19 +4388,35 @@ if (searchInput && searchResults) {
         div.addEventListener('click', () => openSearchResult(r));
         searchResults.appendChild(div);
       });
+      // #18: discoverable "See all" row → grouped full-results overlay.
+      const seeAll = document.createElement('div');
+      seeAll.className = 'search-item search-see-all';
+      seeAll.style.cssText = 'font-weight:600;color:var(--accent)';
+      seeAll.textContent = 'See all ' + data.length + ' result' + (data.length === 1 ? '' : 's') + ' →';
+      seeAll.addEventListener('click', () => openFullSearch(q));
+      searchResults.appendChild(seeAll);
       searchResults.classList.add('open');
     }, 250);
   });
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') { searchCloseDropdown(); return; }
+    if (e.key === 'Enter') {
+      // #18: arrow-selected item opens that record; plain Enter opens the full
+      // grouped results page (works even if the dropdown hasn't opened yet).
+      e.preventDefault();
+      // Same item set as arrow-nav (includes the "See all" row, whose own click
+      // opens the full view) so the active index never mismatches.
+      const items = searchResults.querySelectorAll('.search-item');
+      if (searchResults.classList.contains('open') && searchActiveIdx >= 0 && items[searchActiveIdx]) {
+        items[searchActiveIdx].click();
+      } else {
+        openFullSearch(searchInput.value.trim());
+      }
+      return;
+    }
     if (!searchResults.classList.contains('open')) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); searchSetActive(searchActiveIdx + 1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); searchSetActive((searchActiveIdx < 0 ? 0 : searchActiveIdx) - 1); }
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      const items = searchResults.querySelectorAll('.search-item');
-      (items[searchActiveIdx] || items[0])?.click();
-    }
   });
   document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) searchCloseDropdown(); });
 }
@@ -6720,6 +6784,7 @@ function workspaceOverlayInput(key, label, value, opts = {}) {
   } else if (opts.textarea) {
     input = document.createElement('textarea');
     input.rows = opts.rows || 3;
+    input.spellcheck = true;  /* #40 */
   } else {
     input = document.createElement('input');
     input.type = opts.type || 'text';
@@ -7488,7 +7553,7 @@ function renderField(f,value) {
       return wrap;
     }
   } else if (f.type==='textarea') {
-    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder;
+    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
   } else if (f.type==='placeholder-panel') {
     const panel=document.createElement('div'); panel.className='placeholder-panel';
     const title=document.createElement('div'); title.className='placeholder-title'; title.textContent=f.label;
