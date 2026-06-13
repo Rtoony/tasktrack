@@ -143,8 +143,8 @@ def set_feedback_status(record_id):
             field_name="status", old_value=str(old), new_value=str(requested),
             user_name="Hermes",
         ))
-        if requested in done:
-            row.completed_at = _utcnow_naive()
+        # audit #26: clear completed_at on reopen, mirroring api.update_record
+        row.completed_at = _utcnow_naive() if requested in done else None
 
     notes = data.get("resolution_notes")
     if notes is not None and str(notes) != (row.resolution_notes or ""):

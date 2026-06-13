@@ -37,10 +37,14 @@ def get_csrf_token() -> str:
 
 
 def _request_has_bearer_token() -> bool:
-    """True if the request authenticates with a scoped bearer token.
-
-    These requests are NOT cookie-driven, so CSRF doesn't apply.
+    """True if the request authenticates with a scoped bearer token (and is NOT
+    a browser session). Token clients aren't cookie-driven, so CSRF doesn't
+    apply. Audit #24: a logged-in session must still pass CSRF even if a junk
+    X-Token/Authorization header is present, so only exempt genuine token-only
+    clients (bot/paperless/voice/triage) that carry no session.
     """
+    if "user_id" in session:
+        return False
     if request.headers.get("X-Token"):
         return True
     auth = request.headers.get("Authorization", "")

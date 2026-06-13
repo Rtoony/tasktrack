@@ -177,7 +177,7 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         stmt = select(Model).where(Model.source.in_(source_values))
         for row in sess.scalars(stmt).all():
             created = _parse_dt(getattr(row, "created_at", None))
-            if created is not None and created < since:
+            if created is None or created < since:  # audit #25: NULL/unparseable also out-of-window
                 continue
             payload = _row_payload(table, cfg, row)
             if needs_review is not None and payload["needs_review"] != bool(needs_review):

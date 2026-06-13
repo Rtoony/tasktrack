@@ -469,7 +469,10 @@ def promote(item_id):
                 break
 
     if item.priority and "priority" in cfg["fields"]:
-        payload["priority"] = item.priority
+        # Audit #19: a 'problem' intake carries severity='Critical' as the inbox
+        # priority; task priority columns only offer None/Low/Medium/High, so
+        # clamp anything else to Medium rather than leaking 'Critical'.
+        payload["priority"] = item.priority if item.priority in ("None", "Low", "Medium", "High") else "Medium"
     if item.due_date:
         for due_field in ("due_date", "due_at", "follow_up_date"):
             if due_field in cfg["fields"]:
@@ -497,7 +500,7 @@ def promote(item_id):
         payload["issue_description"] = item.body or item.title
     if ("severity" in cfg["fields"]
             and not str(payload.get("severity") or "").strip()
-            and item.priority in ("Low", "Medium", "High")):
+            and item.priority in ("Low", "Medium", "High", "Critical")):  # audit #10: don't drop Critical
         payload["severity"] = item.priority
 
     # Structured required-field validation: tell the assignment UI

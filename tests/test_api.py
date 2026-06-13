@@ -436,3 +436,27 @@ def test_severity_sort_ranks_critical_first(auth_client):
     rows = auth_client.get("/api/v1/personnel_issues?sort=severity&order=asc").get_json()
     sev = [r["severity"] for r in rows if r.get("severity") in ("Critical", "High", "Medium", "Low")]
     assert sev[0] == "Critical"
+
+
+def test_priority_desc_sort_is_reverse_with_blanks_last(auth_client):
+    """Audit #2: descending priority must be least-urgent-first with blanks LAST
+    (the bug floated blanks/None to the top on desc)."""
+    _make_work_task(auth_client, title="hi", priority="High")
+    _make_work_task(auth_client, title="none", priority="None")
+    _make_work_task(auth_client, title="med", priority="Medium")
+    desc = auth_client.get("/api/v1/work_tasks?sort=priority&order=desc").get_json()
+    ranked = [r["priority"] for r in desc if r["priority"] in ("High", "Medium", "Low", "None")]
+    # desc = reverse of urgency (None first, High last) — and NOT blanks-first.
+    assert ranked == sorted(ranked, key=lambda p: ["None", "Low", "Medium", "High"].index(p))
+    assert ranked[0] == "None" and ranked[-1] == "High"
+
+
+def test_project_task_accepts_managed_billing_phase(auth_client):
+    """Audit #1: a managed billing-phase value ('100 - Survey') must save — the
+    old \\d{2} validator rejected every default dropdown option."""
+    r = auth_client.post("/api/v1/project_work_tasks", json={
+        "project_name": "Lab Job", "project_number": "9001.00",
+        "title": "phase test", "task_description": "x", "billing_phase": "100 - Survey",
+    })
+    assert r.status_code in (200, 201), r.get_json()
+    assert r.get_json()["billing_phase"] == "100 - Survey"

@@ -588,11 +588,14 @@ def list_records(table):
     # severity is Critical>High>Med>Low; blanks/unknowns sort last on asc.
     # Tie-break on id so the order is stable within a rank.
     if sort in ("priority", "severity"):
-        rank = case(
-            *[(sort_col == value, idx) for idx, value in enumerate(_PRIORITY_SORT_ORDER)],
-            else_=len(_PRIORITY_SORT_ORDER),
-        )
-        rank = desc(rank) if order == "desc" else rank
+        # Audit #2: don't desc() the whole CASE — that floats the blank/unknown
+        # sentinel to the TOP on descending. Flip only the ranked values so
+        # blanks stay pinned LAST in both directions (asc = most-urgent first,
+        # desc = least-urgent first, blanks always last).
+        n = len(_PRIORITY_SORT_ORDER)
+        pairs = [(sort_col == value, (n - 1 - idx) if order == "desc" else idx)
+                 for idx, value in enumerate(_PRIORITY_SORT_ORDER)]
+        rank = case(*pairs, else_=n)
         stmt = select(Model).order_by(rank, Model.id)
     else:
         stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)

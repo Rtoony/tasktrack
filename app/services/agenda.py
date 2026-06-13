@@ -182,17 +182,17 @@ def today_agenda(
         if start <= event_start <= end:
             items.append(_event_item(row, event_start))
 
-    seen_project_ids: set[int] = set()
+    # audit #29: the `continue` after the scheduled append already enforces one
+    # item per project task, so the seen_project_ids guard was vacuously true.
     for row in sess.scalars(select(ProjectWorkTask).order_by(ProjectWorkTask.id.asc())).all():
         if row.status in done_statuses_for_table("project_work_tasks"):
             continue
         scheduled = _parse_dt(row.scheduled_completion_at)
         if scheduled is not None and _in_window(scheduled, start=start, end=end, include_overdue=include_overdue):
             items.append(_project_item(row, scheduled, field="scheduled_completion_at", start=start))
-            seen_project_ids.add(row.id)
             continue
         due = _parse_dt(row.due_at)
-        if due is not None and row.id not in seen_project_ids and _in_window(due, start=start, end=end, include_overdue=include_overdue):
+        if due is not None and _in_window(due, start=start, end=end, include_overdue=include_overdue):
             items.append(_project_item(row, due, field="due_at", start=start))
 
     due_sources = (
