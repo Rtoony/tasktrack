@@ -3426,17 +3426,6 @@ function employeeAvatarHtml(emp, size) {
     '<span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f2f4a,#2f6f79);color:white;">' + initials + '</span>' +
   '</span>';
 }
-function confidenceLabel(band) {
-  const b = String(band || 'low').toLowerCase();
-  if (b === 'high') return 'H';
-  if (b === 'medium') return 'M';
-  return 'L';
-}
-function compCellValue(cell) {
-  if (cell == null) return null;
-  if (typeof cell === 'object') return cell.score;
-  return cell;
-}
 function compCellDetail(empId, catId) {
   const cell = compState.scores[String(empId)]?.[String(catId)];
   if (cell && typeof cell === 'object') return cell;
@@ -3471,35 +3460,12 @@ function visibleCompetencyEmployees() {
     return roleOk && (!nameFilter || e.display_name.toLowerCase().includes(nameFilter));
   });
 }
-function compRatingShortLabel(kind) {
-  if (kind === 'official_baseline') return 'baseline';
-  if (kind === 'preliminary_rating') return 'prelim';
-  if (kind === 'manual_override') return 'manual';
-  if (kind === 'self_assessment') return 'self';
-  return (kind || 'rating').replace(/_/g, ' ');
-}
-function compHumanRating(detail) {
-  if (!detail || typeof detail !== 'object') return null;
-  return detail.latest_baseline || detail.latest_preliminary || detail.latest_manual || null;
-}
 function scorecardMarkerSummary(marker) {
   if (!marker) return '—';
   const who = marker.created_by_name ? ' · ' + marker.created_by_name : '';
   const notes = marker.notes ? ' · ' + marker.notes : '';
   return scoreLabel(marker.score) + who + notes;
 }
-function compRatingCard(marker, title) {
-  if (!marker) return '';
-  const who = marker.created_by_name || 'Unknown';
-  const notes = marker.notes ? '<div style="margin-top:0.25rem;color:var(--text-muted)">' + esc(marker.notes) + '</div>' : '';
-  return '<div style="border:1px solid var(--border);border-radius:12px;padding:0.55rem;background:var(--surface-muted)">' +
-    '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em">' + esc(title) + '</div>' +
-    '<div style="font-weight:700;margin-top:0.2rem">' + esc(who) + ': ' + scoreLabel(marker.score) + '</div>' +
-    '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc(marker.observed_at || '') + '</div>' +
-    notes +
-  '</div>';
-}
-
 async function loadCompetency() {
   const loading = document.getElementById('comp-loading');
   const empty = document.getElementById('comp-empty');
@@ -3766,10 +3732,6 @@ function advanceScorecardEmployee() {
   renderCompetencyDetail();
 }
 
-function openCompetencyCell(empId, catId) {
-  openEmployeeScorecard(empId);
-}
-
 function renderCompetencyDetail() {
   const host = document.getElementById('comp-detail');
   if (!host) return;
@@ -3777,34 +3739,6 @@ function renderCompetencyDetail() {
   host.replaceChildren();
 }
 
-async function saveCompetencyObservation(mode) {
-  if (!compSelected) return;
-  const advance = mode.endsWith('_next');
-  const ratingMode = mode.replace('_next', '');
-  const score = document.getElementById('comp-score')?.value;
-  const notes = document.getElementById('comp-notes')?.value || '';
-  const isObservation = ratingMode === 'observation';
-  const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || '') : 'manual';
-  const path = isObservation ? '/api/v1/skills/subscores' : '/api/v1/skills/scores';
-  const payload = {
-    employee_id: compSelected.empId,
-    category_id: compSelected.catId,
-    score,
-    notes,
-  };
-  if (isObservation) payload.dimension_slug = dimension;
-  else payload.source_kind = ratingMode === 'baseline' ? 'official_baseline' : 'preliminary_rating';
-  const res = await api('POST', path, payload);
-  if (!res || res.error) { toast(res?.error || 'Competency save failed'); return; }
-  toast(ratingMode === 'baseline' ? 'Official baseline saved' : (ratingMode === 'preliminary' ? 'Preliminary rating saved' : 'Competency observation added'));
-  await loadCompetency();
-  if (advance) advanceCompetencySelection();
-  else renderCompetencyDetail();
-}
-
-function advanceCompetencySelection() {
-  advanceScorecardEmployee();
-}
 
 // Live filter input — debounced re-render without re-fetching.
 document.addEventListener('DOMContentLoaded', () => {
@@ -7273,7 +7207,6 @@ async function loadFkOptions(endpoint) {
   } catch (e) { FK_OPTION_CACHE[endpoint] = []; }
   return FK_OPTION_CACHE[endpoint];
 }
-function invalidateFkCache() { for (const k of Object.keys(FK_OPTION_CACHE)) delete FK_OPTION_CACHE[k]; }
 
 const MANAGED_OPTION_DEFAULTS = {};
 function managedOptionValue(row) { return String(row?.value ?? row?.label ?? '').trim(); }
