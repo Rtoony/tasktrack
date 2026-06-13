@@ -87,23 +87,23 @@ def test_dashboard_uses_left_rail_shell(auth_client):
     assert 'data-tab="work" data-shell-title="CAD Development"' in html
     assert 'Weekly Review' in html
     assert 'href="/weekly"' in html
-    assert 'All Internal CSV' in html
     assert "del.textContent='Delete'" in html
     assert "card.setAttribute('role', 'button');" in html
     assert "event.key !== 'Enter' && event.key !== ' '" in html
-    assert "label:'Meetings', tab:'personal_father'" in html
-    assert "label:'Office', tab:'personal_house'" in html
-    assert "label:'Assets', tab:'personal_cars'" in html
+    # #14: the 4 personal trackers consolidated into one 'personal' tab; the
+    # category specs now all route to tab:'personal'.
+    assert "label:'Meetings', tab:'personal'" in html
+    assert "label:'Office', tab:'personal'" in html
+    assert "label:'Assets', tab:'personal'" in html
+    assert 'data-tab="personal" data-shell-title="Personal"' in html
+    assert 'id="filter-personal-category"' in html
     assert 'function updateShellContext(title)' in html
     assert 'updateShellContext(tabTitleForButton(btn));' in html
     assert 'position:static; border-right:none; border-bottom:1px solid var(--border); overflow-x:auto;' in html
     assert 'width:min(360px, calc(100vw - 1.7rem));' in html
     assert 'function isActiveCountRow(r)' in html
     assert "data.filter(isActiveCountRow).length" in html
-    assert 'id="filter-personal_husband-overdue"' in html
-    assert 'id="filter-personal_father-overdue"' in html
-    assert 'id="filter-personal_house-overdue"' in html
-    assert 'id="filter-personal_cars-overdue"' in html
+    assert 'id="filter-personal-overdue"' in html
     assert '<span class="tab-divider-label">Work</span>' in html
     assert '<span class="tab-divider-label">Context</span>' in html
     assert '<span class="tab-divider-label">Flow</span>' in html
