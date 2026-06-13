@@ -4318,7 +4318,7 @@ if (searchInput && searchResults) {
     setTimeout(() => editRecord(tabKey, r.id), 200);
   }
   // #18: full results page — a roomy, grouped-by-tracker view of ALL matches
-  // (the API returns the full set, no LIMIT). Opened by Enter or the dropdown's
+  // (the API returns up to 20 matches per source). Opened by Enter or the dropdown's
   // "See all" row. Reuses the app's modal-overlay styling + openSearchResult nav.
   async function openFullSearch(q) {
     q = (q || '').trim();
@@ -4401,6 +4401,7 @@ if (searchInput && searchResults) {
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') { searchCloseDropdown(); return; }
     if (e.key === 'Enter') {
+      if (e.isComposing) return;  // don't hijack IME composition commits
       // #18: arrow-selected item opens that record; plain Enter opens the full
       // grouped results page (works even if the dropdown hasn't opened yet).
       e.preventDefault();
@@ -4675,21 +4676,27 @@ function coreActivityPhrase(action) {
 // re-render without a refetch. Called with rows from loadDashboard; called
 // arg-less by the toggle.
 let _lastActivityRows = [];
+const _SYSTEM_ACTORS = new Set(['hermes', 'claude', 'system', 'autopilot', 'codev', 'codex', 'tasktrack', 'bot', 'fable']);
 function isSystemActor(name) {
   const n = String(name || '').trim().toLowerCase();
   if (!n) return true;  // blank actor = automated/system
-  return ['hermes', 'claude', 'system', 'autopilot', 'codev', 'codex', 'tasktrack', 'bot', 'fable']
-    .some(s => n.includes(s));
+  // Match on whole name tokens, not substrings, so a real person like "Botha"
+  // isn't hidden by the "bot" token.
+  return n.split(/[^a-z0-9]+/).some(tok => _SYSTEM_ACTORS.has(tok));
 }
 function renderCoreRecentActivity(rows) {
   if (rows !== undefined) _lastActivityRows = Array.isArray(rows) ? rows : [];
   const host = document.getElementById('core-recent-activity');
   if (!host) return;
+  const hideSystem = document.getElementById('activity-hide-system')?.checked;
   let pool = _lastActivityRows;
-  if (document.getElementById('activity-hide-system')?.checked) pool = pool.filter(r => !isSystemActor(r.user_name));
+  if (hideSystem) pool = pool.filter(r => !isSystemActor(r.user_name));
   const visible = pool.slice(0, 9);
   host.replaceChildren();
-  if (!visible.length) { host.innerHTML = '<div class="core-empty">No activity yet.</div>'; return; }
+  if (!visible.length) {
+    host.innerHTML = '<div class="core-empty">' + (hideSystem ? 'No non-system activity.' : 'No activity yet.') + '</div>';
+    return;
+  }
   visible.forEach(row => {
     const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
     item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
