@@ -5008,13 +5008,21 @@ async function loadTable(table) {
       ? ['Critical', 'High', 'Medium', 'Low', 'None']
       : ['High', 'Medium', 'Low', 'None'];
     const flow = TRACKER_STATUS_FLOW[table] || [];
-    const dir = (sortState[table] || {}).order === 'desc' ? -1 : 1;
-    const rankOf = v => { const i = ORDER.indexOf(v); return i < 0 ? 99 : i; };
+    const isDesc = (sortState[table] || {}).order === 'desc';
+    // reaudit #4: mirror the server (api.py list_records) — bake the direction
+    // into the rank and pin unknown/blank LAST in BOTH directions (rank =
+    // ORDER.length). Multiplying the whole comparison by dir floated blanks to
+    // the TOP on descending, re-introducing audit #2 client-side.
+    const rankOf = v => {
+      const i = ORDER.indexOf(v);
+      if (i < 0) return ORDER.length;                   // unknown/blank pinned last
+      return isDesc ? (ORDER.length - 1 - i) : i;       // flip only known ranks for desc
+    };
     const dueOf = r => r.due_at || r.due_date || r.follow_up_date || '￿';
     const statusOf = r => { const i = flow.indexOf(r.status); return i < 0 ? 99 : i; };
     filtered = [...filtered].sort((a, b) => {
       const pr = rankOf(a[_sortCol]) - rankOf(b[_sortCol]);
-      if (pr) return pr * dir;                          // primary: urgency band (flips with direction)
+      if (pr) return pr;                                // primary: urgency band (direction baked in)
       const d = String(dueOf(a)).localeCompare(String(dueOf(b)));
       if (d) return d;                                  // secondary: soonest due first (blanks last)
       return statusOf(a) - statusOf(b);                 // tertiary: status-flow order
@@ -6165,6 +6173,11 @@ function makeTriageActions(r) {
    config accepts. Submitting POSTs the reviewed field set as promote
    overrides — the created record carries NO needs_review flag. */
 let assignState = null;
+// reaudit #3: renderField is shared by the record drawer (where the #33
+// logged-in-user requested_by default is correct) and the assignment modal
+// (where pre-filling the triaging operator corrupts attribution). This flag is
+// set only while the assignment modal renders its fields, suppressing that default.
+let assignModalRendering = false;
 
 function assignSuggestionFieldsFor(spec, suggestion) {
   // Suggestion-drafted fields apply only to the suggested target
@@ -6181,8 +6194,11 @@ function assignDataForSpec(spec) {
   if (map.title && carry.title) data[map.title] = carry.title;
   if (map.body && carry.body) data[map.body] = carry.body;
   if (map.priority && carry.priority) {
-    // Backend parity: only a plain Low/Medium/High priority lands in severity.
-    if (map.priority !== 'severity' || ['Low','Medium','High'].includes(carry.priority)) {
+    // reaudit #5: incident_severity managed set includes Critical, so let a
+    // Critical intake carry through to severity on assign-to-Incident — else the
+    // SPA pre-empts the audit #10 backend carry and silently downgrades to Medium.
+    // (Task priority targets still clamp Critical->Medium per audit #19.)
+    if (map.priority !== 'severity' || ['Low','Medium','High','Critical'].includes(carry.priority)) {
       data[map.priority] = carry.priority;
     }
   }
@@ -6247,18 +6263,25 @@ function renderAssignFields() {
     .filter(key => key !== 'category' || !spec.category));
   let data = assignDataForSpec(spec);
   if (spec.tab === 'work') data = transformWorkForDisplay(data);
-  FORMS[spec.tab].forEach(f => {
-    if (f.key === '_row') {
-      const subs = f.fields.filter(sf => assignFieldAllowed(spec, sf));
-      if (!subs.length) return;
-      const row = document.createElement('div');
-      row.className = 'field-row';
-      subs.forEach(sf => row.appendChild(renderAssignField(sf, data[sf.key], requiredSet)));
-      host.appendChild(row);
-    } else if (assignFieldAllowed(spec, f)) {
-      host.appendChild(renderAssignField(f, data[f.key], requiredSet));
-    }
-  });
+  // reaudit #3: flag the synchronous field build so renderField's #33 default
+  // (requested_by -> logged-in user) is suppressed inside the assignment modal.
+  assignModalRendering = true;
+  try {
+    FORMS[spec.tab].forEach(f => {
+      if (f.key === '_row') {
+        const subs = f.fields.filter(sf => assignFieldAllowed(spec, sf));
+        if (!subs.length) return;
+        const row = document.createElement('div');
+        row.className = 'field-row';
+        subs.forEach(sf => row.appendChild(renderAssignField(sf, data[sf.key], requiredSet)));
+        host.appendChild(row);
+      } else if (assignFieldAllowed(spec, f)) {
+        host.appendChild(renderAssignField(f, data[f.key], requiredSet));
+      }
+    });
+  } finally {
+    assignModalRendering = false;
+  }
 }
 
 function renderAssignChips() {
@@ -7351,7 +7374,7 @@ function renderField(f,value) {
     // the logged-in user. Scoped to requested_by so engineer/reporter fields
     // are never wrongly pre-filled. The session name is a nickname, so match
     // via nameMatchesCurrentUser (token-prefix), not strict equality.
-    const currentUserName = (!editingId && !String(value || '').trim() && f.key === 'requested_by')
+    const currentUserName = (!editingId && !assignModalRendering && !String(value || '').trim() && f.key === 'requested_by')
       ? (document.getElementById('core-greeting')?.dataset.user || '')
       : '';
     let defaultMatched = false;

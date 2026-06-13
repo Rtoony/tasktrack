@@ -2,7 +2,7 @@
 import pytest
 
 from app.db import get_session
-from app.models import InboxItem, WorkTask
+from app.models import InboxItem, PersonalItem, WorkTask
 
 INBOX_TOKEN = "test-inbox-token"
 
@@ -111,6 +111,44 @@ def test_capture_routes_directly_when_target_table_set(client, with_token, temp_
         assert wt.priority == "High"
         # Inbox table stays empty when target_table is set.
         assert sess.query(InboxItem).count() == 0
+
+
+def test_capture_directroute_preserves_real_category(client, with_token, temp_app):
+    # reaudit #1: a real CAD category direct-routed into work_tasks must NOT be
+    # clobbered to the personal_items "Follow-up" set.
+    r = client.post(
+        "/api/v1/inbox",
+        json={
+            "title": "Automate layer state import",
+            "target_table": "work_tasks",
+            "category": "LISP Automation",
+        },
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    assert r.status_code == 201
+    with temp_app.app_context():
+        wt = get_session().get(WorkTask, r.get_json()["record_id"])
+        assert wt.category == "LISP Automation"
+
+
+def test_capture_directroute_personal_items_normalizes_category(client, with_token, temp_app):
+    # reaudit #1: personal_items still normalizes to its fixed set — an out-of-set
+    # value falls back to Follow-up, a valid one is kept.
+    bad = client.post(
+        "/api/v1/inbox",
+        json={"title": "junk cat", "target_table": "personal_items", "category": "Nonsense"},
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    good = client.post(
+        "/api/v1/inbox",
+        json={"title": "real cat", "target_table": "personal_items", "category": "Meetings"},
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    assert bad.status_code == 201 and good.status_code == 201
+    with temp_app.app_context():
+        sess = get_session()
+        assert sess.get(PersonalItem, bad.get_json()["record_id"]).category == "Follow-up"
+        assert sess.get(PersonalItem, good.get_json()["record_id"]).category == "Meetings"
 
 
 def test_capture_rejects_unknown_target_table(client, with_token):

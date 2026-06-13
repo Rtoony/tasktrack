@@ -25,6 +25,7 @@ from ..models import (
     to_dict,
 )
 from ..services.audit import log_activity
+from ..services.csv_safe import csv_safe
 from ..services.intake_reports import intake_source_report
 from ..services.tickets import (
     TABLE_MODELS,
@@ -548,8 +549,11 @@ def export_csv(table):
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=cols)
     writer.writeheader()
+    # reaudit #2: the generic exporter was the lone holdout the audit #14
+    # csv_safe remediation missed — neutralise spreadsheet formula injection
+    # (CWE-1236) in every free-text cell, matching the report-specific exporters.
     for r in rows:
-        writer.writerow(to_dict(r))
+        writer.writerow({k: csv_safe(v) for k, v in to_dict(r).items()})
 
     return Response(
         output.getvalue(),

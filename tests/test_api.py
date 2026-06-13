@@ -391,6 +391,19 @@ def test_csv_export_rejects_unknown_table(auth_client):
     assert r.status_code == 400
 
 
+def test_csv_export_neutralizes_formula_injection(auth_client):
+    # reaudit #2: the generic exporter is the lone holdout that audit #14 missed.
+    # A formula-leading title must be prefixed with ' so Excel/Sheets won't run it.
+    _make_work_task(auth_client, title="=cmd|'/c calc'!A1")
+    r = auth_client.get("/api/v1/work_tasks/export.csv")
+    assert r.status_code == 200
+    rows = list(csv.reader(io.StringIO(r.data.decode("utf-8"))))
+    title_idx = [c.lower() for c in rows[0]].index("title")
+    titles = [row[title_idx] for row in rows[1:]]
+    assert "'=cmd|'/c calc'!A1" in titles
+    assert not any(t.startswith("=") for t in titles)
+
+
 def test_work_task_category_round_trips(auth_client):
     """Feedback #24: CAD Dev tasks carry a work-stream category."""
     r = auth_client.post("/api/v1/work_tasks", json={

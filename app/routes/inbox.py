@@ -274,11 +274,18 @@ def capture():
             payload["notes"] = body
         elif body and "body" in ALLOWED_TABLES[target_table]["fields"]:
             payload["body"] = body  # audit #7: personal_items uses 'body' — was silently dropped
-        # audit #7: personal_items requires a category; map it (default Follow-up)
-        # so a direct-route into the Internal queue doesn't hard-400.
+        # audit #7: personal_items requires a category from a fixed set; map it
+        # (default Follow-up) so a direct-route into the Internal queue doesn't
+        # hard-400. reaudit #1: scope that normalization to personal_items ONLY —
+        # other tables (e.g. work_tasks) carry their OWN free-text CAD category;
+        # passing it through unchanged stops a real category being clobbered to
+        # "Follow-up". A missing category falls back to the model's server_default.
         if "category" in ALLOWED_TABLES[target_table]["fields"]:
             _cat = (data.get("category") or "").strip()
-            payload["category"] = _cat if _cat in ("Follow-up", "Meetings", "Office", "Assets") else "Follow-up"
+            if target_table == "personal_items":
+                payload["category"] = _cat if _cat in ("Follow-up", "Meetings", "Office", "Assets") else "Follow-up"
+            elif _cat:
+                payload["category"] = _cat
         if priority and "priority" in ALLOWED_TABLES[target_table]["fields"]:
             payload["priority"] = priority
         if due_date:
