@@ -248,7 +248,7 @@ def _triage_normalize_plan(plan):
         return []
 
     priority = _as_str(plan.get("priority")).title() or "Medium"
-    if priority not in ("Low", "Medium", "High"):
+    if priority not in ("None", "Low", "Medium", "High"):  # audit #18: 'None' is a valid priority
         priority = "Medium"
 
     return {
@@ -282,7 +282,7 @@ def run_triage(raw_text, target="work_tasks", presets=None):
         if normalized and normalized["gist"]:
             # Enforce priority lock server-side even if the model ignored it.
             locked = (presets.get("priority") or "").strip().title()
-            if locked in ("Low", "Medium", "High"):
+            if locked in ("None", "Low", "Medium", "High"):  # audit #18: honor a locked 'None'
                 normalized["priority"] = locked
             return normalized, model
         errors.append(f"{model}: unparseable response")

@@ -78,7 +78,7 @@ def _coerce_fk_columns(data):
     select; SQLite happily stores that as the literal string "" which
     later breaks comparison with the integer id. Normalise to None or int.
     """
-    for key in ("project_id", "engineer_id", "person_id", "related_id"):
+    for key in ("project_id", "engineer_id", "person_id", "related_id", "skill_category_id"):  # audit #13
         if key not in data:
             continue
         raw = data[key]

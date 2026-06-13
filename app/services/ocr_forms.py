@@ -147,7 +147,7 @@ def _clean_date(value: str) -> str:
     try:
         return datetime.fromisoformat(text[:10]).date().isoformat()
     except ValueError:
-        return text[:32]
+        return ""  # audit #15: unparseable date -> empty, not garbage that hard-fails the task create
 
 
 def _extract_fields(text: str) -> dict[str, str]:
