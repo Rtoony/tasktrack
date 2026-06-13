@@ -2515,8 +2515,12 @@ function resolveFeedbackTarget() {
       project_number: proj.project_number || '',
     };
   }
-  // 3. The employee scorecard is open → target that employee.
-  if (typeof compScorecardEmpId !== 'undefined' && compScorecardEmpId) {
+  // 3. The employee scorecard is open AND we're on the Competency tab → target that
+  //    employee. compScorecardEmpId is only reset when ENTERING competency, so it
+  //    persists after leaving; without the active-section gate the FAB would
+  //    mis-attribute feedback filed from other tabs to a stale scorecard employee.
+  if (typeof compScorecardEmpId !== 'undefined' && compScorecardEmpId
+      && document.getElementById('sec-competency')?.classList.contains('active')) {
     const emp = ((typeof compState !== 'undefined' && compState.employees) || [])
       .find(e => e.id === compScorecardEmpId);
     return {
