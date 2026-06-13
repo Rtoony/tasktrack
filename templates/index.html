@@ -1266,7 +1266,7 @@
       <section class="core-panel">
         <div class="core-panel-head">
           <div class="core-panel-title"><span class="core-tag teal">Flow</span><span>Recent activity</span></div>
-          <span class="core-panel-hint">Latest changes across TaskTrack</span>
+          <label class="core-panel-hint" style="cursor:pointer;display:flex;align-items:center;gap:0.3rem" title="Hide rows by Hermes/Claude/automation"><input type="checkbox" id="activity-hide-system" onchange="renderCoreRecentActivity()" style="margin:0">Hide system actors</label>
         </div>
         <div class="core-activity-grid" id="core-recent-activity"><div class="core-empty">No activity yet.</div></div>
       </section>
@@ -3732,10 +3732,23 @@ function renderEmployeeScorecard() {
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
         '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
       '</div>' +
-      '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
+      '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
+        '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
+      '</div>' +
     '</div>' +
     '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:1120px;width:100%;font-size:0.76rem"><thead><tr><th>Task</th><th>Observed</th><th>Self</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' +
     '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save preliminary task ratings</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark official baseline</button><button class="btn btn-ghost" type="button" onclick="saveEmployeeScorecard(\'self_assessment\', false)">Record self-assessment</button></div>';
+}
+
+// #50: jump from a scorecard straight into a prefilled new capability note for
+// that employee. No id passed → openModal opens as CREATE; the People text field
+// is prefilled with the credential-stripped name (formatPersonName, from #29) so
+// "Dyanna Stetina, P.E." doesn't get parsed as two people.
+function logCapabilityNoteFor(empId) {
+  const emp = (compState.employees || []).find(e => e.id === empId);
+  if (!emp) return;
+  openModal('personnel', { person_name: formatPersonName(emp.display_name) });
 }
 
 function scoreOptions(value) {
@@ -4594,10 +4607,23 @@ function coreActivityPhrase(action) {
   return CORE_ACTIVITY_PHRASES[token] || token.replace(/_/g, ' ');
 }
 
+// #17: cache the last activity rows so the "Hide system actors" toggle can
+// re-render without a refetch. Called with rows from loadDashboard; called
+// arg-less by the toggle.
+let _lastActivityRows = [];
+function isSystemActor(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return true;  // blank actor = automated/system
+  return ['hermes', 'claude', 'system', 'autopilot', 'codev', 'codex', 'tasktrack', 'bot', 'fable']
+    .some(s => n.includes(s));
+}
 function renderCoreRecentActivity(rows) {
+  if (rows !== undefined) _lastActivityRows = Array.isArray(rows) ? rows : [];
   const host = document.getElementById('core-recent-activity');
   if (!host) return;
-  const visible = Array.isArray(rows) ? rows.slice(0, 9) : [];
+  let pool = _lastActivityRows;
+  if (document.getElementById('activity-hide-system')?.checked) pool = pool.filter(r => !isSystemActor(r.user_name));
+  const visible = pool.slice(0, 9);
   host.replaceChildren();
   if (!visible.length) { host.innerHTML = '<div class="core-empty">No activity yet.</div>'; return; }
   visible.forEach(row => {
