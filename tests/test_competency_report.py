@@ -46,6 +46,35 @@ def _seed_competency_report(admin_client, temp_app):
     return ids
 
 
+def test_competency_report_per_dimension_coverage(admin_client, temp_app):
+    # Fable: the report surfaces true per-dimension baseline/preliminary coverage
+    # (N of M dimensions), not a single all-or-nothing category marker.
+    from app.services.competency import dimensions_for_category
+    with temp_app.app_context():
+        sess = get_session()
+        emp = Employee(display_name="Coverage Subject", role="engineer", competency_tracked=1)
+        cat = SkillCategory(slug="autocad-core", name="AutoCAD Core", display_order=1)
+        sess.add_all([emp, cat])
+        sess.commit()
+        emp_id, cat_id = emp.id, cat.id
+        dims = dimensions_for_category(cat)
+    assert len(dims) >= 3  # autocad-core is multi-dimension
+    admin_client.post("/api/v1/skills/task-ratings/bulk", json={
+        "employee_id": emp_id,
+        "source_kind": "official_baseline",
+        "ratings": [
+            {"category_id": cat_id, "dimension_slug": dims[0].slug, "score": 2},
+            {"category_id": cat_id, "dimension_slug": dims[1].slug, "score": 3},
+        ],
+    })
+    body = admin_client.get("/api/v1/reports/competency").get_json()
+    row = next(r for r in body["employees"] if r["display_name"] == "Coverage Subject")
+    cell = next(c for c in row["cells"] if c["category_id"] == cat_id)
+    assert cell["total_dimensions"] == len(dims)
+    assert cell["baselined_dimensions"] == 2
+    assert cell["preliminary_dimensions"] == 0
+
+
 def test_competency_report_json_html_csv(admin_client, temp_app):
     _seed_competency_report(admin_client, temp_app)
 
