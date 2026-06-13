@@ -693,7 +693,11 @@
   .comment-meta { font-size:0.68rem; color:var(--text-light); margin-bottom:2px; }
   .comment-meta strong { color:var(--text-muted); }
   .comment-body { color:var(--text); }
-  .comment-add { display:flex; gap:0.4rem; margin-top:0.5rem; }
+  /* #42: AI-directed comments stand out in the thread. */
+  .comment-ai-dev { border-left:2px solid var(--accent); padding-left:0.5rem; }
+  .comment-ai-chip { display:inline-block; font-size:0.6rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:var(--accent); border-radius:999px; padding:0 0.4rem; vertical-align:middle; }
+  .comment-ai-toggle { display:flex; align-items:center; gap:0.25rem; font-size:0.7rem; color:var(--text-muted); white-space:nowrap; cursor:pointer; user-select:none; }
+  .comment-add { display:flex; gap:0.4rem; margin-top:0.5rem; align-items:center; }
   .comment-add input { flex:1; padding:0.4rem 0.6rem; font-family:inherit; font-size:0.8rem; border:1px solid var(--border); border-radius:var(--radius); }
   .comment-add input:focus { outline:none; border-color:var(--accent); }
   .comment-add button { padding:0.4rem 0.7rem; font-family:inherit; font-size:0.75rem; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); cursor:pointer; }
@@ -7944,9 +7948,17 @@ async function loadComments(table,recordId,container) {
   if (comments && comments.length) {
     comments.forEach(c => {
       const div = document.createElement('div'); div.className='comment';
+      const isAi = c.audience === 'ai-dev';
+      if (isAi) div.classList.add('comment-ai-dev');
       const meta = document.createElement('div'); meta.className='comment-meta';
       const strong = document.createElement('strong'); strong.textContent=c.user_name;
-      meta.appendChild(strong); meta.appendChild(document.createTextNode(' \u2022 '+formatTimeAgo(c.created_at)));
+      meta.appendChild(strong);
+      if (isAi) {  // #42: AI-directed instruction \u2014 distinct chip in the thread
+        const chip = document.createElement('span'); chip.className='comment-ai-chip'; chip.textContent='AI Dev';
+        meta.appendChild(document.createTextNode(' '));
+        meta.appendChild(chip);
+      }
+      meta.appendChild(document.createTextNode(' \u2022 '+formatTimeAgo(c.created_at)));
       const body = document.createElement('div'); body.className='comment-body'; body.textContent=c.body;
       div.appendChild(meta); div.appendChild(body);
       container.appendChild(div);
@@ -7955,15 +7967,21 @@ async function loadComments(table,recordId,container) {
 
   const addRow = document.createElement('div'); addRow.className='comment-add';
   const input = document.createElement('input'); input.placeholder='Add a comment...'; input.id='comment-input';
+  // #42: address this comment to the AI developer (surfaced via /api/v1/ai-instructions).
+  const aiWrap = document.createElement('label'); aiWrap.className='comment-ai-toggle';
+  aiWrap.title = 'Address this comment to the AI developer \u2014 picked up by the co-dev assistant';
+  const aiCheck = document.createElement('input'); aiCheck.type='checkbox'; aiCheck.id='comment-ai-dev';
+  aiWrap.appendChild(aiCheck); aiWrap.appendChild(document.createTextNode(' For AI dev'));
   const btn = document.createElement('button'); btn.textContent='Post';
   btn.addEventListener('click', async () => {
     const body=input.value.trim(); if(!body) return;
-    await api('POST','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments',{body});
-    input.value='';
+    const audience = aiCheck.checked ? 'ai-dev' : '';
+    await api('POST','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments',{body, audience});
+    input.value=''; aiCheck.checked=false;
     loadComments(table,recordId,container);
   });
   input.addEventListener('keydown', e => { if(e.key==='Enter') btn.click(); });
-  addRow.appendChild(input); addRow.appendChild(btn);
+  addRow.appendChild(input); addRow.appendChild(aiWrap); addRow.appendChild(btn);
   container.appendChild(addRow);
 }
 

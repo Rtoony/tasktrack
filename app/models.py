@@ -418,6 +418,9 @@ class Comment(Base):
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
     user_name: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # feedback #42: '' = normal human comment (default); 'ai-dev' = instruction
+    # addressed to the headless co-developer (surfaced via /api/v1/ai-instructions).
+    audience: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 

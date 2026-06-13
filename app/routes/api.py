@@ -464,6 +464,11 @@ def add_comment(table, record_id):
     body = (data.get("body") or "").strip()
     if not body:
         return jsonify({"error": "Comment body is required"}), 400
+    # feedback #42: an operator can address a comment to the AI developer.
+    # Clamp to the known set so an arbitrary value can't leak into the thread.
+    audience = (data.get("audience") or "").strip().lower()
+    if audience not in ("", "ai-dev"):
+        audience = ""
     user = session.get("user_name", "Unknown")
     sess = get_session()
     if not _target_detail_visible(sess, table, record_id):
@@ -473,10 +478,12 @@ def add_comment(table, record_id):
         record_id=record_id,
         user_name=user,
         body=body,
+        audience=audience,
     )
     sess.add(comment)
     sess.flush()
-    log_activity(sess, table, record_id, "comment", new=body[:80])
+    log_activity(sess, table, record_id, "comment",
+                 new=("[AI Dev] " if audience == "ai-dev" else "") + body[:80])
     sess.commit()
     sess.refresh(comment)
     return jsonify(to_dict(comment)), 201

@@ -40,6 +40,30 @@ def test_list_requires_bot_token(client):
     assert client.get("/api/v1/feedback").status_code == 401
 
 
+def test_ai_instructions_requires_bot_token(client):
+    assert client.get("/api/v1/ai-instructions").status_code == 401
+
+
+def test_ai_instructions_lists_only_ai_dev_comments(client, temp_app, with_bot_token):
+    # feedback #42: the bot pulls only audience='ai-dev' comments (not normal ones).
+    from app.models import Comment
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Comment(table_name="work_tasks", record_id=7, user_name="Josh",
+                         body="build the CSV export", audience="ai-dev"))
+        sess.add(Comment(table_name="work_tasks", record_id=7, user_name="Josh",
+                         body="just a human note", audience=""))
+        sess.commit()
+    r = client.get("/api/v1/ai-instructions", headers={"X-Token": BOT_TOKEN})
+    assert r.status_code == 200, r.data
+    body = r.get_json()
+    bodies = [i["body"] for i in body["instructions"]]
+    assert "build the CSV export" in bodies
+    assert "just a human note" not in bodies
+    assert body["count"] == 1
+    assert body["instructions"][0]["record_url"] == "/?tab=work_tasks&record=7"
+
+
 def test_list_open_excludes_terminal(client, temp_app, with_bot_token):
     open_id = _seed(temp_app, status="New")
     _seed(temp_app, status="Accepted")  # terminal → excluded from the default open view

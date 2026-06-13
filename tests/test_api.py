@@ -344,6 +344,22 @@ def test_add_comment_rejects_empty_body(auth_client):
     assert r.status_code == 400
 
 
+def test_comment_audience_ai_dev_round_trips(auth_client):
+    # feedback #42: a comment can be addressed to the AI developer; the default is
+    # a normal comment ('') and any out-of-set audience clamps to ''.
+    record_id = _make_work_task(auth_client, title="Has AI comment")
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments", json={"body": "normal"})
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments",
+                     json={"body": "refactor this", "audience": "ai-dev"})
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments",
+                     json={"body": "bogus", "audience": "spaceship"})
+    rows = auth_client.get(f"/api/v1/work_tasks/{record_id}/comments").get_json()
+    by_body = {r["body"]: r["audience"] for r in rows}
+    assert by_body["normal"] == ""
+    assert by_body["refactor this"] == "ai-dev"
+    assert by_body["bogus"] == ""
+
+
 # ── Cycle status ──────────────────────────────────────────────────────────
 
 def test_cycle_status_advances_through_flow(auth_client):
