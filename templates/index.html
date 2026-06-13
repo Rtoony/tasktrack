@@ -4999,6 +4999,28 @@ async function loadTable(table) {
   if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
 
+  // #48 smarter ranking: when sorting by priority/severity, sub-sort within each
+  // urgency band by soonest due date, then status-flow order — so the most
+  // actionable rows rise to the top of their band (priority > due > status).
+  const _sortCol = (sortState[table] || {}).col;
+  if (_sortCol === 'priority' || _sortCol === 'severity') {
+    const ORDER = _sortCol === 'severity'
+      ? ['Critical', 'High', 'Medium', 'Low', 'None']
+      : ['High', 'Medium', 'Low', 'None'];
+    const flow = TRACKER_STATUS_FLOW[table] || [];
+    const dir = (sortState[table] || {}).order === 'desc' ? -1 : 1;
+    const rankOf = v => { const i = ORDER.indexOf(v); return i < 0 ? 99 : i; };
+    const dueOf = r => r.due_at || r.due_date || r.follow_up_date || '￿';
+    const statusOf = r => { const i = flow.indexOf(r.status); return i < 0 ? 99 : i; };
+    filtered = [...filtered].sort((a, b) => {
+      const pr = rankOf(a[_sortCol]) - rankOf(b[_sortCol]);
+      if (pr) return pr * dir;                          // primary: urgency band (flips with direction)
+      const d = String(dueOf(a)).localeCompare(String(dueOf(b)));
+      if (d) return d;                                  // secondary: soonest due first (blanks last)
+      return statusOf(a) - statusOf(b);                 // tertiary: status-flow order
+    });
+  }
+
   renderTrackerSummary(table, baseRows, filtered);
 
   const tbody = document.getElementById('tbody-'+table);
