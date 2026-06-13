@@ -3253,6 +3253,16 @@ function updateShellContext(title) {
 }
 
 function activateTab(tabName, options={}) {
+  // #14: the 4 per-category personal tabs were consolidated into one 'personal'
+  // tab. Alias any stale key (admin standalone views, intake report/review
+  // links, OCR redirects, old bookmarks) to 'personal' and preselect its
+  // category, so no external entry point lands on a deleted section.
+  const LEGACY_PERSONAL = {personal_husband:'Follow-up', personal_father:'Meetings', personal_house:'Office', personal_cars:'Assets'};
+  if (LEGACY_PERSONAL[tabName]) {
+    const catSel = document.getElementById('filter-personal-category');
+    if (catSel) catSel.value = LEGACY_PERSONAL[tabName];
+    tabName = 'personal';
+  }
   const btn = tabButtonFor(tabName);
   const section = document.getElementById('sec-' + tabName);
   if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;
@@ -5817,7 +5827,7 @@ const ASSIGN_TABLE_FIELDS = {
   project_work_tasks: ['project_name','title','project_number','billing_phase','engineer','task_description','priority','status','due_at','scheduled_completion_at','time_required_minutes','notes','scope_notes','progress_notes','confirmation_notes','completion_notes','project_id','engineer_id'],
   training_tasks: ['title','trainees','requested_by','skill_area','training_goals','additional_context','priority','status','due_date','notes','project_number','project_id','trainee_ids'],
   personnel_issues: ['person_name','observed_by','cad_skill_area','issue_description','incident_context','recommended_training','severity','status','reported_date','follow_up_date','resolution_notes','project_number','project_id','person_id','estimated_time_loss_minutes','immediate_solution','skill_category_id','person_ids'],
-  personal_items: ['title','category','body','priority','status','due_date'],
+  personal_items: ['title','body','priority','status','due_date'],  /* #14: category set by the chip, not a redundant select */
 };
 const ASSIGN_REQUIRED = {
   work_tasks: ['title'],

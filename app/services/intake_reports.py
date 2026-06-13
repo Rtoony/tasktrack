@@ -45,7 +45,7 @@ INTAKE_REPORT_TABLES = {
         "due": "due_date",
         "project": "",
         "needs_review": "needs_review",
-        "tab": "personal_husband",
+        "tab": "personal",
     },
     "inbox_items": {
         "label": "Triage Inbox",
@@ -60,10 +60,10 @@ INTAKE_REPORT_TABLES = {
 
 DEFAULT_SOURCES = ["web-form", "paper-form", "remarkable-ocr"]
 INTERNAL_CATEGORY_TABS = {
-    "Follow-up": "personal_husband",
-    "Meetings": "personal_father",
-    "Office": "personal_house",
-    "Assets": "personal_cars",
+    "Follow-up": "personal",
+    "Meetings": "personal",
+    "Office": "personal",
+    "Assets": "personal",
 }
 CSV_FIELDS = [
     "table", "label", "id", "title", "source", "status", "priority",

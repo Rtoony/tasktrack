@@ -124,7 +124,7 @@ def _due_item(table: str, label: str, row, when: datetime, *, field: str,
     tab_url = {
         "work_tasks": "/?tab=work",
         "training_tasks": "/?tab=training",
-        "personal_items": "/?tab=personal_husband",
+        "personal_items": "/?tab=personal",
     }.get(table, "")
     return {
         "kind": "due_task",
