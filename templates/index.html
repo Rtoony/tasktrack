@@ -3446,6 +3446,20 @@ function employeeShortName(emp) {
 function formatPersonName(value) {
   return String(value || '').replace(/,.*/, '').trim();
 }
+// #33: match a logged-in user to their employee row. The session display_name
+// is a first-name nickname ("Josh") while the employee registry stores full
+// names ("Josh Patheal") and has no email join key — so strict equality never
+// matched (the bug this fixes). Compare credential-stripped name tokens
+// left-to-right up to the shorter list, so "josh" matches "josh patheal" but
+// not "joshua ..." and not a different surname.
+function nameMatchesCurrentUser(candidate, userName) {
+  const toks = s => formatPersonName(s).toLowerCase().split(/\s+/).filter(Boolean);
+  const c = toks(candidate), u = toks(userName);
+  if (!c.length || !u.length) return false;
+  const n = Math.min(c.length, u.length);
+  for (let i = 0; i < n; i++) if (c[i] !== u[i]) return false;
+  return true;
+}
 function employeeAvatarHtml(emp, size) {
   const initials = esc(employeeInitials(emp));
   const name = esc(emp?.display_name || 'Employee');
@@ -7314,11 +7328,13 @@ function renderField(f,value) {
     const empty=document.createElement('option'); empty.value=''; empty.textContent=f.placeholder || '— choose employee —';
     input.appendChild(empty);
     // #33: on a NEW record with no preset, default the "Requested By" field to
-    // the logged-in user (name match, credentials ignored). Scoped to
-    // requested_by so engineer/reporter fields are never wrongly pre-filled.
-    const defaultName = (!editingId && !String(value || '').trim() && f.key === 'requested_by')
-      ? formatPersonName(document.getElementById('core-greeting')?.dataset.user || '').toLowerCase()
+    // the logged-in user. Scoped to requested_by so engineer/reporter fields
+    // are never wrongly pre-filled. The session name is a nickname, so match
+    // via nameMatchesCurrentUser (token-prefix), not strict equality.
+    const currentUserName = (!editingId && !String(value || '').trim() && f.key === 'requested_by')
+      ? (document.getElementById('core-greeting')?.dataset.user || '')
       : '';
+    let defaultMatched = false;
     loadFkOptions('/api/v1/employees').then(rows => {
       rows.forEach(r => {
         const opt=document.createElement('option');
@@ -7328,7 +7344,9 @@ function renderField(f,value) {
         opt.textContent=[formatPersonName(r.display_name), r.title || r.role].filter(Boolean).join(' · ');
         const optName = String(opt.value).trim().toLowerCase();
         if (String(value).trim().toLowerCase()===optName) opt.selected=true;
-        else if (defaultName && formatPersonName(opt.value).toLowerCase()===defaultName) opt.selected=true;
+        else if (!defaultMatched && currentUserName && nameMatchesCurrentUser(opt.value, currentUserName)) {
+          opt.selected=true; defaultMatched=true;
+        }
         input.appendChild(opt);
       });
     });
