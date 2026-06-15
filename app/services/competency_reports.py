@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
+from .csv_safe import csv_safe
 from .competency import confidence_band, dimensions_for_category
 
 LOW_SCORE_THRESHOLD = 2.0
@@ -28,6 +29,9 @@ CSV_FIELDS = [
     "baseline_by",
     "baseline_notes",
     "status",
+    "preliminary_dimensions",
+    "baselined_dimensions",
+    "total_dimensions",
 ]
 
 
@@ -124,6 +128,26 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
         if row.source_kind == "official_baseline" and bucket["baseline"] is None:
             bucket["baseline"] = row
 
+    # Fable per-task grain: ratings are now entered per-dimension, so a single
+    # category-level marker hides real coverage. Track WHICH dimensions carry a
+    # preliminary / baseline marker so the report can show "N of M dimensions"
+    # instead of an all-or-nothing flag. Category-level ('manual') rows are skipped.
+    dim_markers: dict[tuple[int, int], dict[str, set]] = {}
+    for row in evidence_rows:
+        slug = (row.dimension_slug or "").strip()
+        if not slug or slug == "manual":
+            continue
+        bucket = dim_markers.setdefault(
+            (row.employee_id, row.category_id), {"preliminary": set(), "baseline": set()}
+        )
+        if row.source_kind == "preliminary_rating":
+            bucket["preliminary"].add(slug)
+        elif row.source_kind == "official_baseline":
+            bucket["baseline"].add(slug)
+    # Valid dimension slugs per category — counts are intersected with these so an
+    # off-catalog/stale slug can never push coverage above total_dimensions.
+    cat_dim_slugs = {c.id: {d.slug for d in dimensions_for_category(c)} for c in categories}
+
     employee_rows = []
     all_csv_rows = []
 
@@ -144,6 +168,12 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             prelim = _rating_payload(markers.get("preliminary"), user_names)
             baseline = _rating_payload(markers.get("baseline"), user_names)
             status = _cell_status(score_row, prelim, baseline)
+            # Fable per-task coverage for this (employee, category) cell.
+            _dm = dim_markers.get((emp.id, cat.id), {"preliminary": set(), "baseline": set()})
+            _valid_dims = cat_dim_slugs.get(cat.id, set())
+            _total_dims = len(_valid_dims)
+            _prelim_dims = len(_dm["preliminary"] & _valid_dims)
+            _baselined_dims = len(_dm["baseline"] & _valid_dims)
             visible_score = float(score_row.score) if score_row is not None else None
 
             if visible_score is not None:
@@ -172,6 +202,10 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
                 "preliminary": prelim,
                 "baseline": baseline,
                 "status": status,
+                # Fable per-task coverage (additive — true N-of-M per dimension).
+                "total_dimensions": _total_dims,
+                "preliminary_dimensions": _prelim_dims,
+                "baselined_dimensions": _baselined_dims,
             }
             cells.append(cell)
             all_csv_rows.append({
@@ -191,6 +225,9 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
                 "baseline_by": "" if baseline is None else baseline["created_by_name"],
                 "baseline_notes": "" if baseline is None else baseline["notes"],
                 "status": status,
+                "preliminary_dimensions": _prelim_dims,
+                "baselined_dimensions": _baselined_dims,
+                "total_dimensions": _total_dims,
             })
 
         average = round(score_sum / score_count, 2) if score_count else None
@@ -316,7 +353,10 @@ def competency_report_csv(packet: dict) -> str:
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
     writer.writeheader()
-    writer.writerows(packet.get("csv_rows") or [])
+    # audit #14: neutralise CSV-formula injection in any free-text cell.
+    writer.writerows(
+        {k: csv_safe(v) for k, v in row.items()} for row in (packet.get("csv_rows") or [])
+    )
     return output.getvalue()
 
 

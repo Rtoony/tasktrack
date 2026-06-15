@@ -344,6 +344,111 @@ def test_add_comment_rejects_empty_body(auth_client):
     assert r.status_code == 400
 
 
+def test_comment_audience_ai_dev_round_trips(auth_client):
+    # feedback #42: a comment can be addressed to the AI developer; the default is
+    # a normal comment ('') and any out-of-set audience clamps to ''.
+    record_id = _make_work_task(auth_client, title="Has AI comment")
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments", json={"body": "normal"})
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments",
+                     json={"body": "refactor this", "audience": "ai-dev"})
+    auth_client.post(f"/api/v1/work_tasks/{record_id}/comments",
+                     json={"body": "bogus", "audience": "spaceship"})
+    rows = auth_client.get(f"/api/v1/work_tasks/{record_id}/comments").get_json()
+    by_body = {r["body"]: r["audience"] for r in rows}
+    assert by_body["normal"] == ""
+    assert by_body["refactor this"] == "ai-dev"
+    assert by_body["bogus"] == ""
+
+
+# ── Archive (#38) ──────────────────────────────────────────────────────────
+
+def test_archive_hides_from_default_list_and_unarchive_restores(auth_client):
+    rid = _make_work_task(auth_client, title="To archive")
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/archive")
+    assert r.status_code == 200 and r.get_json()["archived_at"]
+    # hidden from the default view, retained + visible under ?archived=1
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks?archived=1").get_json()]
+
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/unarchive")
+    assert r.status_code == 200 and r.get_json()["archived_at"] is None
+    assert rid in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+
+
+def test_archive_rejects_non_archivable_table(auth_client):
+    # feedback_items has no archived_at column → 400 before any record lookup.
+    assert auth_client.post("/api/v1/feedback_items/1/archive").status_code == 400
+
+
+def test_follow_up_toggle_and_filter(auth_client):
+    # feedback #44: toggle the follow-up star and list flagged tasks via ?follow_up=1.
+    rid = _make_work_task(auth_client, title="Star me")
+
+    def followed_ids():
+        return [x["id"] for x in auth_client.get("/api/v1/work_tasks?follow_up=1").get_json()]
+
+    assert rid not in followed_ids()
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/follow-up")
+    assert r.status_code == 200 and r.get_json()["follow_up"] == 1
+    assert rid in followed_ids()
+    r = auth_client.post(f"/api/v1/work_tasks/{rid}/follow-up")
+    assert r.status_code == 200 and r.get_json()["follow_up"] == 0
+    assert rid not in followed_ids()
+
+
+def test_follow_up_rejects_unsupported_table(auth_client):
+    assert auth_client.post("/api/v1/feedback_items/1/follow-up").status_code == 400
+
+
+def test_hard_delete_removes_even_from_archived_view(auth_client):
+    rid = _make_work_task(auth_client, title="To delete")
+    assert auth_client.delete(f"/api/v1/work_tasks/{rid}").status_code == 200
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks").get_json()]
+    assert rid not in [r["id"] for r in auth_client.get("/api/v1/work_tasks?archived=1").get_json()]
+
+
+def test_archived_excluded_from_dashboard_search_and_export(auth_client):
+    # #38 leak-fix: archived rows must drop out of the active surfaces that bypass
+    # list_records — the dashboard stats, global search, and CSV export.
+    rid = _make_work_task(auth_client, title="ZephyrArchiveProbe", due_date="2020-01-01", priority="High")
+
+    def work_overdue_ids():
+        return [r["id"] for r in auth_client.get("/api/v1/dashboard").get_json()["stats"]["work_tasks"]["overdue_items"]]
+    def search_work_ids():
+        return [r["id"] for r in auth_client.get("/api/v1/search?q=ZephyrArchiveProbe").get_json() if r.get("source") == "work_tasks"]
+    def in_csv():
+        return "ZephyrArchiveProbe" in auth_client.get("/api/v1/work_tasks/export.csv").data.decode("utf-8")
+
+    assert rid in work_overdue_ids() and rid in search_work_ids() and in_csv()
+    assert auth_client.post(f"/api/v1/work_tasks/{rid}/archive").status_code == 200
+    assert rid not in work_overdue_ids()
+    assert rid not in search_work_ids()
+    assert not in_csv()
+
+
+def test_archived_calendar_and_personal_excluded_from_search(auth_client):
+    # #38 leak-fix: lock the hand-written per-model ORM search exclusions for
+    # calendar_events and personal_items (work/project/training raw-SQL is covered above).
+    cal = auth_client.post("/api/v1/calendar_events", json={"title": "QuokkaArchiveCal", "start_at": "2026-07-01T10:00:00"})
+    assert cal.status_code in (200, 201), cal.get_json()
+    cal_id = cal.get_json()["id"]
+    per = auth_client.post("/api/v1/personal_items", json={"title": "QuokkaArchivePersonal", "category": "Follow-up"})
+    assert per.status_code in (200, 201), per.get_json()
+    per_id = per.get_json()["id"]
+
+    def search_ids(q, source):
+        return [r["id"] for r in auth_client.get(f"/api/v1/search?q={q}").get_json() if r.get("source") == source]
+
+    assert cal_id in search_ids("QuokkaArchiveCal", "calendar_events")
+    assert per_id in search_ids("QuokkaArchivePersonal", "personal_items")
+    assert auth_client.post(f"/api/v1/calendar_events/{cal_id}/archive").status_code == 200
+    assert auth_client.post(f"/api/v1/personal_items/{per_id}/archive").status_code == 200
+    assert cal_id not in search_ids("QuokkaArchiveCal", "calendar_events")
+    assert per_id not in search_ids("QuokkaArchivePersonal", "personal_items")
+
+
 # ── Cycle status ──────────────────────────────────────────────────────────
 
 def test_cycle_status_advances_through_flow(auth_client):
@@ -391,6 +496,19 @@ def test_csv_export_rejects_unknown_table(auth_client):
     assert r.status_code == 400
 
 
+def test_csv_export_neutralizes_formula_injection(auth_client):
+    # reaudit #2: the generic exporter is the lone holdout that audit #14 missed.
+    # A formula-leading title must be prefixed with ' so Excel/Sheets won't run it.
+    _make_work_task(auth_client, title="=cmd|'/c calc'!A1")
+    r = auth_client.get("/api/v1/work_tasks/export.csv")
+    assert r.status_code == 200
+    rows = list(csv.reader(io.StringIO(r.data.decode("utf-8"))))
+    title_idx = [c.lower() for c in rows[0]].index("title")
+    titles = [row[title_idx] for row in rows[1:]]
+    assert "'=cmd|'/c calc'!A1" in titles
+    assert not any(t.startswith("=") for t in titles)
+
+
 def test_work_task_category_round_trips(auth_client):
     """Feedback #24: CAD Dev tasks carry a work-stream category."""
     r = auth_client.post("/api/v1/work_tasks", json={
@@ -436,3 +554,27 @@ def test_severity_sort_ranks_critical_first(auth_client):
     rows = auth_client.get("/api/v1/personnel_issues?sort=severity&order=asc").get_json()
     sev = [r["severity"] for r in rows if r.get("severity") in ("Critical", "High", "Medium", "Low")]
     assert sev[0] == "Critical"
+
+
+def test_priority_desc_sort_is_reverse_with_blanks_last(auth_client):
+    """Audit #2: descending priority must be least-urgent-first with blanks LAST
+    (the bug floated blanks/None to the top on desc)."""
+    _make_work_task(auth_client, title="hi", priority="High")
+    _make_work_task(auth_client, title="none", priority="None")
+    _make_work_task(auth_client, title="med", priority="Medium")
+    desc = auth_client.get("/api/v1/work_tasks?sort=priority&order=desc").get_json()
+    ranked = [r["priority"] for r in desc if r["priority"] in ("High", "Medium", "Low", "None")]
+    # desc = reverse of urgency (None first, High last) — and NOT blanks-first.
+    assert ranked == sorted(ranked, key=lambda p: ["None", "Low", "Medium", "High"].index(p))
+    assert ranked[0] == "None" and ranked[-1] == "High"
+
+
+def test_project_task_accepts_managed_billing_phase(auth_client):
+    """Audit #1: a managed billing-phase value ('100 - Survey') must save — the
+    old \\d{2} validator rejected every default dropdown option."""
+    r = auth_client.post("/api/v1/project_work_tasks", json={
+        "project_name": "Lab Job", "project_number": "9001.00",
+        "title": "phase test", "task_description": "x", "billing_phase": "100 - Survey",
+    })
+    assert r.status_code in (200, 201), r.get_json()
+    assert r.get_json()["billing_phase"] == "100 - Survey"

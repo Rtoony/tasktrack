@@ -411,6 +411,43 @@ def test_create_subscore_appends_and_rolls_up(admin_client, temp_app):
         assert rollup.rollup_version == 2
 
 
+def test_multidim_official_baseline_rolls_up_not_collapse(admin_client, temp_app):
+    # reaudit (HIGH): the 'Mark official baseline' button posts one official_baseline
+    # row PER dimension. They must aggregate via the weighted mean — NOT collapse the
+    # whole category to the last-submitted dimension's raw score (the audit #8 bug).
+    from app.services.competency import dimensions_for_category
+
+    with temp_app.app_context():
+        sess = get_session()
+        emp = Employee(display_name="Multi Dim", role="engineer", competency_tracked=1)
+        cat = SkillCategory(slug="autocad-core", name="AutoCAD Core")
+        sess.add(emp)
+        sess.add(cat)
+        sess.commit()
+        emp_id, cat_id = emp.id, cat.id
+        dims = dimensions_for_category(cat)
+    assert len(dims) >= 2  # autocad-core has 11 dimensions
+
+    # First dimension scored 0, second scored 3 (last submitted -> what the bug picked).
+    r = admin_client.post("/api/v1/skills/task-ratings/bulk", json={
+        "employee_id": emp_id,
+        "source_kind": "official_baseline",
+        "ratings": [
+            {"category_id": cat_id, "dimension_slug": dims[0].slug, "score": 0},
+            {"category_id": cat_id, "dimension_slug": dims[1].slug, "score": 3},
+        ],
+    })
+    assert r.status_code in (200, 201), r.get_json()
+    with temp_app.app_context():
+        rollup = get_session().scalar(
+            select(EmployeeSkillScore).where(EmployeeSkillScore.employee_id == emp_id)
+        )
+        assert rollup is not None
+        # Blended (~1.5), strictly between the two dimension scores — never the
+        # collapsed last-row 3.0 the bug produced.
+        assert 0.0 < rollup.score < 3.0
+
+
 def test_matrix_detail_shape(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/subscores", json={

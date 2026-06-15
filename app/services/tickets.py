@@ -78,7 +78,7 @@ def _coerce_fk_columns(data):
     select; SQLite happily stores that as the literal string "" which
     later breaks comparison with the integer id. Normalise to None or int.
     """
-    for key in ("project_id", "engineer_id", "person_id", "related_id"):
+    for key in ("project_id", "engineer_id", "person_id", "related_id", "skill_category_id"):  # audit #13
         if key not in data:
             continue
         raw = data[key]
@@ -501,8 +501,9 @@ def validate_record_data(table, data, creating=False, sess: Session | None = Non
         data["project_name"] = project_name
 
     if billing_phase:
-        if not re.fullmatch(r"\d{2}", billing_phase):
-            return "Project Billing Phase must match ##"
+        # Audit #1: billing_phase is a managed dropdown ('100 - Survey' … 'Other')
+        # backed by a Text column — the old \d{2} mask rejected every default
+        # option. Accept the stripped value as-is (vocabulary is admin-controlled).
         data["billing_phase"] = billing_phase
 
     if creating or "engineer" in data:

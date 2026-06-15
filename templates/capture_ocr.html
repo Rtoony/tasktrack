@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="csrf-token" content="{{ csrf_token }}">
 <title>OCR Capture - {{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -155,7 +156,7 @@ async function parseOcrForm(showStatus = false) {
   if (showStatus) setParseStatus('Parsing OCR form...');
   const res = await fetch('/api/v1/intake/ocr/parse', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''},
     body: JSON.stringify({ text, source_ref: document.getElementById('source_ref').value.trim() })
   });
   const body = await res.json().catch(() => ({}));
@@ -193,7 +194,7 @@ async function createReviewItem() {
   setParseStatus('Creating review item...');
   const res = await fetch('/api/v1/intake/ocr/create', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || ''},
     body: JSON.stringify({ text, source_ref: document.getElementById('source_ref').value.trim() })
   });
   const body = await res.json().catch(() => ({}));
@@ -207,7 +208,7 @@ async function createReviewItem() {
   applyParsedToForm(body.parsed);
   const created = body.created || {};
   setParseStatus(`Created ${created.table || 'item'} #${created.id || ''}.`, 'ok');
-  const tab = ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', personal_items:'personal_husband'})[created.table] || 'triage';
+  const tab = ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', personal_items:'personal'})[created.table] || 'triage';
   setTimeout(() => { window.location = '/?tab=' + encodeURIComponent(tab); }, 650);
 }
 

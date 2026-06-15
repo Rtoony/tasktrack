@@ -272,6 +272,20 @@ def capture():
             payload["task_description"] = body
         elif body and "notes" in ALLOWED_TABLES[target_table]["fields"]:
             payload["notes"] = body
+        elif body and "body" in ALLOWED_TABLES[target_table]["fields"]:
+            payload["body"] = body  # audit #7: personal_items uses 'body' — was silently dropped
+        # audit #7: personal_items requires a category from a fixed set; map it
+        # (default Follow-up) so a direct-route into the Internal queue doesn't
+        # hard-400. reaudit #1: scope that normalization to personal_items ONLY —
+        # other tables (e.g. work_tasks) carry their OWN free-text CAD category;
+        # passing it through unchanged stops a real category being clobbered to
+        # "Follow-up". A missing category falls back to the model's server_default.
+        if "category" in ALLOWED_TABLES[target_table]["fields"]:
+            _cat = (data.get("category") or "").strip()
+            if target_table == "personal_items":
+                payload["category"] = _cat if _cat in ("Follow-up", "Meetings", "Office", "Assets") else "Follow-up"
+            elif _cat:
+                payload["category"] = _cat
         if priority and "priority" in ALLOWED_TABLES[target_table]["fields"]:
             payload["priority"] = priority
         if due_date:
@@ -469,7 +483,10 @@ def promote(item_id):
                 break
 
     if item.priority and "priority" in cfg["fields"]:
-        payload["priority"] = item.priority
+        # Audit #19: a 'problem' intake carries severity='Critical' as the inbox
+        # priority; task priority columns only offer None/Low/Medium/High, so
+        # clamp anything else to Medium rather than leaking 'Critical'.
+        payload["priority"] = item.priority if item.priority in ("None", "Low", "Medium", "High") else "Medium"
     if item.due_date:
         for due_field in ("due_date", "due_at", "follow_up_date"):
             if due_field in cfg["fields"]:
@@ -477,6 +494,25 @@ def promote(item_id):
                 break
     if "source" in cfg["fields"]:
         payload["source"] = f"inbox:{item.source}"
+
+    # reaudit #6: seed the AI-drafted optional fields from the stored suggestion so a
+    # non-SPA promote applies them too (suggestion_to_payload's docstring promised
+    # this, but nothing called it). Only fills fields not already carried, and only
+    # when the suggestion targets the SAME table being promoted to — the generic
+    # carries above and the client overrides below both still win.
+    if item.suggestion_json:
+        try:
+            _suggestion = json.loads(item.suggestion_json)
+        except (ValueError, TypeError):
+            _suggestion = None
+        if isinstance(_suggestion, dict) and (_suggestion.get("target_table") or "").strip() == target_table:
+            try:
+                _drafted = triage_svc.suggestion_to_payload(_suggestion, raw_text=item.body or item.title or "")
+            except (ValueError, KeyError):
+                _drafted = {}
+            for _k, _v in _drafted.items():
+                if _k in cfg["fields"] and not str(payload.get(_k) or "").strip():
+                    payload[_k] = _v
 
     # Caller-supplied field overrides land last (the assignment modal
     # sends the full reviewed field set here).
@@ -497,7 +533,7 @@ def promote(item_id):
         payload["issue_description"] = item.body or item.title
     if ("severity" in cfg["fields"]
             and not str(payload.get("severity") or "").strip()
-            and item.priority in ("Low", "Medium", "High")):
+            and item.priority in ("Low", "Medium", "High", "Critical")):  # audit #10: don't drop Critical
         payload["severity"] = item.priority
 
     # Structured required-field validation: tell the assignment UI

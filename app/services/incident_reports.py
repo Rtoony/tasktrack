@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import PersonnelIssue, to_dict
+from .csv_safe import csv_safe
 
 MAX_INCIDENT_LIMIT = 250
 DEFAULT_INCIDENT_LIMIT = 100
@@ -182,7 +183,9 @@ def incident_report(sess: Session, *, filters: dict | None = None,
     since = now - timedelta(days=days)
 
     rows = sess.scalars(
-        select(PersonnelIssue).order_by(PersonnelIssue.reported_date.desc(), PersonnelIssue.id.desc())
+        select(PersonnelIssue)
+        .where(PersonnelIssue.archived_at.is_(None))  # #38: archived incidents drop out of the report
+        .order_by(PersonnelIssue.reported_date.desc(), PersonnelIssue.id.desc())
     ).all()
 
     incidents: list[dict] = []
@@ -285,7 +288,7 @@ INCIDENT_CSV_FIELDS = [
 def incident_csv_rows(packet: dict) -> list[dict]:
     rows = []
     for item in packet.get("incidents", []):
-        rows.append({field: item.get(field, "") for field in INCIDENT_CSV_FIELDS})
+        rows.append({field: csv_safe(item.get(field, "")) for field in INCIDENT_CSV_FIELDS})  # audit #14
     return rows
 
 

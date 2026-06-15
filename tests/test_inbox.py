@@ -2,7 +2,7 @@
 import pytest
 
 from app.db import get_session
-from app.models import InboxItem, WorkTask
+from app.models import InboxItem, PersonalItem, WorkTask
 
 INBOX_TOKEN = "test-inbox-token"
 
@@ -111,6 +111,44 @@ def test_capture_routes_directly_when_target_table_set(client, with_token, temp_
         assert wt.priority == "High"
         # Inbox table stays empty when target_table is set.
         assert sess.query(InboxItem).count() == 0
+
+
+def test_capture_directroute_preserves_real_category(client, with_token, temp_app):
+    # reaudit #1: a real CAD category direct-routed into work_tasks must NOT be
+    # clobbered to the personal_items "Follow-up" set.
+    r = client.post(
+        "/api/v1/inbox",
+        json={
+            "title": "Automate layer state import",
+            "target_table": "work_tasks",
+            "category": "LISP Automation",
+        },
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    assert r.status_code == 201
+    with temp_app.app_context():
+        wt = get_session().get(WorkTask, r.get_json()["record_id"])
+        assert wt.category == "LISP Automation"
+
+
+def test_capture_directroute_personal_items_normalizes_category(client, with_token, temp_app):
+    # reaudit #1: personal_items still normalizes to its fixed set — an out-of-set
+    # value falls back to Follow-up, a valid one is kept.
+    bad = client.post(
+        "/api/v1/inbox",
+        json={"title": "junk cat", "target_table": "personal_items", "category": "Nonsense"},
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    good = client.post(
+        "/api/v1/inbox",
+        json={"title": "real cat", "target_table": "personal_items", "category": "Meetings"},
+        headers={"X-Token": INBOX_TOKEN},
+    )
+    assert bad.status_code == 201 and good.status_code == 201
+    with temp_app.app_context():
+        sess = get_session()
+        assert sess.get(PersonalItem, bad.get_json()["record_id"]).category == "Follow-up"
+        assert sess.get(PersonalItem, good.get_json()["record_id"]).category == "Meetings"
 
 
 def test_capture_rejects_unknown_target_table(client, with_token):
@@ -244,6 +282,55 @@ def test_promote_creates_target_record_and_archives_inbox(client, with_token, te
         assert wt.title == "Layer scheme broken"
         assert wt.priority == "High"
         assert wt.description == "see drawing E-501"
+
+
+def test_promote_applies_ai_drafted_optional_fields(client, with_token, temp_app):
+    # reaudit #6: suggestion_to_payload is now wired into promote — an AI-drafted
+    # optional field (beyond the generic title/body/priority/due carries) lands when
+    # the suggestion targets the same table and the field isn't already supplied.
+    import json as _json
+    client.post("/api/v1/inbox",
+                json={"title": "Automate xref binder", "body": "batch bind xrefs", "source": "voice"},
+                headers={"X-Token": INBOX_TOKEN})
+    with temp_app.app_context():
+        sess = get_session()
+        item = sess.query(InboxItem).first()
+        item.suggestion_json = _json.dumps({
+            "target_table": "work_tasks",
+            "fields": {"category": "LISP / Automation"},
+        })
+        sess.commit()
+        item_id = item.id
+    _login(client)
+    r = client.post(f"/api/v1/inbox/{item_id}/promote", json={"target_table": "work_tasks"})
+    assert r.status_code == 201, r.data
+    new_id = r.get_json()["promoted_to"]["id"]
+    with temp_app.app_context():
+        assert get_session().get(WorkTask, new_id).category == "LISP / Automation"
+
+
+def test_promote_client_override_beats_ai_draft(client, with_token, temp_app):
+    # reaudit #6: the AI draft only fills empty fields — client overrides still win.
+    import json as _json
+    client.post("/api/v1/inbox",
+                json={"title": "x", "body": "y", "source": "voice"},
+                headers={"X-Token": INBOX_TOKEN})
+    with temp_app.app_context():
+        sess = get_session()
+        item = sess.query(InboxItem).first()
+        item.suggestion_json = _json.dumps({
+            "target_table": "work_tasks",
+            "fields": {"category": "LISP / Automation"},
+        })
+        sess.commit()
+        item_id = item.id
+    _login(client)
+    r = client.post(f"/api/v1/inbox/{item_id}/promote",
+                    json={"target_table": "work_tasks", "overrides": {"category": "CAD Standards Portal"}})
+    assert r.status_code == 201, r.data
+    new_id = r.get_json()["promoted_to"]["id"]
+    with temp_app.app_context():
+        assert get_session().get(WorkTask, new_id).category == "CAD Standards Portal"
 
 
 def test_promote_rejects_self(client, with_token, temp_app):

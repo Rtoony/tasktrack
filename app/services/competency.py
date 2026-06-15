@@ -203,6 +203,20 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
         if category_score is None:
             category_score = float(manual_latest.score)
 
+    # audit #8: an EXPLICIT CATEGORY-LEVEL override (the single-row /skills/scores
+    # endpoint writes dimension_slug='manual') is authoritative — it must win even
+    # when task dimensions already produced a computed category_score.
+    # reaudit (HIGH): scope this to dimension_slug=='manual' ONLY. The per-dimension
+    # 'Mark official baseline' button (/skills/task-ratings/bulk) submits one
+    # official_baseline row PER real dimension; those already roll up through the
+    # weighted mean (dim_summaries). The old `or source_kind in (...)` clause caught
+    # them too, so max() collapsed a whole multi-dimension category down to one
+    # arbitrary dimension's raw score. A real category slug must never override.
+    override_rows = [r for r in observed_rows if r.dimension_slug == "manual"]
+    if override_rows:
+        latest_override = max(override_rows, key=lambda r: (_parse_dt(r.observed_at) or now, r.id or 0))
+        category_score = float(latest_override.score)
+
     if category_score is None:
         return None
 

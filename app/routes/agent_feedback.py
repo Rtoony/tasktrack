@@ -24,8 +24,8 @@ from sqlalchemy import select
 from .. import limiter
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, FeedbackItem, to_dict
-from ..services.tickets import done_statuses_for_table
+from ..models import ActivityLog, Comment, FeedbackItem, to_dict
+from ..services.tickets import TABLE_MODELS, done_statuses_for_table
 from ..tokens import check_scoped_token
 
 bp = Blueprint("agent_feedback", __name__)
@@ -110,6 +110,74 @@ def list_feedback():
     })
 
 
+@bp.route("/api/v1/ai-instructions", methods=["GET"])
+@limiter.limit("60 per minute; 600 per hour", exempt_when=_skip_limit_for_tests)
+def list_ai_instructions():
+    """Feedback #42: instructions an operator addressed to the AI developer.
+
+    Returns comments tagged ``audience='ai-dev'`` (newest first) across every
+    record, so the headless co-developer can pull what the human wants built /
+    changed and scope a dev-job against the specific record it was left on.
+    Optional ``table`` / ``record_id`` narrow it to one record; ``limit`` caps.
+    Token-authenticated with the ``bot`` scope.
+    """
+    err = check_scoped_token("bot")
+    if err:
+        return err
+
+    sess = get_session()
+    table = (request.args.get("table") or "").strip()
+    record_id = request.args.get("record_id")
+    try:
+        limit = max(1, min(int(request.args.get("limit", 50)), _MAX_LIMIT))
+    except (TypeError, ValueError):
+        limit = 50
+
+    stmt = select(Comment).where(Comment.audience == "ai-dev")
+    if table:
+        stmt = stmt.where(Comment.table_name == table)
+    if record_id is not None:
+        try:
+            stmt = stmt.where(Comment.record_id == int(record_id))
+        except (TypeError, ValueError):
+            return jsonify({"error": "record_id must be an integer"}), 400
+    # Bound the scan so a pathological ai-dev comment volume can't be fully
+    # materialised; the result is still capped at `limit` after the archived filter.
+    stmt = stmt.order_by(Comment.created_at.desc()).limit(max(limit * 5, limit))
+
+    # #42 (pre-merge review): skip AI-dev comments whose parent record has been
+    # archived — an archived task's instructions are stale, so Hermes shouldn't pull
+    # them. Filter then cap (so archived rows don't eat the limit).
+    def _parent_archived(comment) -> bool:
+        Model = TABLE_MODELS.get(comment.table_name)
+        if Model is None or "archived_at" not in {col.name for col in Model.__table__.columns}:
+            return False
+        parent = sess.get(Model, comment.record_id)
+        return parent is not None and parent.archived_at is not None
+
+    instructions = []
+    for c in sess.execute(stmt).scalars().all():
+        if _parent_archived(c):
+            continue
+        instructions.append({
+            "id": c.id,
+            "table_name": c.table_name,
+            "record_id": c.record_id,
+            "user_name": c.user_name,
+            "body": c.body,
+            "created_at": str(c.created_at) if c.created_at else None,
+            "record_url": f"/?tab={c.table_name}&record={c.record_id}",
+        })
+        if len(instructions) >= limit:
+            break
+    return jsonify({
+        "generated_at": _utcnow_naive().isoformat(timespec="seconds") + "Z",
+        "filter": {"table": table or None, "record_id": record_id, "limit": limit},
+        "count": len(instructions),
+        "instructions": instructions,
+    })
+
+
 @bp.route("/api/v1/feedback/<int:record_id>/status", methods=["POST"])
 @limiter.limit("30 per minute; 300 per hour", exempt_when=_skip_limit_for_tests)
 def set_feedback_status(record_id):
@@ -143,8 +211,8 @@ def set_feedback_status(record_id):
             field_name="status", old_value=str(old), new_value=str(requested),
             user_name="Hermes",
         ))
-        if requested in done:
-            row.completed_at = _utcnow_naive()
+        # audit #26: clear completed_at on reopen, mirroring api.update_record
+        row.completed_at = _utcnow_naive() if requested in done else None
 
     notes = data.get("resolution_notes")
     if notes is not None and str(notes) != (row.resolution_notes or ""):

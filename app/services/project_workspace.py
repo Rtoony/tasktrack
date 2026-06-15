@@ -51,6 +51,8 @@ def linked_rows(sess: Session, model, project_id: int, project_number: str,
     stmt = select(model).where(
         (model.project_id == project_id) | (model.project_number == project_number)
     )
+    if "archived_at" in {c.name for c in model.__table__.columns}:  # #38: hide archived
+        stmt = stmt.where(model.archived_at.is_(None))
     if model is CalendarEvent:
         if user_id is None:
             stmt = stmt.where(model.visibility != "private")

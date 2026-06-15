@@ -124,7 +124,7 @@ def _due_item(table: str, label: str, row, when: datetime, *, field: str,
     tab_url = {
         "work_tasks": "/?tab=work",
         "training_tasks": "/?tab=training",
-        "personal_items": "/?tab=personal_husband",
+        "personal_items": "/?tab=personal",
     }.get(table, "")
     return {
         "kind": "due_task",
@@ -170,6 +170,8 @@ def today_agenda(
     for row in sess.scalars(select(CalendarEvent).order_by(CalendarEvent.start_at.asc())).all():
         if row.status in done_statuses_for_table("calendar_events"):
             continue
+        if row.archived_at is not None:  # #38: archived stays out of the agenda
+            continue
         if not record_visible_to_user("calendar_events", row, user_id):
             continue
         if row.visibility == "private" and not include_private:
@@ -182,17 +184,19 @@ def today_agenda(
         if start <= event_start <= end:
             items.append(_event_item(row, event_start))
 
-    seen_project_ids: set[int] = set()
+    # audit #29: the `continue` after the scheduled append already enforces one
+    # item per project task, so the seen_project_ids guard was vacuously true.
     for row in sess.scalars(select(ProjectWorkTask).order_by(ProjectWorkTask.id.asc())).all():
         if row.status in done_statuses_for_table("project_work_tasks"):
+            continue
+        if row.archived_at is not None:  # #38
             continue
         scheduled = _parse_dt(row.scheduled_completion_at)
         if scheduled is not None and _in_window(scheduled, start=start, end=end, include_overdue=include_overdue):
             items.append(_project_item(row, scheduled, field="scheduled_completion_at", start=start))
-            seen_project_ids.add(row.id)
             continue
         due = _parse_dt(row.due_at)
-        if due is not None and row.id not in seen_project_ids and _in_window(due, start=start, end=end, include_overdue=include_overdue):
+        if due is not None and _in_window(due, start=start, end=end, include_overdue=include_overdue):
             items.append(_project_item(row, due, field="due_at", start=start))
 
     due_sources = (
@@ -204,6 +208,8 @@ def today_agenda(
         done = done_statuses_for_table(table)
         for row in sess.scalars(select(Model).order_by(Model.id.asc())).all():
             if getattr(row, "status", "") in done:
+                continue
+            if getattr(row, "archived_at", None) is not None:  # #38
                 continue
             when = _parse_dt(getattr(row, field, ""))
             if when is None or not _in_window(when, start=start, end=end, include_overdue=include_overdue):

@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import InboxItem, PersonalItem, ProjectWorkTask, TrainingTask, WorkTask
+from .csv_safe import csv_safe
 
 INTAKE_REPORT_TABLES = {
     "work_tasks": {
@@ -45,7 +46,7 @@ INTAKE_REPORT_TABLES = {
         "due": "due_date",
         "project": "",
         "needs_review": "needs_review",
-        "tab": "personal_husband",
+        "tab": "personal",
     },
     "inbox_items": {
         "label": "Triage Inbox",
@@ -60,10 +61,10 @@ INTAKE_REPORT_TABLES = {
 
 DEFAULT_SOURCES = ["web-form", "paper-form", "remarkable-ocr"]
 INTERNAL_CATEGORY_TABS = {
-    "Follow-up": "personal_husband",
-    "Meetings": "personal_father",
-    "Office": "personal_house",
-    "Assets": "personal_cars",
+    "Follow-up": "personal",
+    "Meetings": "personal",
+    "Office": "personal",
+    "Assets": "personal",
 }
 CSV_FIELDS = [
     "table", "label", "id", "title", "source", "status", "priority",
@@ -176,8 +177,10 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         Model = cfg["model"]
         stmt = select(Model).where(Model.source.in_(source_values))
         for row in sess.scalars(stmt).all():
+            if getattr(row, "archived_at", None) is not None:  # #38: archived rows out of intake report
+                continue
             created = _parse_dt(getattr(row, "created_at", None))
-            if created is not None and created < since:
+            if created is None or created < since:  # audit #25: NULL/unparseable also out-of-window
                 continue
             payload = _row_payload(table, cfg, row)
             if needs_review is not None and payload["needs_review"] != bool(needs_review):
@@ -185,7 +188,10 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
             rows.append(payload)
 
     rows.sort(key=lambda item: item.get("created_at") or "", reverse=True)
-    rows = rows[:limit]
+    # audit #4: count over the FULL matched set, then truncate for the payload —
+    # the old code sliced first, so the "N need review" headline undercounted
+    # whenever matches exceeded the (small) limit.
+    matched_count = len(rows)
     by_source = {source: 0 for source in source_values}
     by_table = {table: 0 for table in INTAKE_REPORT_TABLES}
     review_count = 0
@@ -194,6 +200,7 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         by_table[row["table"]] = by_table.get(row["table"], 0) + 1
         if row.get("needs_review"):
             review_count += 1
+    rows = rows[:limit]
 
     return {
         "generated_at": datetime.now().isoformat(timespec="seconds"),
@@ -205,7 +212,9 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
         },
         "summary": {
             "count": len(rows),
-            "needs_review_count": review_count,
+            "matched_count": matched_count,            # audit #4: total before the display limit
+            "truncated": matched_count > len(rows),
+            "needs_review_count": review_count,        # counted over the full matched set
             "by_source": by_source,
             "by_table": by_table,
         },
@@ -218,7 +227,7 @@ def intake_report_csv(packet: dict) -> str:
     writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
     writer.writeheader()
     for row in packet.get("rows", []):
-        writer.writerow({field: row.get(field, "") for field in CSV_FIELDS})
+        writer.writerow({field: csv_safe(row.get(field, "")) for field in CSV_FIELDS})  # audit #14
     return output.getvalue()
 
 

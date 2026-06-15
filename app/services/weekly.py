@@ -113,6 +113,7 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
     rows = [
         row for row in sess.scalars(select(Model)).all()
         if record_visible_to_user(table, row, user_id)
+        and getattr(row, "archived_at", None) is None  # #38: archived out of the weekly report
     ]
     items_created = []
     items_completed = []
@@ -208,7 +209,7 @@ def _recent_incidents(sess: Session, since: datetime, *,
                       include_sensitive: bool = False) -> list[dict]:
     """personnel_issues rows whose created_at > since, narrative-gated."""
     from ..models import PersonnelIssue
-    rows = sess.scalars(select(PersonnelIssue)).all()
+    rows = sess.scalars(select(PersonnelIssue).where(PersonnelIssue.archived_at.is_(None))).all()  # #38
     out = []
     for r in rows:
         if not _row_created_since(r, since):

@@ -25,6 +25,7 @@ from ..models import (
     to_dict,
 )
 from ..services.audit import log_activity
+from ..services.csv_safe import csv_safe
 from ..services.intake_reports import intake_source_report
 from ..services.tickets import (
     TABLE_MODELS,
@@ -148,6 +149,14 @@ def _dashboard_activity_dict(sess, row: ActivityLog) -> dict:
     return payload
 
 
+def _exclude_archived(stmt, Model):
+    """feedback #38: hide soft-archived rows from active/default surfaces. Models
+    without an archived_at column (inbox/feedback) are returned unchanged."""
+    if "archived_at" in {c.name for c in Model.__table__.columns}:
+        return stmt.where(Model.archived_at.is_(None))
+    return stmt
+
+
 @bp.route("/api/v1/dashboard")
 @login_required
 def dashboard_stats():
@@ -156,7 +165,7 @@ def dashboard_stats():
     for table, cfg in ALLOWED_TABLES.items():
         Model = TABLE_MODELS[table]
         model_rows = [
-            r for r in sess.scalars(select(Model)).all()
+            r for r in sess.scalars(_exclude_archived(select(Model), Model)).all()  # #38: skip archived
             if _record_visible_to_current_user(table, r)
         ]
         all_rows = [_record_to_current_user_dict(table, r) for r in model_rows]
@@ -237,33 +246,35 @@ def dashboard_stats():
 # projections + UNION-shape don't translate cleanly to ORM and the
 # JS frontend reads the aliased keys (source/label/detail/...).
 
+# #38: `archived_at IS NULL AND (...)` — the OR-group MUST be parenthesised or OR
+# precedence would let archived rows through on all but the last predicate.
 _SEARCH_SQLS = (
     text(
         "SELECT id, 'work_tasks' as source, title as label, description as detail, "
         "priority, status, due_date FROM work_tasks "
-        "WHERE title LIKE :p ESCAPE '\\' OR cad_skill_area LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (title LIKE :p ESCAPE '\\' OR cad_skill_area LIKE :p ESCAPE '\\' "
         "OR description LIKE :p ESCAPE '\\' OR requested_by LIKE :p ESCAPE '\\' "
-        "OR request_reference LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
+        "OR request_reference LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
     text(
         "SELECT id, 'project_work_tasks' as source, title as label, "
         "task_description as detail, priority, status, due_at as due_date "
         "FROM project_work_tasks "
-        "WHERE project_name LIKE :p ESCAPE '\\' OR title LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (project_name LIKE :p ESCAPE '\\' OR title LIKE :p ESCAPE '\\' "
         "OR project_number LIKE :p ESCAPE '\\' OR engineer LIKE :p ESCAPE '\\' "
         "OR task_description LIKE :p ESCAPE '\\' OR notes LIKE :p ESCAPE '\\' "
         "OR scope_notes LIKE :p ESCAPE '\\' OR progress_notes LIKE :p ESCAPE '\\' "
-        "OR confirmation_notes LIKE :p ESCAPE '\\' OR completion_notes LIKE :p ESCAPE '\\' "
+        "OR confirmation_notes LIKE :p ESCAPE '\\' OR completion_notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
     text(
         "SELECT id, 'training_tasks' as source, title as label, "
         "training_goals as detail, priority, status, due_date FROM training_tasks "
-        "WHERE title LIKE :p ESCAPE '\\' OR trainees LIKE :p ESCAPE '\\' "
+        "WHERE archived_at IS NULL AND (title LIKE :p ESCAPE '\\' OR trainees LIKE :p ESCAPE '\\' "
         "OR requested_by LIKE :p ESCAPE '\\' OR skill_area LIKE :p ESCAPE '\\' "
         "OR training_goals LIKE :p ESCAPE '\\' OR additional_context LIKE :p ESCAPE '\\' "
-        "OR notes LIKE :p ESCAPE '\\' "
+        "OR notes LIKE :p ESCAPE '\\') "
         "LIMIT 20"
     ),
 )
@@ -288,7 +299,7 @@ def _search_personnel_issues(sess, pattern: str) -> list[dict]:
             PersonnelIssue.recommended_training.ilike(pattern, escape="\\"),
             PersonnelIssue.resolution_notes.ilike(pattern, escape="\\"),
         )
-    ).order_by(PersonnelIssue.id.desc()).limit(20)
+    ).where(PersonnelIssue.archived_at.is_(None)).order_by(PersonnelIssue.id.desc()).limit(20)  # #38
     return [
         {
             "id": row.id,
@@ -314,7 +325,7 @@ def _search_calendar_events(sess, pattern: str) -> list[dict]:
             CalendarEvent.project_number.ilike(pattern, escape="\\"),
             CalendarEvent.location.ilike(pattern, escape="\\"),
         )
-    )
+    ).where(CalendarEvent.archived_at.is_(None))  # #38
     if user_id is None:
         stmt = stmt.where(CalendarEvent.visibility != "private")
     else:
@@ -353,7 +364,7 @@ def _search_personal_items(sess, pattern: str) -> list[dict]:
             PersonalItem.body.ilike(pattern, escape="\\"),
             PersonalItem.source_ref.ilike(pattern, escape="\\"),
         )
-    ).order_by(PersonalItem.id.desc()).limit(20)
+    ).where(PersonalItem.archived_at.is_(None)).order_by(PersonalItem.id.desc()).limit(20)  # #38
     return [
         {
             "id": row.id,
@@ -463,6 +474,11 @@ def add_comment(table, record_id):
     body = (data.get("body") or "").strip()
     if not body:
         return jsonify({"error": "Comment body is required"}), 400
+    # feedback #42: an operator can address a comment to the AI developer.
+    # Clamp to the known set so an arbitrary value can't leak into the thread.
+    audience = (data.get("audience") or "").strip().lower()
+    if audience not in ("", "ai-dev"):
+        audience = ""
     user = session.get("user_name", "Unknown")
     sess = get_session()
     if not _target_detail_visible(sess, table, record_id):
@@ -472,10 +488,12 @@ def add_comment(table, record_id):
         record_id=record_id,
         user_name=user,
         body=body,
+        audience=audience,
     )
     sess.add(comment)
     sess.flush()
-    log_activity(sess, table, record_id, "comment", new=body[:80])
+    log_activity(sess, table, record_id, "comment",
+                 new=("[AI Dev] " if audience == "ai-dev" else "") + body[:80])
     sess.commit()
     sess.refresh(comment)
     return jsonify(to_dict(comment)), 201
@@ -538,7 +556,7 @@ def export_csv(table):
     sess = get_session()
     Model = TABLE_MODELS[table]
     rows = [
-        r for r in sess.scalars(select(Model).order_by(Model.id)).all()
+        r for r in sess.scalars(_exclude_archived(select(Model).order_by(Model.id), Model)).all()  # #38: archived excluded
         if _record_detail_visible_to_current_user(table, r)
     ]
     if not rows:
@@ -548,8 +566,11 @@ def export_csv(table):
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=cols)
     writer.writeheader()
+    # reaudit #2: the generic exporter was the lone holdout the audit #14
+    # csv_safe remediation missed — neutralise spreadsheet formula injection
+    # (CWE-1236) in every free-text cell, matching the report-specific exporters.
     for r in rows:
-        writer.writerow(to_dict(r))
+        writer.writerow({k: csv_safe(v) for k, v in to_dict(r).items()})
 
     return Response(
         output.getvalue(),
@@ -588,14 +609,28 @@ def list_records(table):
     # severity is Critical>High>Med>Low; blanks/unknowns sort last on asc.
     # Tie-break on id so the order is stable within a rank.
     if sort in ("priority", "severity"):
-        rank = case(
-            *[(sort_col == value, idx) for idx, value in enumerate(_PRIORITY_SORT_ORDER)],
-            else_=len(_PRIORITY_SORT_ORDER),
-        )
-        rank = desc(rank) if order == "desc" else rank
+        # Audit #2: don't desc() the whole CASE — that floats the blank/unknown
+        # sentinel to the TOP on descending. Flip only the ranked values so
+        # blanks stay pinned LAST in both directions (asc = most-urgent first,
+        # desc = least-urgent first, blanks always last).
+        n = len(_PRIORITY_SORT_ORDER)
+        pairs = [(sort_col == value, (n - 1 - idx) if order == "desc" else idx)
+                 for idx, value in enumerate(_PRIORITY_SORT_ORDER)]
+        rank = case(*pairs, else_=n)
         stmt = select(Model).order_by(rank, Model.id)
     else:
         stmt = select(Model).order_by(desc(sort_col) if order == "desc" else sort_col)
+    # feedback #38: archived rows are hidden from the default view (retained in the
+    # DB for long-term analysis); ?archived=1 lists ONLY archived rows for review.
+    cols = {c.name for c in Model.__table__.columns}
+    if "archived_at" in cols:
+        if request.args.get("archived") == "1":
+            stmt = stmt.where(Model.archived_at.is_not(None))
+        else:
+            stmt = stmt.where(Model.archived_at.is_(None))
+    # feedback #44: ?follow_up=1 narrows to flagged ("starred") tasks only.
+    if request.args.get("follow_up") == "1" and "follow_up" in cols:
+        stmt = stmt.where(Model.follow_up == 1)
     rows = [r for r in sess.scalars(stmt).all() if _record_detail_visible_to_current_user(table, r)]
     return jsonify([to_dict(r) for r in rows])
 
@@ -718,5 +753,75 @@ def delete_record(table, record_id):
     log_activity(sess, table, record_id, "deleted", new=label)
     sess.commit()
     return jsonify({"deleted": record_id})
+
+
+def _archivable_model(table):
+    """Return (Model, error_response). Model has an archived_at column, else 400."""
+    if table not in ALLOWED_TABLES:
+        return None, (jsonify({"error": "Invalid table"}), 400)
+    Model = TABLE_MODELS[table]
+    if "archived_at" not in {c.name for c in Model.__table__.columns}:
+        return None, (jsonify({"error": f"{table} is not archivable"}), 400)
+    return Model, None
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/archive", methods=["POST"])
+@login_required
+def archive_record(table, record_id):
+    """feedback #38: soft-archive a record (retained in the DB; hidden by default)."""
+    Model, err = _archivable_model(table)
+    if err:
+        return err
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    if row.archived_at is None:
+        row.archived_at = datetime.utcnow()
+        log_activity(sess, table, record_id, "archived",
+                     new=getattr(row, "title", None) or getattr(row, "person_name", "") or "")
+        sess.commit()
+        sess.refresh(row)
+    return jsonify(to_dict(row))
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/unarchive", methods=["POST"])
+@login_required
+def unarchive_record(table, record_id):
+    """feedback #38: restore an archived record to the active view."""
+    Model, err = _archivable_model(table)
+    if err:
+        return err
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    if row.archived_at is not None:
+        row.archived_at = None
+        log_activity(sess, table, record_id, "unarchived",
+                     new=getattr(row, "title", None) or getattr(row, "person_name", "") or "")
+        sess.commit()
+        sess.refresh(row)
+    return jsonify(to_dict(row))
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/follow-up", methods=["POST"])
+@login_required
+def toggle_follow_up(table, record_id):
+    """feedback #44: flip a task's follow-up flag (a star)."""
+    if table not in ALLOWED_TABLES:
+        return jsonify({"error": "Invalid table"}), 400
+    Model = TABLE_MODELS[table]
+    if "follow_up" not in {c.name for c in Model.__table__.columns}:
+        return jsonify({"error": f"{table} does not support follow-up"}), 400
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    row.follow_up = 0 if row.follow_up else 1
+    log_activity(sess, table, record_id, "follow_up", new=str(row.follow_up))
+    sess.commit()
+    sess.refresh(row)
+    return jsonify(to_dict(row))
 
 

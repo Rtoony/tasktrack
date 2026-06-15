@@ -127,7 +127,7 @@
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const TABLE_TAB = { work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage' };
 const CONFIRM_TABLES = new Set(['work_tasks', 'project_work_tasks', 'training_tasks', 'personal_items']);
-const CATEGORY_TAB = { 'Follow-up':'personal_husband', 'Meetings':'personal_father', 'Office':'personal_house', 'Assets':'personal_cars' };
+const CATEGORY_TAB = { 'Follow-up':'personal', 'Meetings':'personal', 'Office':'personal', 'Assets':'personal' };
 
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 function queueParams() {
@@ -151,7 +151,7 @@ function hydrateFiltersFromUrl() {
 }
 function rowRecordUrl(row) {
   if (row.record_url) return row.record_url;
-  if (row.table === 'personal_items') return '/?tab=' + (CATEGORY_TAB[row.category] || 'personal_husband') + '&record=' + row.id;
+  if (row.table === 'personal_items') return '/?tab=' + (CATEGORY_TAB[row.category] || 'personal') + '&record=' + row.id;
   return '/?tab=' + (TABLE_TAB[row.table] || 'triage') + '&record=' + row.id;
 }
 function setStatus(text, cls='') {

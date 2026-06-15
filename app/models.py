@@ -142,6 +142,10 @@ class WorkTask(Base):
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
     # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
     project_id: Mapped[int | None] = mapped_column(Integer)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class ProjectWorkTask(Base):
@@ -175,6 +179,10 @@ class ProjectWorkTask(Base):
     # Phase-0 FK spine: nullable, additive. Text columns stay authoritative.
     project_id: Mapped[int | None] = mapped_column(Integer)
     engineer_id: Mapped[int | None] = mapped_column(Integer)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class TrainingTask(Base):
@@ -204,6 +212,10 @@ class TrainingTask(Base):
     # (kept as TEXT so the generic CRUD/AI paths don't choke on a list type).
     project_id: Mapped[int | None] = mapped_column(Integer)
     trainee_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class PersonnelIssue(Base):
@@ -243,6 +255,10 @@ class PersonnelIssue(Base):
     # `person_id` (above) becomes the convenience "primary person" and
     # is auto-populated from person_ids[0] if set.
     person_ids: Mapped[str] = mapped_column(Text, server_default=text("'[]'"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
 
 class PersonalItem(Base):
@@ -270,6 +286,10 @@ class PersonalItem(Base):
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
     __table_args__ = (
         Index("idx_personal_items_category", "category"),
@@ -385,6 +405,10 @@ class CalendarEvent(Base):
     created_by_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    # feedback #38: NULL = active; a timestamp = archived (soft-delete, retained).
+    archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
+    follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
 
     __table_args__ = (
         Index("idx_calendar_events_start_at", "start_at"),
@@ -418,6 +442,9 @@ class Comment(Base):
     record_id: Mapped[int] = mapped_column(Integer, nullable=False)
     user_name: Mapped[str] = mapped_column(Text, nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
+    # feedback #42: '' = normal human comment (default); 'ai-dev' = instruction
+    # addressed to the headless co-developer (surfaced via /api/v1/ai-instructions).
+    audience: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("''"))
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
 
 

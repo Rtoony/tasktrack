@@ -10,6 +10,8 @@
 <link rel="apple-touch-icon" href="/pwa-icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/MarkerCluster.css">
+<link rel="stylesheet" href="/static/vendor/leaflet/MarkerCluster.Default.css">
 <style>
   /* Carbon/IBM Plex palette. The first GUI redesign pass moves TaskTrack
      from the older dark-only look to a flat, dense Carbon Gray-10 shell
@@ -40,10 +42,7 @@
   body:has(.tab-btn.active[data-tab="training"])         { --accent:#198038; --accent-hover:#0e6027; --accent-light:#defbe6; }
   body:has(.tab-btn.active[data-tab="personnel"])        { --accent:#da1e28; --accent-hover:#a2191f; --accent-light:#fff1f1; }
   body:has(.tab-btn.active[data-tab="calendar"])         { --accent:#007d79; --accent-hover:#005d5d; --accent-light:#d9fbfb; }
-  body:has(.tab-btn.active[data-tab="personal_husband"]) { --accent:#9f1853; --accent-hover:#740937; --accent-light:#fff0f7; }
-  body:has(.tab-btn.active[data-tab="personal_father"])  { --accent:#8a3ffc; --accent-hover:#6929c4; --accent-light:#f6f2ff; }
-  body:has(.tab-btn.active[data-tab="personal_house"])   { --accent:#ba4e00; --accent-hover:#8a3800; --accent-light:#fff2e8; }
-  body:has(.tab-btn.active[data-tab="personal_cars"])    { --accent:#525252; --accent-hover:#393939; --accent-light:#e0e0e0; }
+  body:has(.tab-btn.active[data-tab="personal"])         { --accent:#9f1853; --accent-hover:#740937; --accent-light:#fff0f7; }
   /* Section heading colored bar — sits left of every section title to
      anchor the per-tab color in the content area. */
   .section-heading { position:relative; padding-left:0.85rem; }
@@ -274,6 +273,8 @@
 
   /* ── Filter bar ──────────────────────────── */
   .filter-bar { display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; flex-wrap:wrap; }
+  /* #38: per-tracker "Show archived" toggle. */
+  .archived-toggle { display:flex; align-items:center; gap:0.25rem; font-size:0.72rem; color:var(--text-muted); white-space:nowrap; cursor:pointer; user-select:none; }
   .section-title { font-size:1.05rem; font-weight:600; letter-spacing:-0.01em; margin-right:auto; }
   .section-heading { margin-right:auto; min-width:220px; }
   .section-subtitle { font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem; }
@@ -696,7 +697,11 @@
   .comment-meta { font-size:0.68rem; color:var(--text-light); margin-bottom:2px; }
   .comment-meta strong { color:var(--text-muted); }
   .comment-body { color:var(--text); }
-  .comment-add { display:flex; gap:0.4rem; margin-top:0.5rem; }
+  /* #42: AI-directed comments stand out in the thread. */
+  .comment-ai-dev { border-left:2px solid var(--accent); padding-left:0.5rem; }
+  .comment-ai-chip { display:inline-block; font-size:0.6rem; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:#fff; background:var(--accent); border-radius:999px; padding:0 0.4rem; vertical-align:middle; }
+  .comment-ai-toggle { display:flex; align-items:center; gap:0.25rem; font-size:0.7rem; color:var(--text-muted); white-space:nowrap; cursor:pointer; user-select:none; }
+  .comment-add { display:flex; gap:0.4rem; margin-top:0.5rem; align-items:center; }
   .comment-add input { flex:1; padding:0.4rem 0.6rem; font-family:inherit; font-size:0.8rem; border:1px solid var(--border); border-radius:var(--radius); }
   .comment-add input:focus { outline:none; border-color:var(--accent); }
   .comment-add button { padding:0.4rem 0.7rem; font-family:inherit; font-size:0.75rem; font-weight:500; background:var(--accent); color:#fff; border:none; border-radius:var(--radius); cursor:pointer; }
@@ -907,10 +912,7 @@
       <button class="tab-btn" data-tab="competency" data-shell-title="Competency">Competency</button>
       {% endif %}
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Flow</span></span>
-      <button class="tab-btn" data-tab="personal_husband" data-shell-title="Follow-up">Follow-up <span class="tab-count" id="count-personal_husband">0</span></button>
-      <button class="tab-btn" data-tab="personal_father" data-shell-title="Meetings">Meetings <span class="tab-count" id="count-personal_father">0</span></button>
-      <button class="tab-btn" data-tab="personal_house" data-shell-title="Office">Office <span class="tab-count" id="count-personal_house">0</span></button>
-      <button class="tab-btn" data-tab="personal_cars" data-shell-title="Assets">Assets <span class="tab-count" id="count-personal_cars">0</span></button>
+      <button class="tab-btn" data-tab="personal" data-shell-title="Personal">Personal <span class="tab-count" id="count-personal">0</span></button>
       <span class="tab-divider" aria-hidden="true"><span class="tab-divider-label">Output</span></span>
       <a class="side-link" href="/intake" target="_blank" rel="noopener">Submission Forms</a>
       <a class="side-link" href="/feedback">Feedback</a>
@@ -951,7 +953,7 @@
           <div class="mobile-quick-title">Quick capture</div>
           <div class="mobile-quick-copy">Cheap inbox drop first. Add project context or a photo if useful; full triage can happen later.</div>
         </div>
-        <textarea id="mobile-quick-text" class="mobile-quick-textarea" placeholder="What needs to be remembered or triaged?"></textarea>
+        <textarea id="mobile-quick-text" spellcheck="true" class="mobile-quick-textarea" placeholder="What needs to be remembered or triaged?"></textarea>
         <div class="mobile-quick-row">
           <input id="mobile-quick-project" class="mobile-quick-input" type="text" inputmode="text" placeholder="Project # optional">
           <select id="mobile-quick-priority" class="mobile-quick-select" aria-label="Priority">
@@ -961,7 +963,7 @@
             <option value="None">None</option>
           </select>
         </div>
-        <input id="mobile-quick-file" class="mobile-quick-file" type="file" accept="image/*,.pdf,.dwg,.dxf,.xlsx,.csv,.txt" aria-label="Optional attachment">
+        <input id="mobile-quick-file" class="mobile-quick-file" type="file" accept="image/png,image/jpeg,.pdf,.dwg,.dxf,.xlsx,.docx" aria-label="Optional attachment">
         <div class="mobile-quick-row">
           <button class="mobile-quick-primary" id="mobile-quick-submit" type="button">Save to inbox</button>
           <button class="mobile-quick-secondary" id="mobile-quick-clear" type="button">Clear</button>
@@ -1086,7 +1088,7 @@
                 <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('cad_issue')">CAD Issue</button>
                 <button class="capture-preset-btn" type="button" onclick="applyCapturePreset('training')">Training Need</button>
               </div>
-              <textarea id="intake-input" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
+              <textarea id="intake-input" spellcheck="true" class="intake-textarea capture-textarea" placeholder="e.g. 'Mike from survey needs the grading plan on 2301.04 re-cut to match the new storm tie-in. Sheets C-301 through C-305. He wants a redline markup by Thursday&hellip;'"></textarea>
               <div class="intake-hint" id="intake-hint">Local model tried first, cloud fallback if the local parse fails.</div>
 
               <div class="preset-panel" id="intake-preset-panel">
@@ -1202,13 +1204,13 @@
               <div class="starter-block" id="intake-starter-wrap" style="display:none">
                 <div class="starter-label">Start here &rarr;</div>
                 <div class="field" style="margin-bottom:0">
-                  <textarea id="intake-field-starter" rows="2" style="background:var(--surface)"></textarea>
+                  <textarea id="intake-field-starter" spellcheck="true" rows="2" style="background:var(--surface)"></textarea>
                 </div>
               </div>
               <div class="clarify-block" id="intake-clarify-wrap" style="display:none">
                 <div class="clarify-label">Questions to resolve</div>
                 <div class="field" style="margin-bottom:0">
-                  <textarea id="intake-field-clarify" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
+                  <textarea id="intake-field-clarify" spellcheck="true" rows="3" style="background:var(--surface)" placeholder="One question per line"></textarea>
                 </div>
               </div>
               <div class="field">
@@ -1266,7 +1268,7 @@
       <section class="core-panel">
         <div class="core-panel-head">
           <div class="core-panel-title"><span class="core-tag teal">Flow</span><span>Recent activity</span></div>
-          <span class="core-panel-hint">Latest changes across TaskTrack</span>
+          <label class="core-panel-hint" style="cursor:pointer;display:flex;align-items:center;gap:0.3rem" title="Hide rows by Hermes/Claude/automation"><input type="checkbox" id="activity-hide-system" onchange="renderCoreRecentActivity()" style="margin:0">Hide system actors</label>
         </div>
         <div class="core-activity-grid" id="core-recent-activity"><div class="core-empty">No activity yet.</div></div>
       </section>
@@ -1479,6 +1481,7 @@
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
         <option value="technical" selected>Engineering + Drafting</option>
         <option value="engineer">Engineers</option>
+        <option value="engineer in training">Engineers-in-Training</option>
         <option value="drafter">Drafters</option>
       </select>
       <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
@@ -1515,6 +1518,8 @@
         <h2 class="section-title">CAD Dev</h2>
         <div class="section-subtitle">Track requested CAD changes, the discipline involved, and the follow-up context behind the work.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-work-archived" onchange="loadTable('work')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-work-followup" onchange="loadTable('work')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-work-status" onchange="loadTable('work')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1559,6 +1564,8 @@
         <h2 class="section-title">Project Tasks</h2>
         <div class="section-subtitle">Manage project-linked execution work with project numbers, billing phase, engineer ownership, and due timing.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-project-archived" onchange="loadTable('project')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-project-followup" onchange="loadTable('project')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-project-status" onchange="loadTable('project')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1615,6 +1622,8 @@
         <h2 class="section-title">Training</h2>
         <div class="section-subtitle">Plan and track targeted training work by staff member, skill area, goals, and follow-up context.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-training-archived" onchange="loadTable('training')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-training-followup" onchange="loadTable('training')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-training-status" onchange="loadTable('training')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1655,6 +1664,8 @@
         <h2 class="section-title">Capabilities</h2>
         <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personnel-archived" onchange="loadTable('personnel')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-personnel-followup" onchange="loadTable('personnel')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-personnel-status" onchange="loadTable('personnel')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
@@ -1692,6 +1703,8 @@
         <h2 class="section-title">Calendar</h2>
         <div class="section-subtitle">Internal meetings, milestones, report deadlines, prep blocks, and project-linked reminders.</div>
       </div>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-calendar-archived" onchange="loadTable('calendar')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) items"><input type="checkbox" id="filter-calendar-followup" onchange="loadTable('calendar')"> ★ Follow-ups</label>
       <select class="filter-select" id="filter-calendar-status" onchange="loadTable('calendar')">
         <option value="">All Statuses</option>
         <option value="scheduled">Scheduled</option><option value="tentative">Tentative</option>
@@ -1746,157 +1759,57 @@
   </section>
 
   <!-- ── INTERNAL — Follow-up ───────────────── -->
-  <section id="sec-personal_husband" class="section">
+  <section id="sec-personal" class="section">
     <div class="filter-bar">
       <div class="section-heading">
-        <h2 class="section-title">Follow-up</h2>
-        <div class="section-subtitle">Internal follow-up items that do not belong in a project, CAD, training, or capability queue yet.</div>
+        <h2 class="section-title">Personal</h2>
+        <div class="section-subtitle">Internal follow-ups, meetings, office, and asset items that don't belong in a project, CAD, training, or capability queue yet.</div>
       </div>
-      <select class="filter-select" id="filter-personal_husband-status" onchange="loadTable('personal_husband')">
+      <select class="filter-select" id="filter-personal-category" onchange="loadTable('personal')">
+        <option value="" selected>All Categories</option>
+        <option value="Follow-up">Follow-up</option><option value="Meetings">Meetings</option>
+        <option value="Office">Office</option><option value="Assets">Assets</option>
+      </select>
+      <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personal-archived" onchange="loadTable('personal')"> Archived</label>
+      <label class="archived-toggle" title="Show only follow-up (starred) items"><input type="checkbox" id="filter-personal-followup" onchange="loadTable('personal')"> ★ Follow-ups</label>
+      <select class="filter-select" id="filter-personal-status" onchange="loadTable('personal')">
         <option value="__active" selected>Active</option>
         <option value="">All Statuses</option>
         <option value="New">New</option><option value="In Progress">In Progress</option>
         <option value="Done">Done</option><option value="Archived">Archived</option>
       </select>
-      <select class="filter-select" id="filter-personal_husband-priority" onchange="loadTable('personal_husband')">
+      <select class="filter-select" id="filter-personal-priority" onchange="loadTable('personal')">
         <option value="">All Priorities</option>
         <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
       </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_husband-overdue" onchange="loadTable('personal_husband')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_husband')">+ Add Follow-up Item</button>
+      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal-overdue" onchange="loadTable('personal')" style="margin-right:3px">Overdue only</label>
+      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv">CSV</a>
+      <button class="btn btn-primary" onclick="openModal('personal', {category: document.getElementById('filter-personal-category')?.value || ''})">+ Add Personal Item</button>
     </div>
     <div class="table-wrap">
       <table><thead><tr>
-        <th data-col="title" data-table="personal_husband">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_husband">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_husband">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_husband">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_husband">Captured <span class="sort-arrow">&#9660;</span></th>
+        <th data-col="title" data-table="personal">Title <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="category" data-table="personal">Category <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="priority" data-table="personal">Priority <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="status" data-table="personal">Status <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="due_date" data-table="personal">Due <span class="sort-arrow">&#9650;</span></th>
+        <th class="sorted" data-col="created_at" data-table="personal">Captured <span class="sort-arrow">&#9660;</span></th>
         <th></th>
-      </tr></thead><tbody id="tbody-personal_husband"></tbody></table>
-      <div class="empty-state" id="empty-personal_husband" style="display:none">
-        <div class="empty-title">Nothing in Follow-up yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Follow-up Item</strong> to capture something that belongs in this category.</p>
+      </tr></thead><tbody id="tbody-personal"></tbody></table>
+      <div class="empty-state" id="empty-personal" style="display:none">
+        <div class="empty-title">Nothing here yet</div>
+        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Personal Item</strong> to capture an internal follow-up, meeting, office, or asset note.</p>
       </div>
     </div>
   </section>
 
   <!-- ── INTERNAL — Meetings ────────────────── -->
-  <section id="sec-personal_father" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Meetings</h2>
-        <div class="section-subtitle">Meeting prep, management follow-ups, and time-bound coordination notes.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_father-status" onchange="loadTable('personal_father')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_father-priority" onchange="loadTable('personal_father')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_father-overdue" onchange="loadTable('personal_father')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_father')">+ Add Meeting Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_father">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_father">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_father">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_father">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_father">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_father"></tbody></table>
-      <div class="empty-state" id="empty-personal_father" style="display:none">
-        <div class="empty-title">Nothing in Meetings yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Meeting Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── INTERNAL — Office ──────────────────── -->
-  <section id="sec-personal_house" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Office</h2>
-        <div class="section-subtitle">Office operations, workspace upkeep, and non-project administrative work.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_house-status" onchange="loadTable('personal_house')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_house-priority" onchange="loadTable('personal_house')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_house-overdue" onchange="loadTable('personal_house')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_house')">+ Add Office Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_house">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_house">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_house">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_house">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_house">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_house"></tbody></table>
-      <div class="empty-state" id="empty-personal_house" style="display:none">
-        <div class="empty-title">Nothing in Office yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Office Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── INTERNAL — Assets ──────────────────── -->
-  <section id="sec-personal_cars" class="section">
-    <div class="filter-bar">
-      <div class="section-heading">
-        <h2 class="section-title">Assets</h2>
-        <div class="section-subtitle">Assets, equipment, tools, and other operational upkeep items.</div>
-      </div>
-      <select class="filter-select" id="filter-personal_cars-status" onchange="loadTable('personal_cars')">
-        <option value="__active" selected>Active</option>
-        <option value="">All Statuses</option>
-        <option value="New">New</option><option value="In Progress">In Progress</option>
-        <option value="Done">Done</option><option value="Archived">Archived</option>
-      </select>
-      <select class="filter-select" id="filter-personal_cars-priority" onchange="loadTable('personal_cars')">
-        <option value="">All Priorities</option>
-        <option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option><option value="None">None</option>
-      </select>
-      <label style="font-size:0.75rem;color:var(--text-muted);cursor:pointer"><input type="checkbox" id="filter-personal_cars-overdue" onchange="loadTable('personal_cars')" style="margin-right:3px">Overdue only</label>
-      <a class="btn btn-sm btn-export" href="/api/v1/personal_items/export.csv" title="Exports all internal queues">All Internal CSV</a>
-      <button class="btn btn-primary" onclick="openModal('personal_cars')">+ Add Asset Item</button>
-    </div>
-    <div class="table-wrap">
-      <table><thead><tr>
-        <th data-col="title" data-table="personal_cars">Title <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="priority" data-table="personal_cars">Priority <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="status" data-table="personal_cars">Status <span class="sort-arrow">&#9650;</span></th>
-        <th data-col="due_date" data-table="personal_cars">Due <span class="sort-arrow">&#9650;</span></th>
-        <th class="sorted" data-col="created_at" data-table="personal_cars">Captured <span class="sort-arrow">&#9660;</span></th>
-        <th></th>
-      </tr></thead><tbody id="tbody-personal_cars"></tbody></table>
-      <div class="empty-state" id="empty-personal_cars" style="display:none">
-        <div class="empty-title">Nothing in Assets yet</div>
-        <p class="empty-copy">Promote a Triage item or click <strong>+ Add Asset Item</strong> to capture something that belongs in this category.</p>
-      </div>
-    </div>
-  </section>
+  <!-- personal_father/house/cars sections consolidated into #sec-personal (#14) -->
   </main>
 </div>
 
 <!-- ── Feedback Modal ─────────────────────────── -->
-<button class="feedback-fab" type="button" onclick="openFeedbackModal()">Feedback</button>
+<button class="feedback-fab" type="button" onclick="openFeedbackSmart()">Feedback</button>
 <div class="modal-overlay" id="feedback-overlay">
   <div class="modal feedback-modal">
     <div class="modal-header">
@@ -1909,7 +1822,7 @@
     <div class="modal-body">
       <p class="feedback-intro">Use this while testing: describe the problem or desired tweak, optionally attach a screenshot, and TaskTrack will keep the current page, tab, viewport, and browser context with the record.</p>
       <div class="field"><label>Title</label><input id="feedback-title" type="text" placeholder="Short label for the issue or tweak"></div>
-      <div class="field"><label>Details</label><textarea id="feedback-body" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
+      <div class="field"><label>Details</label><textarea id="feedback-body" spellcheck="true" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
       <div class="feedback-grid">
         <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
         <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option><option>None</option></select></div>
@@ -1920,6 +1833,7 @@
           <input id="feedback-file" type="file" multiple accept="image/png,image/jpeg,image/jpg,application/pdf" style="display:none">
           <div class="feedback-dropzone-copy">Drag &amp; drop screenshots here, paste from clipboard, or <span class="feedback-dropzone-browse">browse files</span></div>
         </div>
+        <button class="btn btn-sm btn-export" type="button" id="feedback-screenshot-btn" onclick="captureFeedbackScreenshot()" style="margin-top:0.4rem;" title="Snapshot the current view and attach it to this feedback">📷 Capture screenshot</button>
         <ul class="feedback-file-list" id="feedback-file-list"></ul>
         <div class="fk-hint" id="feedback-file-hint" style="font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;">PNG, JPG, or PDF.</div>
       </div>
@@ -1950,6 +1864,7 @@
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
       <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger-ghost" type="button" id="drawer-delete-btn" style="display:none;" onclick="drawerDeleteCurrent()" title="Permanently delete this record (archive instead to keep it)">Delete</button>
       <span id="promote-wrap" style="display:none; margin-right:auto;">
         <select id="promote-select" class="filter-select" style="margin-right:0.4rem;">
           <option value="">Promote / Escalate →</option>
@@ -2027,6 +1942,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="/static/vendor/leaflet/leaflet.js"></script>
+<script src="/static/vendor/leaflet/leaflet.markercluster.js"></script>
 <script>
 /* Leaflet expects its marker images at L.Icon.Default.imagePath. We vendor
    them under /static/vendor/leaflet/images so the default Marker icon works
@@ -2045,22 +1961,15 @@ const API_MAP = {
   personnel:'personnel_issues',
   triage:'inbox_items',
   calendar:'calendar_events',
-  personal_husband:'personal_items',
-  personal_father:'personal_items',
-  personal_house:'personal_items',
-  personal_cars:'personal_items',
+  personal:'personal_items',
 };
 
 // Tab keys for the four internal queue views. They still use the legacy
 // personal_items table until a later migration renames the storage layer.
 // The category JSON below preserves existing rows while the UI uses neutral labels.
-const INTERNAL_QUEUE_TABS = ['personal_husband','personal_father','personal_house','personal_cars'];
-const INTERNAL_QUEUE_CATEGORIES = {
-  personal_husband:'Follow-up',
-  personal_father:'Meetings',
-  personal_house:'Office',
-  personal_cars:'Assets',
-};
+const INTERNAL_QUEUE_TABS = ['personal'];
+// audit #27: PERSONAL_CATEGORIES + INTERNAL_QUEUE_CATEGORIES were dead after the
+// #14 consolidation (category now comes from the form/filter) — removed.
 
 /* ── Markdown (tiny renderer; DOM-only, no innerHTML) ────────────────── */
 function appendInlineMd(parent, str) {
@@ -2175,14 +2084,14 @@ const CORE_TRACKERS = [
   { table:'work_tasks', label:'CAD Dev', tab:'work', key:'work' },
   { table:'training_tasks', label:'Training', tab:'training', key:'training' },
   { table:'personnel_issues', label:'Capabilities', tab:'personnel', key:'personnel' },
-  { table:'personal_items', label:'Follow-up', tab:'personal_husband', key:'personal', category:'Follow-up' },
-  { table:'personal_items', label:'Meetings', tab:'personal_father', key:'meetings', category:'Meetings' },
-  { table:'personal_items', label:'Office', tab:'personal_house', key:'office', category:'Office' },
-  { table:'personal_items', label:'Assets', tab:'personal_cars', key:'assets', category:'Assets' },
+  { table:'personal_items', label:'Follow-up', tab:'personal', key:'personal', category:'Follow-up' },
+  { table:'personal_items', label:'Meetings', tab:'personal', key:'meetings', category:'Meetings' },
+  { table:'personal_items', label:'Office', tab:'personal', key:'office', category:'Office' },
+  { table:'personal_items', label:'Assets', tab:'personal', key:'assets', category:'Assets' },
 ];
 const CORE_TABLE_TO_TAB = {
   work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
-  personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal_husband',
+  personnel_issues:'personnel', inbox_items:'triage', personal_items:'personal',
   calendar_events:'calendar',
 };
 const TRACKER_STATUS_FLOW = {
@@ -2192,10 +2101,7 @@ const TRACKER_STATUS_FLOW = {
   personnel:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed'],
   triage:['New','In Progress','Done','Archived'],
   calendar:['scheduled','tentative','done','cancelled'],
-  personal_husband:['New','In Progress','Done','Archived'],
-  personal_father:['New','In Progress','Done','Archived'],
-  personal_house:['New','In Progress','Done','Archived'],
-  personal_cars:['New','In Progress','Done','Archived'],
+  personal:['New','In Progress','Done','Archived'],
 };
 const sortState = {
   work:{col:'id',order:'asc'},
@@ -2204,15 +2110,12 @@ const sortState = {
   personnel:{col:'id',order:'asc'},
   triage:{col:'created_at',order:'desc'},
   calendar:{col:'start_at',order:'asc'},
-  personal_husband:{col:'created_at',order:'desc'},
-  personal_father:{col:'created_at',order:'desc'},
-  personal_house:{col:'created_at',order:'desc'},
-  personal_cars:{col:'created_at',order:'desc'},
+  personal:{col:'created_at',order:'desc'},
 };
 let currentTab = 'dashboard', editingId = null, editingTable = null;
 let tableCache = {
   work:[], project:[], training:[], personnel:[],
-  triage:[], calendar:[], personal_husband:[], personal_father:[], personal_house:[], personal_cars:[],
+  triage:[], calendar:[], personal:[],
 };
 const STANDALONE_TAB = {{ standalone_tab|tojson }};
 const SHELL_BRAND = {{ brand_name|tojson }};
@@ -2612,6 +2515,55 @@ function openFeedbackForCurrentRecord() {
   openFeedbackForRecord(editingTable, window.__currentModalData || { id: editingId });
 }
 
+// #53 feedback-everywhere: resolve the MOST SPECIFIC live context so the one global
+// FAB captures the right target wherever the user is — an open record drawer, the
+// project workspace, an employee scorecard, or (fallback) the active tab. The rich
+// page context (filters, sort, telemetry) is still captured by feedbackContextPayload.
+function resolveFeedbackTarget() {
+  // 1. A record drawer is open → target that record (most specific).
+  if (editingTable) {
+    return feedbackRecordContext(editingTable, window.__currentModalData || { id: editingId });
+  }
+  // 2. The project workspace overlay is open → target the project.
+  if (document.getElementById('workspace-overlay')?.classList.contains('open')
+      && typeof workspaceState !== 'undefined' && workspaceState?.project) {
+    const proj = workspaceState.project;
+    return {
+      component_label: ['Project Workspace', proj.project_number, proj.name].filter(Boolean).join(' · '),
+      tab: 'project',
+      table: 'project_work_tasks',
+      project_number: proj.project_number || '',
+    };
+  }
+  // 3. The employee scorecard is open AND we're on the Competency tab → target that
+  //    employee. compScorecardEmpId is only reset when ENTERING competency, so it
+  //    persists after leaving; without the active-section gate the FAB would
+  //    mis-attribute feedback filed from other tabs to a stale scorecard employee.
+  if (typeof compScorecardEmpId !== 'undefined' && compScorecardEmpId
+      && document.getElementById('sec-competency')?.classList.contains('active')) {
+    const emp = ((typeof compState !== 'undefined' && compState.employees) || [])
+      .find(e => e.id === compScorecardEmpId);
+    return {
+      component_label: ['Competency scorecard',
+        emp ? formatPersonName(emp.display_name) : '#' + compScorecardEmpId].filter(Boolean).join(' · '),
+      tab: 'competency',
+      table: 'employees',
+      record_id: compScorecardEmpId,
+      record_title: emp ? emp.display_name : '',
+    };
+  }
+  // 4. Fallback: the active tab/section, so report/dashboard/map views still land a
+  //    useful component label instead of a bare generic capture.
+  const activeSection = document.querySelector('.section.active');
+  const heading = activeSection?.querySelector('h1,h2,.section-title,.dash-card-header')?.textContent?.trim() || '';
+  const label = heading || activeSection?.id?.replace(/^sec-/, '') || currentTab || '';
+  return label ? { component_label: label, tab: activeSection?.id?.replace(/^sec-/, '') || currentTab || '' } : '';
+}
+
+function openFeedbackSmart() {
+  openFeedbackModal(resolveFeedbackTarget());
+}
+
 function openFeedbackModal(target='') {
   feedbackTargetContext = normalizeFeedbackTargetContext(target);
   const componentLabel = feedbackTargetContext?.component_label || '';
@@ -2695,6 +2647,58 @@ function setFeedbackFiles(files) {
   });
   input.files = dt.files;
   renderFeedbackFileList(rejected);
+}
+
+// #36: vendored html2canvas, lazy-loaded only when the capture button is first used
+// (keeps the 198KB off every page load). Vendored at /static/vendor/html2canvas/.
+let _html2canvasPromise = null;
+function loadHtml2Canvas() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (_html2canvasPromise) return _html2canvasPromise;
+  _html2canvasPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/static/vendor/html2canvas/html2canvas.min.js';
+    s.onload = () => resolve(window.html2canvas);
+    s.onerror = () => { _html2canvasPromise = null; reject(new Error('html2canvas failed to load')); };
+    document.head.appendChild(s);
+  });
+  return _html2canvasPromise;
+}
+
+// #36: "Capture screenshot" — snapshot the current view (with the feedback modal
+// hidden) and attach it to the feedback via the existing upload path. The map view
+// uses cross-origin tiles that html2canvas can't always paint; the catch degrades
+// gracefully to "drag & drop instead".
+async function captureFeedbackScreenshot() {
+  const status = document.getElementById('feedback-status');
+  const btn = document.getElementById('feedback-screenshot-btn');
+  const overlay = document.getElementById('feedback-overlay');
+  if (btn && btn.disabled) return;  // hardening: re-entry guard against rapid double-click
+  if (btn) btn.disabled = true;
+  let lib;
+  try { lib = await loadHtml2Canvas(); }
+  catch { if (status) status.textContent = 'Screenshot tool failed to load — drag & drop a file instead.'; if (btn) btn.disabled = false; return; }
+  if (status) status.textContent = 'Capturing…';
+  const wasOpen = overlay && overlay.classList.contains('open');
+  if (wasOpen) overlay.style.visibility = 'hidden';  // capture the view behind the form
+  try {
+    const canvas = await lib(document.body, {
+      logging: false, useCORS: true,
+      backgroundColor: getComputedStyle(document.body).backgroundColor || '#ffffff',
+      scale: Math.min(window.devicePixelRatio || 1, 2),
+      width: window.innerWidth, height: window.innerHeight,
+      x: window.scrollX || 0, y: window.scrollY || 0,
+    });
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('no blob');
+    setFeedbackFiles([new File([blob], 'screenshot-' + today() + '.png', { type: 'image/png' })]);
+    if (status) status.textContent = 'Screenshot attached.';
+  } catch (e) {
+    if (status) status.textContent = 'Could not capture this view — drag & drop a screenshot instead.';
+  } finally {
+    if (wasOpen) overlay.style.visibility = '';
+    if (btn) btn.disabled = false;
+  }
 }
 
 function removeFeedbackFile(idx) {
@@ -2879,16 +2883,16 @@ const MOBILE_REVIEW_TRACKERS = [
   { tab:'work', table:'work_tasks', label:'CAD Dev' },
   { tab:'project', table:'project_work_tasks', label:'Project Tasks' },
   { tab:'training', table:'training_tasks', label:'Training' },
-  { tab:'personal_husband', table:'personal_items', label:'Follow-up', category:'Follow-up' },
-  { tab:'personal_father', table:'personal_items', label:'Meetings', category:'Meetings' },
-  { tab:'personal_house', table:'personal_items', label:'Office', category:'Office' },
-  { tab:'personal_cars', table:'personal_items', label:'Assets', category:'Assets' },
+  { tab:'personal', table:'personal_items', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal', table:'personal_items', label:'Meetings', category:'Meetings' },
+  { tab:'personal', table:'personal_items', label:'Office', category:'Office' },
+  { tab:'personal', table:'personal_items', label:'Assets', category:'Assets' },
 ];
 const MOBILE_TODAY_INTERNAL_TABS = [
-  { tab:'personal_husband', label:'Follow-up', category:'Follow-up' },
-  { tab:'personal_father', label:'Meetings', category:'Meetings' },
-  { tab:'personal_house', label:'Office', category:'Office' },
-  { tab:'personal_cars', label:'Assets', category:'Assets' },
+  { tab:'personal', label:'Follow-up', category:'Follow-up' },
+  { tab:'personal', label:'Meetings', category:'Meetings' },
+  { tab:'personal', label:'Office', category:'Office' },
+  { tab:'personal', label:'Assets', category:'Assets' },
 ];
 
 function mobileShell() {
@@ -2970,7 +2974,7 @@ function updateMobileCounts(counts) {
   coreSetText('mobile-overdue-pill', mobileCompanionState.counts.overdue);
   coreSetText('mobile-review-pill', mobileCompanionState.counts.review);
   const todayTone = mobileCompanionState.counts.overdue ? 'danger' : '';
-  setMobileBadge('mobile-badge-today', mobileCompanionState.counts.overdue || mobileCompanionState.counts.open, todayTone);
+  setMobileBadge('mobile-badge-today', mobileTodayRowsFromCache().length, todayTone);  /* audit #28: badge the actual Today list, not whole-app open/overdue */
   setMobileBadge('mobile-badge-review', mobileCompanionState.counts.review, mobileCompanionState.counts.review ? 'warn' : '');
   renderMobilePaneChrome();
 }
@@ -3372,9 +3376,23 @@ function updateShellContext(title) {
 }
 
 function activateTab(tabName, options={}) {
+  // #14: the 4 per-category personal tabs were consolidated into one 'personal'
+  // tab. Alias any stale key (admin standalone views, intake report/review
+  // links, OCR redirects, old bookmarks) to 'personal' and preselect its
+  // category, so no external entry point lands on a deleted section.
+  const LEGACY_PERSONAL = {personal_husband:'Follow-up', personal_father:'Meetings', personal_house:'Office', personal_cars:'Assets'};
+  if (LEGACY_PERSONAL[tabName]) {
+    const catSel = document.getElementById('filter-personal-category');
+    if (catSel) catSel.value = LEGACY_PERSONAL[tabName];
+    tabName = 'personal';
+  }
   const btn = tabButtonFor(tabName);
   const section = document.getElementById('sec-' + tabName);
-  if (!section || (!btn && STANDALONE_TAB !== tabName)) return false;
+  // audit #6: compare against the ALIASED standalone key so admin
+  // /admin/workflow/personal_* standalone views (no sidebar button) don't
+  // dead-end on the guard now that tabName was remapped to 'personal'.
+  const effectiveStandalone = LEGACY_PERSONAL[STANDALONE_TAB] ? 'personal' : STANDALONE_TAB;
+  if (!section || (!btn && effectiveStandalone !== tabName)) return false;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   if (btn) {
     btn.classList.add('active');
@@ -3462,7 +3480,7 @@ function nameMatchesCurrentUser(candidate, userName) {
 }
 function employeeAvatarHtml(emp, size) {
   const initials = esc(employeeInitials(emp));
-  const name = esc(emp?.display_name || 'Employee');
+  const name = escHtml(emp?.display_name || 'Employee');  /* audit #17: quote-safe for title=/alt= attrs */
   const src = employeePhotoPath(emp);
   const base = 'width:' + size + 'px;height:' + size + 'px;border-radius:999px;display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto;border:1px solid var(--border);background:linear-gradient(135deg,#0f2f4a,#2f6f79);color:white;font-weight:800;font-size:' + Math.max(10, Math.round(size * 0.34)) + 'px;letter-spacing:0.02em;';
   if (!src) return '<span style="' + base + '" title="' + name + '">' + initials + '</span>';
@@ -3470,17 +3488,6 @@ function employeeAvatarHtml(emp, size) {
     '<img src="' + esc(src) + '" alt="' + name + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block" onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'flex\';">' +
     '<span style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:linear-gradient(135deg,#0f2f4a,#2f6f79);color:white;">' + initials + '</span>' +
   '</span>';
-}
-function confidenceLabel(band) {
-  const b = String(band || 'low').toLowerCase();
-  if (b === 'high') return 'H';
-  if (b === 'medium') return 'M';
-  return 'L';
-}
-function compCellValue(cell) {
-  if (cell == null) return null;
-  if (typeof cell === 'object') return cell.score;
-  return cell;
 }
 function compCellDetail(empId, catId) {
   const cell = compState.scores[String(empId)]?.[String(catId)];
@@ -3510,22 +3517,14 @@ function visibleCompetencyEmployees() {
   const roleFilter = document.getElementById('comp-role-filter')?.value || 'technical';
   return (compState.employees || []).filter(e => {
     const role = String(e.role || '').toLowerCase();
+    // #52: Engineer-in-Training is a technical role — counts in the default
+    // "Engineering + Drafting" view and has its own filter. Canonical role value:
+    // "engineer in training" (lowercase free-text, set per-employee via the registry).
     const roleOk = roleFilter === 'technical'
-      ? (role === 'engineer' || role === 'drafter')
+      ? (role === 'engineer' || role === 'drafter' || role === 'engineer in training')
       : role === roleFilter;
     return roleOk && (!nameFilter || e.display_name.toLowerCase().includes(nameFilter));
   });
-}
-function compRatingShortLabel(kind) {
-  if (kind === 'official_baseline') return 'baseline';
-  if (kind === 'preliminary_rating') return 'prelim';
-  if (kind === 'manual_override') return 'manual';
-  if (kind === 'self_assessment') return 'self';
-  return (kind || 'rating').replace(/_/g, ' ');
-}
-function compHumanRating(detail) {
-  if (!detail || typeof detail !== 'object') return null;
-  return detail.latest_baseline || detail.latest_preliminary || detail.latest_manual || null;
 }
 function scorecardMarkerSummary(marker) {
   if (!marker) return '—';
@@ -3533,18 +3532,6 @@ function scorecardMarkerSummary(marker) {
   const notes = marker.notes ? ' · ' + marker.notes : '';
   return scoreLabel(marker.score) + who + notes;
 }
-function compRatingCard(marker, title) {
-  if (!marker) return '';
-  const who = marker.created_by_name || 'Unknown';
-  const notes = marker.notes ? '<div style="margin-top:0.25rem;color:var(--text-muted)">' + esc(marker.notes) + '</div>' : '';
-  return '<div style="border:1px solid var(--border);border-radius:12px;padding:0.55rem;background:var(--surface-muted)">' +
-    '<div style="font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em">' + esc(title) + '</div>' +
-    '<div style="font-weight:700;margin-top:0.2rem">' + esc(who) + ': ' + scoreLabel(marker.score) + '</div>' +
-    '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc(marker.observed_at || '') + '</div>' +
-    notes +
-  '</div>';
-}
-
 async function loadCompetency() {
   const loading = document.getElementById('comp-loading');
   const empty = document.getElementById('comp-empty');
@@ -3721,7 +3708,7 @@ function renderEmployeeScorecard() {
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:115px">' + esc(scorecardMarkerSummary(prelim)) + '</td>' +
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:115px">' + esc(scorecardMarkerSummary(baseline)) + '</td>' +
         '<td><select class="scorecard-score" style="width:6.2rem">' + scoreOptions(existing) + '</select></td>' +
-        '<td><input class="scorecard-note" type="text" value="' + esc(note) + '" placeholder="optional note" style="min-width:190px"></td>' +
+        '<td><input class="scorecard-note" type="text" value="' + escHtml(note) + '" placeholder="optional note" style="min-width:190px"></td>' +
       '</tr>');
     });
   });
@@ -3732,10 +3719,26 @@ function renderEmployeeScorecard() {
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
         '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
       '</div>' +
-      '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
+      '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
+        '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
+        '<button class="btn btn-ghost" type="button" onclick="openEmployeeScorecard(\'\')">Close</button>' +
+      '</div>' +
     '</div>' +
     '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:1120px;width:100%;font-size:0.76rem"><thead><tr><th>Task</th><th>Observed</th><th>Self</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' +
     '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save preliminary task ratings</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark official baseline</button><button class="btn btn-ghost" type="button" onclick="saveEmployeeScorecard(\'self_assessment\', false)">Record self-assessment</button></div>';
+}
+
+// #50: jump from a scorecard straight into a prefilled new capability note for
+// that employee. No id passed → openModal opens as CREATE; the People text field
+// is prefilled with the credential-stripped name (formatPersonName, from #29) so
+// "Dyanna Stetina, P.E." doesn't get parsed as two people.
+function logCapabilityNoteFor(empId) {
+  const emp = (compState.employees || []).find(e => e.id === empId);
+  if (!emp) return;
+  // audit #9: pass the employee id as the authoritative FK (person_ids JSON list)
+  // so a credentialed display_name ("Dyanna Stetina, P.E.") doesn't orphan the
+  // note via brittle exact-string matching.
+  openModal('personnel', { person_name: formatPersonName(emp.display_name), person_ids: JSON.stringify([emp.id]) });
 }
 
 function scoreOptions(value) {
@@ -3795,10 +3798,6 @@ function advanceScorecardEmployee() {
   renderCompetencyDetail();
 }
 
-function openCompetencyCell(empId, catId) {
-  openEmployeeScorecard(empId);
-}
-
 function renderCompetencyDetail() {
   const host = document.getElementById('comp-detail');
   if (!host) return;
@@ -3806,34 +3805,6 @@ function renderCompetencyDetail() {
   host.replaceChildren();
 }
 
-async function saveCompetencyObservation(mode) {
-  if (!compSelected) return;
-  const advance = mode.endsWith('_next');
-  const ratingMode = mode.replace('_next', '');
-  const score = document.getElementById('comp-score')?.value;
-  const notes = document.getElementById('comp-notes')?.value || '';
-  const isObservation = ratingMode === 'observation';
-  const dimension = isObservation ? (document.getElementById('comp-dimension')?.value || '') : 'manual';
-  const path = isObservation ? '/api/v1/skills/subscores' : '/api/v1/skills/scores';
-  const payload = {
-    employee_id: compSelected.empId,
-    category_id: compSelected.catId,
-    score,
-    notes,
-  };
-  if (isObservation) payload.dimension_slug = dimension;
-  else payload.source_kind = ratingMode === 'baseline' ? 'official_baseline' : 'preliminary_rating';
-  const res = await api('POST', path, payload);
-  if (!res || res.error) { toast(res?.error || 'Competency save failed'); return; }
-  toast(ratingMode === 'baseline' ? 'Official baseline saved' : (ratingMode === 'preliminary' ? 'Preliminary rating saved' : 'Competency observation added'));
-  await loadCompetency();
-  if (advance) advanceCompetencySelection();
-  else renderCompetencyDetail();
-}
-
-function advanceCompetencySelection() {
-  advanceScorecardEmployee();
-}
 
 // Live filter input — debounced re-render without re-fetching.
 document.addEventListener('DOMContentLoaded', () => {
@@ -3882,6 +3853,38 @@ async function refreshHealthPill() {
 let mapInstance = null;
 let mapLayer = null;
 let mapHullLayer = null;
+let mapClusterLayer = null;  // map clustering: markerClusterGroup wrapping the pins
+
+// Hardening: build map-popup content via DOM + addEventListener (raw project id/number
+// as JS args) instead of onclick string-literals. Embedding project_number in an inline
+// onclick was DOM-XSS — the HTML-entity decode of the attribute reopens the JS string.
+// displayHtml carries only escHtml-escaped HTML-context content; the [data-copy-pn]
+// code element and the action buttons get their handlers wired here.
+function projectPopupEl(displayHtml, p) {
+  const el = document.createElement('div');
+  el.innerHTML = displayHtml;
+  const id = Number(p.project_id || 0);
+  const num = p.project_number || '';
+  const copy = el.querySelector('[data-copy-pn]');
+  if (copy) copy.addEventListener('click', () => {
+    navigator.clipboard.writeText(num).then(() => toast('project number copied')).catch(() => {});
+  });
+  const row = document.createElement('div');
+  row.style.cssText = 'margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap';
+  const mk = (label, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.style.cssText = 'border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer';
+    b.addEventListener('click', () => fn(id, num));
+    return b;
+  };
+  row.appendChild(mk('Workspace', openProjectWorkspaceSmart));
+  row.appendChild(mk('Focus', focusProjectOnMapSmart));
+  row.appendChild(mk('Report', openProjectReportSmart));
+  el.appendChild(row);
+  return el;
+}
 let mapComponentsLoaded = false;
 let mapClientDebounce = null;
 let mapProjectFocus = { id: '', number: '' };
@@ -4042,6 +4045,7 @@ async function reloadMap(fit) {
     geo = await res.json();
   } catch (e) { geo = { features: [] }; }
 
+  if (mapClusterLayer) { mapClusterLayer.remove(); mapClusterLayer = null; }
   if (mapLayer) { mapLayer.remove(); mapLayer = null; }
   const features = (geo.features || []);
 
@@ -4080,13 +4084,11 @@ async function reloadMap(fit) {
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
       const pin = p.pin_color ? `<span style="display:inline-block;width:0.6rem;height:0.6rem;border-radius:50%;background:${PIN_COLOR[p.pin_color] || '#94a3b8'};margin-right:0.3rem;vertical-align:middle"></span>${escHtml(p.pin_color)}` : '';
-      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
-      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + '</div>' +
         '<div style="color:#555;margin-top:0.15rem">' +
-          '<code style="cursor:pointer" title="Click to copy" onclick="navigator.clipboard.writeText(\'' + escHtml(p.project_number).replace(/'/g, "\\'") + '\')">' + escHtml(p.project_number) + '</code>' +
+          '<code data-copy-pn="1" style="cursor:pointer" title="Click to copy">' + escHtml(p.project_number) + '</code>' +
           ' &middot; ' + escHtml(p.client || '—') +
         '</div>' +
         (p.component
@@ -4096,15 +4098,20 @@ async function reloadMap(fit) {
           '<span style="padding:0.05rem 0.45rem;border-radius:999px;background:' + (STATUS_COLOR[p.display_status]||'#94a3b8') + ';color:#0b1220;font-size:0.7rem;font-weight:500">' + escHtml(p.display_status) + '</span>' +
           (pin ? '<span style="font-size:0.7rem;color:#555">' + pin + '</span>' : '') +
         '</div>' +
-        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
-        '</div>' +
         '</div>';
-      layer.bindPopup(html);
+      layer.bindPopup(projectPopupEl(html, p));  // hardening: buttons/copy wired via DOM, not onclick strings
     },
-  }).addTo(mapInstance);
+  });
+  // Map clustering: group nearby project pins into a count bubble so dense areas stay
+  // readable; declusters automatically as you zoom in (full pins by zoom 18).
+  mapClusterLayer = L.markerClusterGroup({
+    chunkedLoading: true,
+    showCoverageOnHover: false,
+    maxClusterRadius: 50,
+    disableClusteringAtZoom: 18,
+  });
+  mapClusterLayer.addLayer(mapLayer);
+  mapClusterLayer.addTo(mapInstance);
 
   if (fit || mapLayer.getLayers().length) {
     try { mapInstance.fitBounds(mapLayer.getBounds(), { padding: [24, 24] }); } catch (e) {}
@@ -4159,26 +4166,19 @@ async function reloadMapHulls() {
     },
     onEachFeature: (feat, layer) => {
       const p = feat.properties;
-      const popupProjectNumber = escHtml(p.project_number || '').replace(/'/g, "\'");
-      const popupProjectId = Number(p.project_id || 0);
       const html =
         '<div style="font-family:\'IBM Plex Sans\',sans-serif;font-size:0.82rem;line-height:1.45;min-width:200px">' +
         '<div style="font-weight:600">' + escHtml(p.name || '(unnamed)') + ' <span style="color:var(--text-muted);font-weight:400">· area</span></div>' +
         '<div style="color:#555;margin-top:0.15rem">' +
-          '<code>' + escHtml(p.project_number) + '</code>' +
+          '<code data-copy-pn="1" style="cursor:pointer" title="Click to copy">' + escHtml(p.project_number) + '</code>' +
           ' &middot; ' + escHtml(p.client || '—') +
         '</div>' +
         '<div style="color:#555;margin-top:0.15rem;font-size:0.76rem">' +
           p.site_count + ' site' + (p.site_count === 1 ? '' : 's') + ' · ' + escHtml(p.display_status) +
         '</div>' +
         '<div style="color:var(--text-muted);margin-top:0.3rem;font-size:0.7rem;font-style:italic">Convex hull of project_sites — not a surveyed boundary.</div>' +
-        '<div style="margin-top:0.45rem;display:flex;gap:0.35rem;flex-wrap:wrap">' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectWorkspaceSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Workspace</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="focusProjectOnMapSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Focus</button>' +
-          '<button type="button" style="border:1px solid #cbd5e1;background:#f8fafc;color:#0f172a;border-radius:6px;padding:0.18rem 0.45rem;font-size:0.72rem;cursor:pointer" onclick="openProjectReportSmart(' + popupProjectId + ',\'' + popupProjectNumber + '\')">Report</button>' +
-        '</div>' +
         '</div>';
-      layer.bindPopup(html);
+      layer.bindPopup(projectPopupEl(html, p));  // hardening: buttons/copy wired via DOM, not onclick strings
     },
   }).addTo(mapInstance);
   // Pins are added AFTER hulls in DOM order, so they naturally render
@@ -4280,6 +4280,7 @@ let searchTimeout;
 if (searchInput && searchResults) {
   let searchActiveIdx = -1;
   function searchCloseDropdown() {
+    clearTimeout(searchTimeout);  // audit #22: cancel a pending debounce so it can't re-open the dropdown over the full-results overlay
     searchResults.classList.remove('open');
     searchActiveIdx = -1;
   }
@@ -4295,7 +4296,7 @@ if (searchInput && searchResults) {
     searchInput.value = '';
     if (r.source === 'projects') { openProjectWorkspaceSmart(r.id, r.project_number); return; }
     const tabKey = r.source === 'personal_items'
-      ? (({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[r.category] || 'personal_husband')
+      ? 'personal'
       : {
           work_tasks:'work', project_work_tasks:'project', training_tasks:'training',
           personnel_issues:'personnel', calendar_events:'calendar', inbox_items:'triage'
@@ -4303,6 +4304,54 @@ if (searchInput && searchResults) {
     if (!tabKey) return;
     document.querySelector('.tab-btn[data-tab="'+tabKey+'"]')?.click();
     setTimeout(() => editRecord(tabKey, r.id), 200);
+  }
+  // #18: full results page — a roomy, grouped-by-tracker view of ALL matches
+  // (the API returns up to 20 matches per source). Opened by Enter or the dropdown's
+  // "See all" row. Reuses the app's modal-overlay styling + openSearchResult nav.
+  async function openFullSearch(q) {
+    q = (q || '').trim();
+    if (q.length < 2) return;
+    searchCloseDropdown();
+    const data = await api('GET', '/api/v1/search?q=' + encodeURIComponent(q)) || [];
+    let ov = document.getElementById('search-full-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'search-full-overlay';
+      ov.className = 'modal-overlay';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', e => { if (e.target === ov) ov.classList.remove('open'); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') ov.classList.remove('open'); });
+    }
+    const groups = {};
+    data.forEach(r => { (groups[r.source] = groups[r.source] || []).push(r); });
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.maxWidth = '760px';
+    let h = '<div class="modal-header"><div><h3>Search results</h3><div class="drawer-eyebrow">' +
+      data.length + ' match' + (data.length === 1 ? '' : 'es') + ' for “' + esc(q) + '”</div></div>' +
+      '<button class="modal-close" type="button" aria-label="Close">&times;</button></div><div class="modal-body">';
+    if (!data.length) h += '<p style="color:var(--text-muted)">No matches.</p>';
+    Object.keys(groups).forEach(src => {
+      h += '<div style="margin-bottom:0.9rem"><div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--accent);font-weight:700;margin-bottom:0.35rem">' +
+        esc(TABLE_LABELS[src] || src) + ' (' + groups[src].length + ')</div>';
+      groups[src].forEach((r, i) => {
+        h += '<button class="search-full-item" data-src="' + esc(src) + '" data-idx="' + i + '" style="display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.65rem;margin-bottom:0.3rem;cursor:pointer;font:inherit">' +
+          '<div style="font-weight:600;font-size:0.82rem">' + esc(r.label) + '</div>' +
+          '<div style="font-size:0.72rem;color:var(--text-muted)">' + esc((r.status || '') + (r.priority ? ' • ' + r.priority : '')) + '</div></button>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+    modal.innerHTML = h;
+    modal.querySelector('.modal-close').addEventListener('click', () => ov.classList.remove('open'));
+    Object.keys(groups).forEach(src => {
+      modal.querySelectorAll('.search-full-item[data-src="' + CSS.escape(src) + '"]').forEach(btn => {
+        const i = Number(btn.getAttribute('data-idx'));
+        btn.addEventListener('click', () => { ov.classList.remove('open'); openSearchResult(groups[src][i]); });
+      });
+    });
+    ov.replaceChildren(modal);
+    ov.classList.add('open');
   }
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimeout);
@@ -4327,19 +4376,36 @@ if (searchInput && searchResults) {
         div.addEventListener('click', () => openSearchResult(r));
         searchResults.appendChild(div);
       });
+      // #18: discoverable "See all" row → grouped full-results overlay.
+      const seeAll = document.createElement('div');
+      seeAll.className = 'search-item search-see-all';
+      seeAll.style.cssText = 'font-weight:600;color:var(--accent)';
+      seeAll.textContent = 'See all ' + data.length + ' result' + (data.length === 1 ? '' : 's') + ' →';
+      seeAll.addEventListener('click', () => openFullSearch(q));
+      searchResults.appendChild(seeAll);
       searchResults.classList.add('open');
     }, 250);
   });
   searchInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') { searchCloseDropdown(); return; }
+    if (e.key === 'Enter') {
+      if (e.isComposing) return;  // don't hijack IME composition commits
+      // #18: arrow-selected item opens that record; plain Enter opens the full
+      // grouped results page (works even if the dropdown hasn't opened yet).
+      e.preventDefault();
+      // Same item set as arrow-nav (includes the "See all" row, whose own click
+      // opens the full view) so the active index never mismatches.
+      const items = searchResults.querySelectorAll('.search-item');
+      if (searchResults.classList.contains('open') && searchActiveIdx >= 0 && items[searchActiveIdx]) {
+        items[searchActiveIdx].click();
+      } else {
+        openFullSearch(searchInput.value.trim());
+      }
+      return;
+    }
     if (!searchResults.classList.contains('open')) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); searchSetActive(searchActiveIdx + 1); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); searchSetActive((searchActiveIdx < 0 ? 0 : searchActiveIdx) - 1); }
-    else if (e.key === 'Enter') {
-      e.preventDefault();
-      const items = searchResults.querySelectorAll('.search-item');
-      (items[searchActiveIdx] || items[0])?.click();
-    }
   });
   document.addEventListener('click', e => { if (!e.target.closest('.search-wrap')) searchCloseDropdown(); });
 }
@@ -4458,7 +4524,12 @@ function renderCoreTrackerCards(stats) {
     const card = document.createElement('button');
     card.type = 'button';
     card.className = 'core-tracker-card';
-    card.addEventListener('click', () => document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click());
+    card.addEventListener('click', () => {
+      // audit #11: preserve the category drill-down — set the Personal category
+      // filter before opening the (now-unified) tab so the card lands scoped.
+      if (spec.category) { const cs = document.getElementById('filter-personal-category'); if (cs) cs.value = spec.category; }
+      document.querySelector('.tab-btn[data-tab="' + spec.tab + '"]')?.click();
+    });
 
     const head = document.createElement('div');
     head.className = 'core-tracker-head';
@@ -4594,15 +4665,39 @@ function coreActivityPhrase(action) {
   return CORE_ACTIVITY_PHRASES[token] || token.replace(/_/g, ' ');
 }
 
+// #17: cache the last activity rows so the "Hide system actors" toggle can
+// re-render without a refetch. Called with rows from loadDashboard; called
+// arg-less by the toggle.
+let _lastActivityRows = [];
+const _SYSTEM_ACTORS = new Set(['hermes', 'claude', 'system', 'autopilot', 'codev', 'codex', 'tasktrack', 'bot', 'fable']);
+function isSystemActor(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return true;  // blank actor = automated/system
+  // Match on whole name tokens, not substrings, so a real person like "Botha"
+  // isn't hidden by the "bot" token.
+  return n.split(/[^a-z0-9]+/).some(tok => _SYSTEM_ACTORS.has(tok));
+}
 function renderCoreRecentActivity(rows) {
+  if (rows !== undefined) _lastActivityRows = Array.isArray(rows) ? rows : [];
   const host = document.getElementById('core-recent-activity');
   if (!host) return;
-  const visible = Array.isArray(rows) ? rows.slice(0, 9) : [];
+  const hideSystem = document.getElementById('activity-hide-system')?.checked;
+  let pool = _lastActivityRows;
+  if (hideSystem) pool = pool.filter(r => !isSystemActor(r.user_name));
+  const visible = pool.slice(0, 9);
   host.replaceChildren();
-  if (!visible.length) { host.innerHTML = '<div class="core-empty">No activity yet.</div>'; return; }
+  if (!visible.length) {
+    host.innerHTML = '<div class="core-empty">' + (hideSystem ? 'No non-system activity.' : 'No activity yet.') + '</div>';
+    return;
+  }
   visible.forEach(row => {
-    const item = document.createElement('button'); item.type = 'button'; item.className = 'core-row';
-    item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id));
+    // audit #12: only rows whose table maps to a tab are openable; render the
+    // rest (e.g. feedback_items) as a static, non-clickable row instead of a
+    // button that looks interactive but does nothing.
+    const canOpen = !!CORE_TABLE_TO_TAB[row.table_name];
+    const item = document.createElement(canOpen ? 'button' : 'div');
+    if (canOpen) { item.type = 'button'; item.className = 'core-row'; item.addEventListener('click', () => openCoreRecord(row.table_name, row.record_id)); }
+    else { item.className = 'core-row core-row-static'; }
     const main = document.createElement('span'); main.className = 'core-row-main';
     const title = document.createElement('span'); title.className = 'core-row-title';
     title.textContent = (row.user_name || 'TaskTrack') + ' ' + coreActivityPhrase(row.action) + ' ' + (row.record_title || row.label || TABLE_LABELS[row.table_name] || row.table_name || 'record')
@@ -4639,7 +4734,7 @@ async function loadDashboard() {
 
 function intakeRowTab(row) {
   if (row.table === 'personal_items') {
-    return ({'Follow-up':'personal_husband','Meetings':'personal_father','Office':'personal_house','Assets':'personal_cars'})[row.category] || 'personal_husband';
+    return 'personal';
   }
   return ({work_tasks:'work', project_work_tasks:'project', training_tasks:'training', inbox_items:'triage'})[row.table] || '';
 }
@@ -4752,7 +4847,7 @@ function agendaTabForTable(table) {
     project_work_tasks: 'project',
     work_tasks: 'work',
     training_tasks: 'training',
-    personal_items: 'personal_husband',
+    personal_items: 'personal',
   }[table] || '';
 }
 
@@ -4854,9 +4949,9 @@ function trackerDoneStatuses(table) {
 }
 
 function trackerDisplayRowsForTab(table, rows) {
-  if (!INTERNAL_QUEUE_TABS.includes(table)) return rows || [];
-  const cat = INTERNAL_QUEUE_CATEGORIES[table];
-  return (rows || []).filter(r => r.category === cat);
+  // #14: the unified Personal tab shows all categories; the category dropdown
+  // does any narrowing in loadTable. No per-tab category restriction anymore.
+  return rows || [];
 }
 
 function ensureTrackerSummary(table) {
@@ -4956,7 +5051,7 @@ function wireRecordRow(tr, table, row) {
 /* ── Load Table (with filters) ─────────────── */
 async function loadTable(table) {
   const st = sortState[table];
-  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order);
+  const data = await api('GET','/api/v1/'+API_MAP[table]+'?sort='+st.col+'&order='+st.order+(archivedViewOn(table)?'&archived=1':'')+(followUpViewOn(table)?'&follow_up=1':''));
   if (!data) return;
   tableCache[table] = data;
 
@@ -4969,12 +5064,18 @@ async function loadTable(table) {
 
   let filtered = data;
   let baseRows = trackerDisplayRowsForTab(table, data);
-  // Internal queues share the legacy personal_items table; filter to this tab's category.
-  if (INTERNAL_QUEUE_TABS.includes(table)) {
-    filtered = filtered.filter(r => r.category === INTERNAL_QUEUE_CATEGORIES[table]);
+  // #14: unified Personal tab — narrow by the category dropdown when one is picked.
+  if (table === 'personal') {
+    const cat = document.getElementById('filter-personal-category')?.value || '';
+    if (cat) filtered = filtered.filter(r => r.category === cat);
   }
   // "__active" = anything not in the tracker's done/closed statuses (default).
-  if (statusFilter === '__active') {
+  // #38 (pre-merge review): the Archived view must show EVERY archived row regardless
+  // of status — otherwise the default "Active" filter hides completed-then-archived
+  // rows and the archived list looks partially blank. Skip status filtering there.
+  if (archivedViewOn(table)) {
+    // no status narrowing in the archived view
+  } else if (statusFilter === '__active') {
     const doneStatuses = trackerDoneStatuses(table);
     filtered = filtered.filter(r => !doneStatuses.has(r.status));
   } else if (statusFilter) {
@@ -4994,12 +5095,46 @@ async function loadTable(table) {
   if (table === 'calendar') filtered = applyCalendarFilters(filtered);
   if (overdueFilter) filtered = filtered.filter(r => isOverdue(r));
 
+  // #48 smarter ranking: when sorting by priority/severity, sub-sort within each
+  // urgency band by soonest due date, then status-flow order — so the most
+  // actionable rows rise to the top of their band (priority > due > status).
+  const _sortCol = (sortState[table] || {}).col;
+  if (_sortCol === 'priority' || _sortCol === 'severity') {
+    // reaudit (low): include 'Critical' on the priority axis too — the server
+    // (_PRIORITY_SORT_ORDER) ranks both axes against the same Critical-first order,
+    // so if an admin adds 'Critical' to the managed task_priority set, the client
+    // re-sort must agree instead of pinning those rows last (indexOf -1).
+    const ORDER = ['Critical', 'High', 'Medium', 'Low', 'None'];
+    const flow = TRACKER_STATUS_FLOW[table] || [];
+    const isDesc = (sortState[table] || {}).order === 'desc';
+    // reaudit #4: mirror the server (api.py list_records) — bake the direction
+    // into the rank and pin unknown/blank LAST in BOTH directions (rank =
+    // ORDER.length). Multiplying the whole comparison by dir floated blanks to
+    // the TOP on descending, re-introducing audit #2 client-side.
+    const rankOf = v => {
+      const i = ORDER.indexOf(v);
+      if (i < 0) return ORDER.length;                   // unknown/blank pinned last
+      return isDesc ? (ORDER.length - 1 - i) : i;       // flip only known ranks for desc
+    };
+    const dueOf = r => r.due_at || r.due_date || r.follow_up_date || '￿';
+    const statusOf = r => { const i = flow.indexOf(r.status); return i < 0 ? 99 : i; };
+    filtered = [...filtered].sort((a, b) => {
+      const pr = rankOf(a[_sortCol]) - rankOf(b[_sortCol]);
+      if (pr) return pr;                                // primary: urgency band (direction baked in)
+      const d = String(dueOf(a)).localeCompare(String(dueOf(b)));
+      if (d) return d;                                  // secondary: soonest due first (blanks last)
+      return statusOf(a) - statusOf(b);                 // tertiary: status-flow order
+    });
+  }
+
   renderTrackerSummary(table, baseRows, filtered);
 
   const tbody = document.getElementById('tbody-'+table);
   const empty = document.getElementById('empty-'+table);
   const countEl = document.getElementById('count-'+table);
-  if (countEl) {
+  // #38/#44: while the "Archived" or "★ Follow-ups" view is on, `data` is a narrowed
+  // subset — don't let it overwrite the tab badge (which reflects the active queue).
+  if (countEl && !archivedViewOn(table) && !followUpViewOn(table)) {
     // Triage count = the active queue (New + In Progress) regardless of which
     // status filter the user has selected.
     // Internal queue counts = active queue (New + In Progress) within the
@@ -5009,10 +5144,8 @@ async function loadTable(table) {
     } else if (table === 'calendar') {
       countEl.textContent = data.filter(r => r.status === 'scheduled' || r.status === 'tentative').length;
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
-      const cat = INTERNAL_QUEUE_CATEGORIES[table];
-      countEl.textContent = data.filter(r =>
-        r.category === cat && (r.status === 'New' || r.status === 'In Progress')
-      ).length;
+      // #14: count all active personal items (any category) in the badge.
+      countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
     } else {
       countEl.textContent = data.filter(isActiveCountRow).length;
     }
@@ -5089,6 +5222,7 @@ async function loadTable(table) {
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       if (r.needs_review) tr.classList.add('ai-review');
       tr.appendChild(makeTitleCell(r.title, r.needs_review ? (r.source || 'intake') : ''));
+      tr.appendChild(makeCell(r.category,'cell-supporting'));  // #14 Category column
       tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
@@ -5484,7 +5618,7 @@ function makeKanbanCard(r) {
   }
   if (r.priority) {
     const pr = document.createElement('span');
-    pr.className = 'kanban-card-tag ' + r.priority.toLowerCase();
+    pr.className = 'kanban-card-tag ' + String(r.priority).toLowerCase().replace(/\s+/g,'-');  /* audit #21 */
     pr.textContent = r.priority;
     meta.appendChild(pr);
   }
@@ -5627,10 +5761,7 @@ function itemLabel(table) {
     personnel: 'capability note',
     triage: 'triage item',
     calendar: 'calendar event',
-    personal_husband: 'follow-up item',
-    personal_father: 'meeting item',
-    personal_house: 'office item',
-    personal_cars: 'asset item',
+    personal: 'personal item',
   }[table] || 'record';
 }
 
@@ -5826,10 +5957,10 @@ const TRIAGE_PROMOTE_TARGETS = [
   { table: 'work_tasks',         label: 'CAD Dev',         tab: 'work' },
   { table: 'training_tasks',     label: 'Training',        tab: 'training' },
   { table: 'personnel_issues',   label: 'Incident Report', tab: 'personnel' },
-  { table: 'personal_items',     label: 'Follow-up',       tab: 'personal_husband', category: 'Follow-up' },
-  { table: 'personal_items',     label: 'Meetings',        tab: 'personal_father',  category: 'Meetings' },
-  { table: 'personal_items',     label: 'Office',          tab: 'personal_house',   category: 'Office' },
-  { table: 'personal_items',     label: 'Assets',          tab: 'personal_cars',    category: 'Assets' },
+  { table: 'personal_items',     label: 'Follow-up',       tab: 'personal', category: 'Follow-up' },
+  { table: 'personal_items',     label: 'Meetings',        tab: 'personal', category: 'Meetings' },
+  { table: 'personal_items',     label: 'Office',          tab: 'personal', category: 'Office' },
+  { table: 'personal_items',     label: 'Assets',          tab: 'personal', category: 'Assets' },
 ];
 
 /* Mirror of app/config.py ALLOWED_TABLES for the assignment modal —
@@ -5842,7 +5973,7 @@ const ASSIGN_TABLE_FIELDS = {
   project_work_tasks: ['project_name','title','project_number','billing_phase','engineer','task_description','priority','status','due_at','scheduled_completion_at','time_required_minutes','notes','scope_notes','progress_notes','confirmation_notes','completion_notes','project_id','engineer_id'],
   training_tasks: ['title','trainees','requested_by','skill_area','training_goals','additional_context','priority','status','due_date','notes','project_number','project_id','trainee_ids'],
   personnel_issues: ['person_name','observed_by','cad_skill_area','issue_description','incident_context','recommended_training','severity','status','reported_date','follow_up_date','resolution_notes','project_number','project_id','person_id','estimated_time_loss_minutes','immediate_solution','skill_category_id','person_ids'],
-  personal_items: ['title','category','body','priority','status','due_date'],
+  personal_items: ['title','body','priority','status','due_date'],  /* #14: category set by the chip, not a redundant select */
 };
 const ASSIGN_REQUIRED = {
   work_tasks: ['title'],
@@ -6142,6 +6273,11 @@ function makeTriageActions(r) {
    config accepts. Submitting POSTs the reviewed field set as promote
    overrides — the created record carries NO needs_review flag. */
 let assignState = null;
+// reaudit #3: renderField is shared by the record drawer (where the #33
+// logged-in-user requested_by default is correct) and the assignment modal
+// (where pre-filling the triaging operator corrupts attribution). This flag is
+// set only while the assignment modal renders its fields, suppressing that default.
+let assignModalRendering = false;
 
 function assignSuggestionFieldsFor(spec, suggestion) {
   // Suggestion-drafted fields apply only to the suggested target
@@ -6158,8 +6294,11 @@ function assignDataForSpec(spec) {
   if (map.title && carry.title) data[map.title] = carry.title;
   if (map.body && carry.body) data[map.body] = carry.body;
   if (map.priority && carry.priority) {
-    // Backend parity: only a plain Low/Medium/High priority lands in severity.
-    if (map.priority !== 'severity' || ['Low','Medium','High'].includes(carry.priority)) {
+    // reaudit #5: incident_severity managed set includes Critical, so let a
+    // Critical intake carry through to severity on assign-to-Incident — else the
+    // SPA pre-empts the audit #10 backend carry and silently downgrades to Medium.
+    // (Task priority targets still clamp Critical->Medium per audit #19.)
+    if (map.priority !== 'severity' || ['Low','Medium','High','Critical'].includes(carry.priority)) {
       data[map.priority] = carry.priority;
     }
   }
@@ -6224,18 +6363,25 @@ function renderAssignFields() {
     .filter(key => key !== 'category' || !spec.category));
   let data = assignDataForSpec(spec);
   if (spec.tab === 'work') data = transformWorkForDisplay(data);
-  FORMS[spec.tab].forEach(f => {
-    if (f.key === '_row') {
-      const subs = f.fields.filter(sf => assignFieldAllowed(spec, sf));
-      if (!subs.length) return;
-      const row = document.createElement('div');
-      row.className = 'field-row';
-      subs.forEach(sf => row.appendChild(renderAssignField(sf, data[sf.key], requiredSet)));
-      host.appendChild(row);
-    } else if (assignFieldAllowed(spec, f)) {
-      host.appendChild(renderAssignField(f, data[f.key], requiredSet));
-    }
-  });
+  // reaudit #3: flag the synchronous field build so renderField's #33 default
+  // (requested_by -> logged-in user) is suppressed inside the assignment modal.
+  assignModalRendering = true;
+  try {
+    FORMS[spec.tab].forEach(f => {
+      if (f.key === '_row') {
+        const subs = f.fields.filter(sf => assignFieldAllowed(spec, sf));
+        if (!subs.length) return;
+        const row = document.createElement('div');
+        row.className = 'field-row';
+        subs.forEach(sf => row.appendChild(renderAssignField(sf, data[sf.key], requiredSet)));
+        host.appendChild(row);
+      } else if (assignFieldAllowed(spec, f)) {
+        host.appendChild(renderAssignField(f, data[f.key], requiredSet));
+      }
+    });
+  } finally {
+    assignModalRendering = false;
+  }
 }
 
 function renderAssignChips() {
@@ -6404,6 +6550,38 @@ function formatDateTime(d) {
   }
 }
 
+// #38 Archive: the core trackers carry an archived_at column. The main view's
+// destructive button becomes "Archive" (soft, reversible, retained); hard Delete
+// moves into the record drawer. A per-tracker "Show archived" toggle flips the view.
+const ARCHIVABLE_TABS = new Set(['work', 'project', 'training', 'personnel', 'calendar', 'personal']);
+function archivedViewOn(table) {
+  return !!document.getElementById('filter-' + table + '-archived')?.checked;
+}
+async function archiveRecord(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/archive');
+  if (r && !r.error) { toast(itemLabel(table) + ' archived'); loadTable(table); if (table === 'calendar') loadDashboard(); }
+}
+async function unarchiveRecord(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/unarchive');
+  if (r && !r.error) { toast(itemLabel(table) + ' restored'); loadTable(table); if (table === 'calendar') loadDashboard(); }
+}
+// #44: follow-up flag (a star). Same core trackers as archive carry the column.
+function followUpViewOn(table) {
+  return !!document.getElementById('filter-' + table + '-followup')?.checked;
+}
+async function toggleFollowUp(table, id) {
+  const r = await api('POST', '/api/v1/' + API_MAP[table] + '/' + id + '/follow-up');
+  if (r && !r.error) loadTable(table);
+}
+function drawerDeleteCurrent() {
+  if (!editingTable || !editingId) return;
+  const t = editingTable, id = editingId;
+  const d = window.__currentModalData || {};
+  const title = d.title || d.person_name || ('#' + id);
+  closeModal();
+  confirmDelete(t, id, title);
+}
+
 function makeActions(table, id, label, row = {}) {
   const td = document.createElement('td'); td.className='cell-actions';
   if (row.project_number || row.project_id) {
@@ -6432,9 +6610,36 @@ function makeActions(table, id, label, row = {}) {
   td.appendChild(feedback);
   const edit = document.createElement('button'); edit.className='btn btn-ghost'; edit.type='button'; edit.textContent='Edit';
   edit.addEventListener('click', ev => { ev.stopPropagation(); editRecord(table,id); });
-  const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
-  del.addEventListener('click', ev => { ev.stopPropagation(); confirmDelete(table,id,label); });
-  td.appendChild(edit); td.appendChild(del);
+  td.appendChild(edit);
+  // #44: a follow-up star — filled when flagged, click to toggle. Doubles as the
+  // at-a-glance indicator; the per-tracker "★ Follow-ups" filter lists flagged tasks.
+  if (ARCHIVABLE_TABS.has(table)) {
+    const star = document.createElement('button'); star.className='btn btn-ghost'; star.type='button';
+    star.textContent = row.follow_up ? '★' : '☆';
+    star.title = row.follow_up ? 'Following up — click to clear the flag' : 'Flag as a follow-up';
+    star.setAttribute('aria-label', star.title);
+    star.addEventListener('click', ev => { ev.stopPropagation(); toggleFollowUp(table, id); });
+    td.appendChild(star);
+  }
+  // #38: archivable trackers show Archive (or Restore in the archived view) on the
+  // main row; hard Delete lives inside the drawer. Non-archivable rows keep Delete.
+  if (ARCHIVABLE_TABS.has(table)) {
+    if (archivedViewOn(table)) {
+      const restore = document.createElement('button'); restore.className='btn btn-ghost'; restore.type='button'; restore.textContent='Restore';
+      restore.title = 'Restore to the active view';
+      restore.addEventListener('click', ev => { ev.stopPropagation(); unarchiveRecord(table,id); });
+      td.appendChild(restore);
+    } else {
+      const arch = document.createElement('button'); arch.className='btn btn-danger-ghost'; arch.type='button'; arch.textContent='Archive';
+      arch.title = 'Archive (kept for the record; permanent delete is inside the task)';
+      arch.addEventListener('click', ev => { ev.stopPropagation(); archiveRecord(table,id); });
+      td.appendChild(arch);
+    }
+  } else {
+    const del = document.createElement('button'); del.className='btn btn-danger-ghost'; del.type='button'; del.textContent='Delete';
+    del.addEventListener('click', ev => { ev.stopPropagation(); confirmDelete(table,id,label); });
+    td.appendChild(del);
+  }
   return td;
 }
 
@@ -6694,6 +6899,7 @@ function workspaceOverlayInput(key, label, value, opts = {}) {
   } else if (opts.textarea) {
     input = document.createElement('textarea');
     input.rows = opts.rows || 3;
+    input.spellcheck = true;  /* #40 */
   } else {
     input = document.createElement('input');
     input.type = opts.type || 'text';
@@ -7098,15 +7304,13 @@ const FORMS = {
 // saveRecord and openModal for the per-tab category preset/injection.
 const PERSONAL_FORM = [
   {key:'title',label:'Title',type:'text',required:true,placeholder:'What needs to happen?'},
+  {key:'category',label:'Category',type:'select',options:['Follow-up','Meetings','Office','Assets'],default:'Follow-up'},  // #14
   {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context.'},
   {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
   {key:'due_date',label:'Due Date',type:'date'},
   {key:'links',label:'Links',type:'links'},
 ];
-FORMS.personal_husband = PERSONAL_FORM;
-FORMS.personal_father  = PERSONAL_FORM;
-FORMS.personal_house   = PERSONAL_FORM;
-FORMS.personal_cars    = PERSONAL_FORM;
+FORMS.personal = PERSONAL_FORM;
 
 /* fk-select option cache. Populated lazily per endpoint; reused across
    modal opens so the user doesn't see a flash. */
@@ -7121,7 +7325,6 @@ async function loadFkOptions(endpoint) {
   } catch (e) { FK_OPTION_CACHE[endpoint] = []; }
   return FK_OPTION_CACHE[endpoint];
 }
-function invalidateFkCache() { for (const k of Object.keys(FK_OPTION_CACHE)) delete FK_OPTION_CACHE[k]; }
 
 const MANAGED_OPTION_DEFAULTS = {};
 function managedOptionValue(row) { return String(row?.value ?? row?.label ?? '').trim(); }
@@ -7201,9 +7404,7 @@ function managedDefault(setKey, fallback='Medium') {
 function populateManagedOptionControls() {
   [
     'filter-triage-priority', 'filter-work-priority', 'filter-project-priority',
-    'filter-training-priority', 'filter-personal_husband-priority',
-    'filter-personal_father-priority', 'filter-personal_house-priority',
-    'filter-personal_cars-priority',
+    'filter-training-priority', 'filter-personal-priority',
   ].forEach(id => populateManagedSelect(document.getElementById(id), 'task_priority', { emptyLabel: 'All Priorities' }));
   ['mobile-quick-priority', 'intake-field-priority', 'feedback-priority'].forEach(id => {
     populateManagedSelect(document.getElementById(id), 'task_priority', { defaultValue: 'Medium' });
@@ -7331,7 +7532,7 @@ function renderField(f,value) {
     // the logged-in user. Scoped to requested_by so engineer/reporter fields
     // are never wrongly pre-filled. The session name is a nickname, so match
     // via nameMatchesCurrentUser (token-prefix), not strict equality.
-    const currentUserName = (!editingId && !String(value || '').trim() && f.key === 'requested_by')
+    const currentUserName = (!editingId && !assignModalRendering && !String(value || '').trim() && f.key === 'requested_by')
       ? (document.getElementById('core-greeting')?.dataset.user || '')
       : '';
     let defaultMatched = false;
@@ -7462,7 +7663,7 @@ function renderField(f,value) {
       return wrap;
     }
   } else if (f.type==='textarea') {
-    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder;
+    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
   } else if (f.type==='placeholder-panel') {
     const panel=document.createElement('div'); panel.className='placeholder-panel';
     const title=document.createElement('div'); title.className='placeholder-title'; title.textContent=f.label;
@@ -7534,15 +7735,8 @@ function renderField(f,value) {
         input.value = digits;
       });
     }
-    if (f.key==='billing_phase') {
-      input.inputMode='numeric';
-      input.maxLength=2;
-      input.pattern='\\d{2}';
-      input.title='Use format ##';
-      input.addEventListener('input', () => {
-        input.value = input.value.replace(/\D/g, '').slice(0, 2);
-      });
-    }
+    // audit #1: billing_phase is a managed dropdown ('100 - Survey' … 'Other'),
+    // not a 2-digit text field — the old numeric/##-mask block was removed.
   }
   wrap.appendChild(input);
   if (f.hint) {
@@ -7558,10 +7752,7 @@ const AI_REVIEW_TABLES = {
   work: 'work_tasks',
   project: 'project_work_tasks',
   training: 'training_tasks',
-  personal_husband: 'personal_items',
-  personal_father: 'personal_items',
-  personal_house: 'personal_items',
-  personal_cars: 'personal_items',
+  personal: 'personal_items',
 };
 const AI_DESCRIPTION_FIELD = { work: 'description', project: 'task_description', training: 'training_goals' };
 
@@ -7844,10 +8035,7 @@ function validateForm(table, data) {
     toast('Pick a project from the registry before saving');
     return false;
   }
-  if (data.billing_phase && !/^\d{2}$/.test(data.billing_phase)) {
-    toast('Project Billing Phase must use ##');
-    return false;
-  }
+  // audit #1: billing_phase is a managed dropdown value, not ## — no client mask.
   if (String(data.time_required_minutes || '').trim()) {
     const minutes = Number(data.time_required_minutes);
     if (!Number.isInteger(minutes) || minutes < 0 || minutes % 30 !== 0) {
@@ -7867,9 +8055,17 @@ async function loadComments(table,recordId,container) {
   if (comments && comments.length) {
     comments.forEach(c => {
       const div = document.createElement('div'); div.className='comment';
+      const isAi = c.audience === 'ai-dev';
+      if (isAi) div.classList.add('comment-ai-dev');
       const meta = document.createElement('div'); meta.className='comment-meta';
       const strong = document.createElement('strong'); strong.textContent=c.user_name;
-      meta.appendChild(strong); meta.appendChild(document.createTextNode(' \u2022 '+formatTimeAgo(c.created_at)));
+      meta.appendChild(strong);
+      if (isAi) {  // #42: AI-directed instruction \u2014 distinct chip in the thread
+        const chip = document.createElement('span'); chip.className='comment-ai-chip'; chip.textContent='AI Dev';
+        meta.appendChild(document.createTextNode(' '));
+        meta.appendChild(chip);
+      }
+      meta.appendChild(document.createTextNode(' \u2022 '+formatTimeAgo(c.created_at)));
       const body = document.createElement('div'); body.className='comment-body'; body.textContent=c.body;
       div.appendChild(meta); div.appendChild(body);
       container.appendChild(div);
@@ -7878,15 +8074,21 @@ async function loadComments(table,recordId,container) {
 
   const addRow = document.createElement('div'); addRow.className='comment-add';
   const input = document.createElement('input'); input.placeholder='Add a comment...'; input.id='comment-input';
+  // #42: address this comment to the AI developer (surfaced via /api/v1/ai-instructions).
+  const aiWrap = document.createElement('label'); aiWrap.className='comment-ai-toggle';
+  aiWrap.title = 'Address this comment to the AI developer \u2014 picked up by the co-dev assistant';
+  const aiCheck = document.createElement('input'); aiCheck.type='checkbox'; aiCheck.id='comment-ai-dev';
+  aiWrap.appendChild(aiCheck); aiWrap.appendChild(document.createTextNode(' For AI dev'));
   const btn = document.createElement('button'); btn.textContent='Post';
   btn.addEventListener('click', async () => {
     const body=input.value.trim(); if(!body) return;
-    await api('POST','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments',{body});
-    input.value='';
+    const audience = aiCheck.checked ? 'ai-dev' : '';
+    await api('POST','/api/v1/'+API_MAP[table]+'/'+recordId+'/comments',{body, audience});
+    input.value=''; aiCheck.checked=false;
     loadComments(table,recordId,container);
   });
   input.addEventListener('keydown', e => { if(e.key==='Enter') btn.click(); });
-  addRow.appendChild(input); addRow.appendChild(btn);
+  addRow.appendChild(input); addRow.appendChild(aiWrap); addRow.appendChild(btn);
   container.appendChild(addRow);
 }
 
@@ -8093,10 +8295,7 @@ function openModal(table,data) {
     personnel:'Capability Entry',
     triage:'Triage Item',
     calendar:'Calendar Event',
-    personal_husband:'Follow-up Item',
-    personal_father:'Meeting Item',
-    personal_house:'Office Item',
-    personal_cars:'Asset Item',
+    personal:'Personal Item',
   };
   renderModalHeader(table, data || {}, labels);
   const body=document.getElementById('modal-body');
@@ -8124,8 +8323,17 @@ function openModal(table,data) {
   renderPromoteDropdown(table);
   renderMeetingPacketButton(table, data || {});
   renderDrawerAssignButton(table, data || {});
+  renderDrawerDeleteButton(table, data || {});
 
   document.getElementById('modal-overlay').classList.add('open');
+}
+
+// #38: hard delete lives inside the drawer for archivable trackers (the main view
+// uses Archive). Shown only for an existing record.
+function renderDrawerDeleteButton(table, data) {
+  const btn = document.getElementById('drawer-delete-btn');
+  if (!btn) return;
+  btn.style.display = (ARCHIVABLE_TABS.has(table) && data && data.id) ? 'inline-flex' : 'none';
 }
 
 /* Triage drawer → assignment modal handoff. Shown only for un-promoted
@@ -8253,9 +8461,9 @@ async function saveRecord() {
   let data=getFormData(table);
   if (!validateForm(table, data)) return;
   if (table === 'work') data = transformWorkForSave(data);
-  // Internal queues share the legacy personal_items table; inject the category
-  // implied by which tab opened the modal.
-  if (INTERNAL_QUEUE_TABS.includes(table)) data.category = INTERNAL_QUEUE_CATEGORIES[table];
+  // #14: Personal items carry an explicit category from the form select;
+  // default to Follow-up if somehow blank.
+  if (table === 'personal' && !data.category) data.category = 'Follow-up';
   if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
   else await api('POST','/api/v1/'+API_MAP[table],data);
   closeModal(); loadTable(table);
@@ -8487,10 +8695,7 @@ function intakeValidateBeforeCommit(target, presets) {
       intakeSetStatus('Project Number is required for Project Work (####.##). Fill the preset above.', 'error');
       return false;
     }
-    if (presets.billing_phase && !/^\d{2}$/.test(presets.billing_phase)) {
-      intakeSetStatus('Billing Phase must be ##.', 'error');
-      return false;
-    }
+    // audit #1: billing_phase is a managed dropdown value, not ## — no client mask.
   }
   return true;
 }
@@ -8736,7 +8941,7 @@ if (STANDALONE_TAB) {
   loadTable('triage');
   loadTable('work'); loadTable('project'); loadTable('training'); loadTable('personnel');
   loadTable('calendar');
-  loadTable('personal_husband'); loadTable('personal_father'); loadTable('personal_house'); loadTable('personal_cars');
+  loadTable('personal');
   applyStartupRouteState().finally(initShellHistory);
 }
 </script>
