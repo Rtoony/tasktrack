@@ -715,13 +715,25 @@ def update_record(table, record_id):
     if not fields:
         return jsonify({"error": "No valid fields to update"}), 400
 
+    reminder_changed = False
     for f in fields:
         old_val = getattr(row, f, "")
         new_val = data[f]
         if str(old_val) != str(new_val):
             action = "status_change" if f == "status" else "updated"
             log_activity(sess, table, record_id, action, f, old_val, new_val)
+            if table == "calendar_events" and f == "reminder_date":
+                reminder_changed = True
         setattr(row, f, new_val)
+
+    # P1-2: editing or clearing a reminder re-arms the dispatch sweep. The
+    # reminder_sent_at stamp is what stops re-sends; if the operator moves the
+    # reminder to a new time (or clears it and sets another), that stamp must
+    # drop back to NULL or the new reminder would silently never fire. Clearing
+    # the reminder entirely also resets it (a no-op for the sweep, but keeps the
+    # column honest — "no reminder" should never carry a stale sent stamp).
+    if table == "calendar_events" and reminder_changed:
+        row.reminder_sent_at = None
 
     if table == "feedback_items" and "status" in fields:
         if getattr(row, "status", "") in done_statuses_for_table("feedback_items"):

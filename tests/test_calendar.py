@@ -442,3 +442,138 @@ def test_calendar_routes_require_login(client):
     assert client.get("/api/v1/calendar/reminders").status_code == 401
     assert client.get("/api/v1/calendar/agenda").status_code == 401
     assert client.get("/api/v1/calendar/events").status_code == 401
+
+
+# ── P1-2: reminder set/clear via the UI (PUT) + dispatch re-arming ──────────
+#
+# The calendar event editor (and the in-line card controls) set/clear a
+# reminder by PUTting reminder_date to /api/v1/calendar_events/<id>. The server
+# must reset reminder_sent_at on ANY reminder change so the live sweep re-arms;
+# otherwise a moved or cleared-then-reset reminder would silently never fire.
+
+
+def _get_event(temp_app, event_id):
+    from app.models import CalendarEvent
+    with temp_app.app_context():
+        return get_session().get(CalendarEvent, event_id)
+
+
+def test_set_reminder_via_put(auth_client, temp_app):
+    event = _create_event(auth_client, title="Submittal due", start_at=_future(3))
+    assert not event.get("reminder_date")
+
+    reminder_at = _future(2)
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"reminder_date": reminder_at},
+    )
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["reminder_date"] == reminder_at
+
+    row = _get_event(temp_app, event["id"])
+    assert row.reminder_date == reminder_at
+    # Freshly-set reminder has never been dispatched.
+    assert row.reminder_sent_at is None
+
+
+def test_clear_reminder_resets_sent_stamp(auth_client, temp_app):
+    event = _create_event(
+        auth_client, title="Review prep", start_at=_future(3),
+        reminder_date=_future(2),
+    )
+    # Simulate the sweep having already fired this reminder.
+    with temp_app.app_context():
+        from app.models import CalendarEvent
+        sess = get_session()
+        row = sess.get(CalendarEvent, event["id"])
+        row.reminder_sent_at = datetime.now()
+        sess.commit()
+    assert _get_event(temp_app, event["id"]).reminder_sent_at is not None
+
+    # Clearing the reminder (empty string) must reset the sent stamp.
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"reminder_date": ""},
+    )
+    assert r.status_code == 200, r.get_json()
+    assert r.get_json()["reminder_date"] == ""
+
+    row = _get_event(temp_app, event["id"])
+    assert row.reminder_date == ""
+    assert row.reminder_sent_at is None
+
+
+def test_moving_reminder_rearms_sent_stamp(auth_client, temp_app):
+    event = _create_event(
+        auth_client, title="Kickoff", start_at=_future(5),
+        reminder_date=_future(1),
+    )
+    with temp_app.app_context():
+        from app.models import CalendarEvent
+        sess = get_session()
+        row = sess.get(CalendarEvent, event["id"])
+        row.reminder_sent_at = datetime.now()
+        sess.commit()
+
+    # Move the reminder to a new time -> stamp must drop so it fires again.
+    new_time = _future(4)
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"reminder_date": new_time},
+    )
+    assert r.status_code == 200, r.get_json()
+    row = _get_event(temp_app, event["id"])
+    assert row.reminder_date == new_time
+    assert row.reminder_sent_at is None
+
+
+def test_unrelated_update_keeps_sent_stamp(auth_client, temp_app):
+    """A PUT that does NOT change reminder_date must not disturb the stamp —
+    otherwise editing the title would needlessly re-fire a sent reminder."""
+    event = _create_event(
+        auth_client, title="Status sync", start_at=_future(3),
+        reminder_date=_future(2),
+    )
+    with temp_app.app_context():
+        from app.models import CalendarEvent
+        sess = get_session()
+        row = sess.get(CalendarEvent, event["id"])
+        row.reminder_sent_at = datetime.now()
+        sess.commit()
+
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"description": "Edited note, reminder untouched"},
+    )
+    assert r.status_code == 200, r.get_json()
+    row = _get_event(temp_app, event["id"])
+    assert row.reminder_sent_at is not None  # unchanged
+
+
+def test_reminder_set_via_api_is_picked_up_by_sweep(auth_client, temp_app):
+    """End-to-end: set a now-due reminder via the API, then the live dispatch
+    sweep finds it and (with a stub sender) stamps it sent exactly once."""
+    from app.services.reminders import dispatch_reminders
+
+    # Event starts in the future (so the reminder is still useful), reminder
+    # due 5 minutes ago.
+    due = (datetime.now().replace(microsecond=0) - timedelta(minutes=5)).isoformat(timespec="minutes")
+    event = _create_event(auth_client, title="Field visit", start_at=_future(2))
+
+    r = auth_client.put(
+        f"/api/v1/calendar_events/{event['id']}",
+        json={"reminder_date": due},
+    )
+    assert r.status_code == 200, r.get_json()
+
+    sent = []
+    with temp_app.app_context():
+        sess = get_session()
+        result = dispatch_reminders(sess, sender=lambda text: (sent.append(text) or True))
+    assert result["sent"] == 1
+    assert result["ids"] == [event["id"]]
+    assert len(sent) == 1
+    assert "Field visit" in sent[0]
+
+    row = _get_event(temp_app, event["id"])
+    assert row.reminder_sent_at is not None
