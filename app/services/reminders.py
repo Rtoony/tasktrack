@@ -28,8 +28,8 @@ A reminder is *due* when all of these hold:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Callable, Optional
 
 from sqlalchemy import select
 
@@ -40,7 +40,7 @@ LOG = logging.getLogger("tasktrack.reminders")
 _DONE_STATUSES = {"done", "cancelled"}
 
 
-def _parse_iso(raw: Optional[str]) -> Optional[datetime]:
+def _parse_iso(raw: str | None) -> datetime | None:
     value = (raw or "").strip()
     if not value:
         return None
@@ -60,7 +60,7 @@ def _event_is_future(row: CalendarEvent, now: datetime) -> bool:
     return start >= now
 
 
-def due_reminders(session, now: Optional[datetime] = None) -> list[CalendarEvent]:
+def due_reminders(session, now: datetime | None = None) -> list[CalendarEvent]:
     """Return events whose reminder is due and not yet sent. Pure, no I/O."""
     now = now or datetime.now()
     rows = session.scalars(
@@ -138,8 +138,8 @@ def _default_sender(text: str) -> bool:
 
 def dispatch_reminders(
     session,
-    now: Optional[datetime] = None,
-    sender: Optional[Callable[[str], bool]] = None,
+    now: datetime | None = None,
+    sender: Callable[[str], bool] | None = None,
 ) -> dict:
     """Send all due reminders and stamp the ones the sender accepted.
 
