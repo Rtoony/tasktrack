@@ -66,6 +66,9 @@ def _att_dict(att: Attachment) -> dict:
     # Convenience field for the UI — full URL the client can hit to get
     # the redirect to MinIO. Keeps frontend code from having to assemble it.
     out["download_url"] = f"/api/v1/attachments/{att.id}/download"
+    # Inline-preview classification (P2-5) so the client renders thumbnails
+    # vs icons without re-deriving type rules. 'image' | 'pdf' | 'file'.
+    out["preview_kind"] = att_svc.preview_kind(att.content_type, att.filename)
     return out
 
 
