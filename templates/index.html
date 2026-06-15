@@ -650,6 +650,11 @@
   .att-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.6rem 0.7rem; background:var(--surface); }
   .att-list { display:flex; flex-direction:column; gap:0.3rem; margin:0; padding:0; list-style:none; }
   .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); font-size:0.78rem; }
+  /* P2-5 inline preview thumbnail/icon */
+  .att-thumb-wrap { flex:0 0 auto; display:inline-flex; line-height:0; }
+  .att-thumb { width:40px; height:40px; border-radius:var(--radius); border:1px solid var(--border-light); object-fit:cover; background:#fff; display:block; }
+  .att-thumb-icon { display:inline-flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:700; letter-spacing:0.02em; color:var(--text-muted); background:color-mix(in srgb, var(--surface) 80%, var(--bg)); }
+  .att-thumb-pdf { color:#b91c1c; border-color:#b91c1c; }
   .att-row .att-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .att-row .att-meta { color:var(--text-muted); font-size:0.7rem; }
   .att-row a { color:var(--accent); text-decoration:none; }
@@ -8126,6 +8131,42 @@ function fmtBytes(n) {
   return (n/(1024*1024)).toFixed(1) + ' MB';
 }
 
+// P2-5: inline attachment preview. Images get a clickable thumbnail
+// (the presigned download_url renders inline); PDFs and everything else
+// get a labelled icon. The image path degrades gracefully — if the
+// thumbnail fails to load (expired presign, MinIO down) onerror swaps in
+// the generic icon so the row never shows a broken-image glyph.
+function attIconLabel(kind, filename) {
+  if (kind === 'pdf') return 'PDF';
+  const ext = (filename || '').split('.').pop().toUpperCase();
+  return (ext && ext.length <= 4) ? ext : 'FILE';
+}
+function buildAttPreview(a) {
+  const wrap = document.createElement('a');
+  wrap.className = 'att-thumb-wrap';
+  wrap.href = a.download_url; wrap.target = '_blank'; wrap.rel = 'noopener';
+  wrap.title = a.filename || '';
+  const kind = a.preview_kind || 'file';
+  const fallback = () => {
+    const icon = document.createElement('span');
+    icon.className = 'att-thumb att-thumb-icon att-thumb-' + kind;
+    icon.textContent = attIconLabel(kind, a.filename);
+    wrap.replaceChildren(icon);
+  };
+  if (kind === 'image') {
+    const img = document.createElement('img');
+    img.className = 'att-thumb';
+    img.alt = a.filename || 'attachment';
+    img.loading = 'lazy';
+    img.src = a.download_url;
+    img.addEventListener('error', fallback, { once: true });
+    wrap.appendChild(img);
+  } else {
+    fallback();
+  }
+  return wrap;
+}
+
 async function loadAttachments(table, recordId) {
   const panel = document.getElementById('att-panel');
   if (!panel) return;
@@ -8147,6 +8188,7 @@ async function loadAttachments(table, recordId) {
     const list = document.createElement('ul'); list.className='att-list';
     items.forEach(a => {
       const li = document.createElement('li'); li.className='att-row';
+      li.appendChild(buildAttPreview(a));
       const link = document.createElement('a');
       link.href = a.download_url; link.target='_blank'; link.rel='noopener';
       link.textContent = a.filename; link.className='att-name';

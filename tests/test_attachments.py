@@ -308,3 +308,66 @@ def test_config_prefers_dedicated_access_keys(monkeypatch):
     cfg = att_svc._config()
     assert cfg.access_key == "dedicated"
     assert cfg.secret_key == "dedicated-secret"
+
+
+# ── Inline preview classification (P2-5) ─────────────────────────────────
+
+@pytest.mark.parametrize(
+    "content_type,filename,expected",
+    [
+        # Browser-renderable image MIMEs are authoritative.
+        ("image/png", "shot.png", "image"),
+        ("image/jpeg", "photo.jpg", "image"),
+        ("image/webp", "x.webp", "image"),
+        ("application/pdf", "drawing.pdf", "pdf"),
+        # MIME with charset/params and odd casing still classified.
+        ("image/png; charset=binary", "a.png", "image"),
+        ("APPLICATION/PDF", "a.pdf", "pdf"),
+        # Non-previewable known types fall through to the generic icon.
+        ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+         "report.xlsx", "file"),
+        # DWG/DXF carry image/vnd.* MIMEs but aren't browser-renderable —
+        # must be 'file' (icon), never a broken-image thumbnail.
+        ("image/vnd.dwg", "plan.dwg", "file"),
+        ("image/vnd.dxf", "plan.dxf", "file"),
+        ("application/octet-stream", "plan.dxf", "file"),
+        # Extension fallback when the stored MIME is empty/garbled.
+        ("", "scan.JPG", "image"),
+        ("", "doc.PDF", "pdf"),
+        ("", "model.dwg", "file"),
+        (None, None, "file"),
+        ("garbage/type", "weird.bin", "file"),
+    ],
+)
+def test_preview_kind(content_type, filename, expected):
+    assert att_svc.preview_kind(content_type, filename) == expected
+
+
+def test_list_includes_preview_kind(client, temp_app, patched_minio):
+    """The list/upload API must surface preview_kind so the UI can render
+    a thumbnail vs an icon without re-deriving type rules."""
+    _login(client)
+    record_id = _seed_work_task(temp_app)
+
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+    r = client.post(
+        f"/api/v1/attachments/work_tasks/{record_id}",
+        data={"file": (io.BytesIO(png), "shot.png", "image/png")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 201, r.data
+    assert r.get_json()["preview_kind"] == "image"
+
+    r = client.post(
+        f"/api/v1/attachments/work_tasks/{record_id}",
+        data={"file": (io.BytesIO(b"%PDF-1.4 stub"), "drawing.pdf", "application/pdf")},
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 201, r.data
+    assert r.get_json()["preview_kind"] == "pdf"
+
+    # The list endpoint carries it too.
+    r = client.get(f"/api/v1/attachments/work_tasks/{record_id}")
+    assert r.status_code == 200
+    kinds = sorted(a["preview_kind"] for a in r.get_json())
+    assert kinds == ["image", "pdf"]
