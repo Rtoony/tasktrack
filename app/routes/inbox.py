@@ -58,6 +58,7 @@ from ..db import get_session
 from ..models import ActivityLog, InboxItem, to_dict
 from ..services import triage as triage_svc
 from ..services.audit import log_activity
+from ..services.intake_templates import suggest_from_templates
 from ..services.tickets import create_direct_record
 from ..services.triage import run_classify
 from ..tokens import check_scoped_token
@@ -166,14 +167,23 @@ def _log_suggested(sess, item_id, target):
 def run_suggest_for_item(sess, item):
     """Classify an inbox item and store the ADVISORY suggestion on it.
 
+    Phase 2: the deterministic intake-template registry runs FIRST. When a
+    known input shape matches (B&R form marker, [####.##] subject, cad:
+    prefix, …) the suggestion is built locally and the LLM is skipped —
+    higher confidence for known shapes, and a useful row even when the
+    model is down. Only unmatched input falls through to the AI classifier
+    (run_classify). Templates always take precedence.
+
     Synchronous core shared by POST /<id>/suggest and the capture-time
     background refine. Raises RuntimeError (from run_classify) on model
-    failure, leaving the item untouched. Re-runs overwrite the previous
-    suggestion. Never creates tracker rows.
+    failure when no template matched, leaving the item untouched. Re-runs
+    overwrite the previous suggestion. Never creates tracker rows.
     """
-    raw_text = item.title + (("\n\n" + item.body) if item.body else "")
-    hints = _intake_hints(item.body)
-    suggestion, _model = run_classify(raw_text, hints=hints)
+    suggestion = suggest_from_templates(item.title, item.body or "", item.source or "")
+    if suggestion is None:
+        raw_text = item.title + (("\n\n" + item.body) if item.body else "")
+        hints = _intake_hints(item.body)
+        suggestion, _model = run_classify(raw_text, hints=hints)
     item.suggested_table = suggestion["target_table"]
     item.suggestion_json = json.dumps(suggestion)
     item.suggested_at = datetime.now()

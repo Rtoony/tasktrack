@@ -237,7 +237,13 @@ def test_suggest_accepts_triage_token(
     assert r.status_code == 200, r.data
 
 
-def test_suggest_forwards_intake_meta_hints(auth_client, monkeypatch):
+def test_suggest_intake_meta_handled_by_template_not_ai(auth_client, monkeypatch):
+    """Phase 2 precedence: an INTAKE_META body matches the br-intake-form
+    template and is suggested deterministically — the AI classifier is
+    SKIPPED. (Pre-Phase-2 this item's hints were forwarded to run_classify;
+    that hint path now only matters for the malformed-meta fallback, which
+    _intake_hints returns None for. The hint extractor itself is covered by
+    test_intake_hints_defensive_on_malformed_meta + test_intake_templates.)"""
     meta = {"type": "cad", "suggested_target": "work_tasks",
             "fields": {"skill": "LISP / Automation", "software": "AutoCAD",
                        "project": "", "details": "long text"}}
@@ -246,14 +252,12 @@ def test_suggest_forwards_intake_meta_hints(auth_client, monkeypatch):
 
     calls = []
     _mock_classifier(monkeypatch, calls=calls)
-    assert auth_client.post(f"/api/v1/inbox/{item_id}/suggest").status_code == 200
-    hints = calls[0]["hints"]
-    assert hints["request_type"] == "cad"
-    assert hints["requested_target"] == "work_tasks"
-    assert hints["skill"] == "LISP / Automation"
-    assert hints["software"] == "AutoCAD"
-    assert "project" not in hints  # empty values dropped
-    assert calls[0]["raw_text"].startswith("fix crosshairs\n\n")
+    r = auth_client.post(f"/api/v1/inbox/{item_id}/suggest")
+    assert r.status_code == 200
+    suggestion = r.get_json()["suggestion"]
+    assert suggestion["model"] == "rule:br-intake-form"
+    assert suggestion["target_table"] == "work_tasks"
+    assert calls == []  # the AI classifier was never consulted
 
 
 def test_intake_hints_defensive_on_malformed_meta():
