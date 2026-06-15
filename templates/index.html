@@ -280,6 +280,13 @@
   .section-subtitle { font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem; }
   .filter-select { padding:0.3rem 0.5rem; font-family:inherit; font-size:0.75rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); color:var(--text); cursor:pointer; }
   .filter-select:focus { outline:none; border-color:var(--accent); }
+  /* P1-5 Saved Views: per-tab control group injected into each tracker
+     filter-bar by JS. Visually mirrors the existing filter controls. */
+  .saved-views { display:inline-flex; align-items:center; gap:0.3rem; }
+  .saved-views .btn-sm { padding:0.3rem 0.6rem; font-size:0.72rem; }
+  .saved-views-del { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:var(--radius); cursor:pointer; font-size:0.85rem; line-height:1; padding:0.25rem 0.45rem; }
+  .saved-views-del:hover { color:var(--danger); border-color:var(--danger); }
+  .saved-views-del:disabled { opacity:0.4; cursor:default; }
 
   .btn { display:inline-flex; align-items:center; gap:5px; padding:0.4rem 0.85rem; font-family:inherit; font-size:0.78rem; font-weight:500; border:none; border-radius:var(--radius); cursor:pointer; transition:all 0.15s; }
   .btn-primary { background:var(--accent); color:#fff; }
@@ -650,6 +657,11 @@
   .att-panel { border:1px solid var(--border); border-radius:var(--radius); padding:0.6rem 0.7rem; background:var(--surface); }
   .att-list { display:flex; flex-direction:column; gap:0.3rem; margin:0; padding:0; list-style:none; }
   .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); font-size:0.78rem; }
+  /* P2-5 inline preview thumbnail/icon */
+  .att-thumb-wrap { flex:0 0 auto; display:inline-flex; line-height:0; }
+  .att-thumb { width:40px; height:40px; border-radius:var(--radius); border:1px solid var(--border-light); object-fit:cover; background:#fff; display:block; }
+  .att-thumb-icon { display:inline-flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:700; letter-spacing:0.02em; color:var(--text-muted); background:color-mix(in srgb, var(--surface) 80%, var(--bg)); }
+  .att-thumb-pdf { color:#b91c1c; border-color:#b91c1c; }
   .att-row .att-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .att-row .att-meta { color:var(--text-muted); font-size:0.7rem; }
   .att-row a { color:var(--accent); text-decoration:none; }
@@ -3426,6 +3438,9 @@ function activateTab(tabName, options={}) {
   // loadCompetency(), which post-save reloads rely on to keep the selection.
   if (currentTab === 'competency') { compScorecardEmpId = null; compSelected = null; loadCompetency(); }
   if (API_MAP[currentTab]) loadTable(currentTab);
+  // P1-5: refresh this tab's saved-views dropdown on activation (per-user,
+  // per-tab). Fire-and-forget — the table loads independently.
+  if (SAVED_VIEW_TABS.includes(currentTab)) loadSavedViews(currentTab);
   if (options.history !== false) pushShellHistory(currentTab);
   return true;
 }
@@ -3433,6 +3448,154 @@ function activateTab(tabName, options={}) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
+
+/* ── Saved Views (WORK_PLAN P1-5) ──────────────────────────────────────
+   Per-user, per-tab named filter/sort configurations. Each tracker tab's
+   filter-bar gets a "Save view" button + a views dropdown injected at init.
+   A view captures every `filter-<tab>-*` control in the section plus the
+   tab's sortState entry, stores it as an opaque blob server-side, and
+   re-applies it by setting those same controls and reloading the table.
+   This stays generic across all tracker tabs — no per-tab special casing —
+   so it keeps working as each tab's filter set evolves. */
+const SAVED_VIEW_TABS = ['work', 'project', 'training', 'personnel', 'triage', 'calendar', 'personal'];
+const savedViewsCache = {};  // tab -> [view, ...]
+
+// Capture the live filter-bar state for a tab: the value of every
+// filter-<tab>-* control inside its section, plus the sort col/order.
+function captureViewState(tab) {
+  const section = document.getElementById('sec-' + tab);
+  const filters = {};
+  if (section) {
+    section.querySelectorAll('[id^="filter-' + tab + '-"]').forEach(el => {
+      filters[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
+    });
+  }
+  const st = sortState[tab] || {};
+  return { filters, sort: { col: st.col || null, order: st.order || null } };
+}
+
+// Re-apply a captured state to the tab's controls + sortState, then reload.
+function applyViewState(tab, state) {
+  const filters = (state && state.filters) || {};
+  Object.entries(filters).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (!el) return;  // control was removed/renamed since the view was saved
+    if (el.type === 'checkbox') el.checked = !!val;
+    else el.value = val;
+  });
+  const sort = (state && state.sort) || {};
+  if (sort.col && sortState[tab]) {
+    sortState[tab].col = sort.col;
+    sortState[tab].order = sort.order === 'desc' ? 'desc' : 'asc';
+  }
+  if (API_MAP[tab]) loadTable(tab);
+}
+
+function savedViewsControl(tab) {
+  return document.querySelector('.saved-views[data-tab="' + tab + '"]');
+}
+
+function renderSavedViewsOptions(tab) {
+  const ctrl = savedViewsControl(tab);
+  if (!ctrl) return;
+  const sel = ctrl.querySelector('select');
+  const del = ctrl.querySelector('.saved-views-del');
+  const views = savedViewsCache[tab] || [];
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = '';
+  ph.textContent = views.length ? 'Saved views…' : 'No saved views';
+  sel.appendChild(ph);
+  views.forEach(v => {
+    const o = document.createElement('option');
+    o.value = String(v.id);
+    o.textContent = v.name;
+    sel.appendChild(o);
+  });
+  if (del) del.disabled = true;
+}
+
+async function loadSavedViews(tab) {
+  if (!SAVED_VIEW_TABS.includes(tab)) return;
+  const data = await api('GET', '/api/v1/saved-views?tab=' + encodeURIComponent(tab));
+  if (!data) return;
+  savedViewsCache[tab] = Array.isArray(data.views) ? data.views : [];
+  renderSavedViewsOptions(tab);
+}
+
+async function saveCurrentView(tab) {
+  const name = (prompt('Name this view (e.g. "My overdue", "Due this week"):') || '').trim();
+  if (!name) return;
+  const res = await api('POST', '/api/v1/saved-views', {
+    name, tab, state: captureViewState(tab),
+  });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not save view'); return; }
+  await loadSavedViews(tab);
+  const sel = savedViewsControl(tab)?.querySelector('select');
+  if (sel) sel.value = String(res.id);
+  const del = savedViewsControl(tab)?.querySelector('.saved-views-del');
+  if (del) del.disabled = false;
+  toast('Saved view "' + name + '"');
+}
+
+function onSavedViewSelected(tab, value) {
+  const del = savedViewsControl(tab)?.querySelector('.saved-views-del');
+  if (del) del.disabled = !value;
+  if (!value) return;
+  const view = (savedViewsCache[tab] || []).find(v => String(v.id) === String(value));
+  if (view) applyViewState(tab, view.state);
+}
+
+async function deleteSelectedView(tab) {
+  const sel = savedViewsControl(tab)?.querySelector('select');
+  const id = sel && sel.value;
+  if (!id) return;
+  const view = (savedViewsCache[tab] || []).find(v => String(v.id) === String(id));
+  if (!confirm('Delete saved view "' + (view ? view.name : id) + '"?')) return;
+  const res = await api('DELETE', '/api/v1/saved-views/' + id);
+  if (!res || res.error) { toast('Could not delete view'); return; }
+  await loadSavedViews(tab);
+  toast('Deleted view');
+}
+
+// Inject the control group into each tracker tab's filter-bar.
+function initSavedViews() {
+  SAVED_VIEW_TABS.forEach(tab => {
+    const section = document.getElementById('sec-' + tab);
+    const bar = section && section.querySelector('.filter-bar');
+    if (!bar || savedViewsControl(tab)) return;
+
+    const wrap = document.createElement('span');
+    wrap.className = 'saved-views';
+    wrap.dataset.tab = tab;
+
+    const sel = document.createElement('select');
+    sel.className = 'filter-select';
+    sel.title = 'Load a saved view';
+    sel.addEventListener('change', () => onSavedViewSelected(tab, sel.value));
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-export';
+    saveBtn.textContent = 'Save view';
+    saveBtn.title = 'Save the current filters & sort as a named view';
+    saveBtn.addEventListener('click', () => saveCurrentView(tab));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'saved-views-del';
+    del.textContent = '✕';
+    del.title = 'Delete the selected saved view';
+    del.disabled = true;
+    del.addEventListener('click', () => deleteSelectedView(tab));
+
+    wrap.appendChild(sel);
+    wrap.appendChild(saveBtn);
+    wrap.appendChild(del);
+    bar.appendChild(wrap);
+    renderSavedViewsOptions(tab);
+  });
+}
 
 /* ── Competency matrix (CAD/GIS 0-3 task coverage) ────────────────
    /api/v1/skills/matrix?detail=1 returns categories, task dimensions,
@@ -3827,6 +3990,7 @@ function renderCompetencyDetail() {
 // Live filter input — debounced re-render without re-fetching.
 document.addEventListener('DOMContentLoaded', () => {
   populateManagedOptionControls();
+  initSavedViews();
   const filt = document.getElementById('comp-filter');
   if (filt) {
     let t;
@@ -5439,7 +5603,18 @@ function makeCalendarAgendaCard(r) {
     meta.appendChild(p);
   }
   if (r.location) { const loc = document.createElement('span'); loc.className = 'calendar-chip'; loc.textContent = r.location; meta.appendChild(loc); }
-  if (r.reminder_date) { const rem = document.createElement('span'); rem.className = 'calendar-chip reminder'; rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date); meta.appendChild(rem); }
+  if (r.reminder_date) {
+    // P1-2: the reminder chip doubles as a one-click clear control. Clicking it
+    // clears reminder_date (PUT '' -> server resets reminder_sent_at), so an
+    // operator can drop a reminder without opening the full editor.
+    const rem = document.createElement('button');
+    rem.type = 'button';
+    rem.className = 'calendar-chip reminder';
+    rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date) + ' ×';
+    rem.title = 'Clear this reminder';
+    rem.addEventListener('click', (ev) => { ev.stopPropagation(); clearEventReminder(r.id); });
+    meta.appendChild(rem);
+  }
   main.appendChild(meta);
   if (r.description) { const desc = document.createElement('div'); desc.className = 'calendar-event-desc'; desc.textContent = descriptionPreview(r.description); main.appendChild(desc); }
 
@@ -5447,6 +5622,17 @@ function makeCalendarAgendaCard(r) {
   const status = document.createElement('span'); status.className = 'badge badge-' + String(r.status || '').toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-'); status.textContent = r.status || '';
   const vis = document.createElement('span'); vis.className = 'badge badge-' + String(r.visibility || 'internal').toLowerCase().replace(/\s+/g, '-'); vis.textContent = r.visibility || 'internal';
   actions.appendChild(status); actions.appendChild(vis);
+  if (r.id && !r.reminder_date) {
+    // P1-2: quick "set a reminder" affordance for events that have none yet.
+    // Prompts for a date/time, PUTs reminder_date, and the live sweep fires it.
+    const remind = document.createElement('button');
+    remind.className = 'btn btn-sm btn-export';
+    remind.type = 'button';
+    remind.textContent = '⏰ Remind';
+    remind.title = 'Set a reminder for this event';
+    remind.addEventListener('click', (ev) => { ev.stopPropagation(); setEventReminder(r); });
+    actions.appendChild(remind);
+  }
   if (r.id) {
     const packet = document.createElement('button');
     packet.className = 'btn btn-sm btn-export';
@@ -5459,6 +5645,57 @@ function makeCalendarAgendaCard(r) {
 
   card.appendChild(time); card.appendChild(main); card.appendChild(actions);
   return card;
+}
+
+/* ── Calendar reminder quick controls (P1-2) ───────────────────────────
+   The full editor (modal) already exposes a reminder datetime field; these
+   are the in-line shortcuts on each event card so an operator can arm or drop
+   a reminder in one click. Both PUT reminder_date; the server resets
+   reminder_sent_at on any change so the live dispatch sweep re-arms. */
+
+/* Normalise a free-typed datetime into the ISO 'YYYY-MM-DDTHH:MM' the rest of
+   TaskTrack stores. Accepts a space or 'T' separator and an optional time
+   (defaults to 09:00 for a bare date). Returns '' if it can't be parsed. */
+function normalizeReminderInput(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!m) return '';
+  const [, y, mo, d, h, mi] = m;
+  const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h ?? 9), Number(mi ?? 0));
+  if (Number.isNaN(dt.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+async function setEventReminder(r) {
+  // Default the prompt to one day before the event start (or now+1h if no start),
+  // a sensible nudge lead-time the operator can override.
+  let suggested = '';
+  const start = r && r.start_at ? new Date(String(r.start_at).slice(0, 16)) : null;
+  const base = start && !Number.isNaN(start.getTime())
+    ? new Date(start.getTime() - 24 * 60 * 60 * 1000)
+    : new Date(Date.now() + 60 * 60 * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  suggested = `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())} ${pad(base.getHours())}:${pad(base.getMinutes())}`;
+  const entered = window.prompt('Remind me at (YYYY-MM-DD HH:MM):', suggested);
+  if (entered === null) return;  // cancelled
+  const iso = normalizeReminderInput(entered);
+  if (!iso) { toast('Could not read that date/time'); return; }
+  const res = await api('PUT', '/api/v1/calendar_events/' + r.id, { reminder_date: iso });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not set reminder'); return; }
+  toast('Reminder set');
+  loadTable('calendar'); loadDashboard();
+}
+
+async function clearEventReminder(id) {
+  if (!window.confirm('Clear this reminder?')) return;
+  // Empty reminder_date -> server resets reminder_sent_at too (a "cleared then
+  // re-set" reminder must be able to fire again).
+  const res = await api('PUT', '/api/v1/calendar_events/' + id, { reminder_date: '' });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not clear reminder'); return; }
+  toast('Reminder cleared');
+  loadTable('calendar'); loadDashboard();
 }
 
 /* ── Kanban view (Phase 4) ─────────────────────────────────────────────
@@ -8126,6 +8363,42 @@ function fmtBytes(n) {
   return (n/(1024*1024)).toFixed(1) + ' MB';
 }
 
+// P2-5: inline attachment preview. Images get a clickable thumbnail
+// (the presigned download_url renders inline); PDFs and everything else
+// get a labelled icon. The image path degrades gracefully — if the
+// thumbnail fails to load (expired presign, MinIO down) onerror swaps in
+// the generic icon so the row never shows a broken-image glyph.
+function attIconLabel(kind, filename) {
+  if (kind === 'pdf') return 'PDF';
+  const ext = (filename || '').split('.').pop().toUpperCase();
+  return (ext && ext.length <= 4) ? ext : 'FILE';
+}
+function buildAttPreview(a) {
+  const wrap = document.createElement('a');
+  wrap.className = 'att-thumb-wrap';
+  wrap.href = a.download_url; wrap.target = '_blank'; wrap.rel = 'noopener';
+  wrap.title = a.filename || '';
+  const kind = a.preview_kind || 'file';
+  const fallback = () => {
+    const icon = document.createElement('span');
+    icon.className = 'att-thumb att-thumb-icon att-thumb-' + kind;
+    icon.textContent = attIconLabel(kind, a.filename);
+    wrap.replaceChildren(icon);
+  };
+  if (kind === 'image') {
+    const img = document.createElement('img');
+    img.className = 'att-thumb';
+    img.alt = a.filename || 'attachment';
+    img.loading = 'lazy';
+    img.src = a.download_url;
+    img.addEventListener('error', fallback, { once: true });
+    wrap.appendChild(img);
+  } else {
+    fallback();
+  }
+  return wrap;
+}
+
 async function loadAttachments(table, recordId) {
   const panel = document.getElementById('att-panel');
   if (!panel) return;
@@ -8147,6 +8420,7 @@ async function loadAttachments(table, recordId) {
     const list = document.createElement('ul'); list.className='att-list';
     items.forEach(a => {
       const li = document.createElement('li'); li.className='att-row';
+      li.appendChild(buildAttPreview(a));
       const link = document.createElement('a');
       link.href = a.download_url; link.target='_blank'; link.rel='noopener';
       link.textContent = a.filename; link.className='att-name';

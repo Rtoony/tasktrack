@@ -82,6 +82,41 @@ EXTENSION_MAGIC = {
 
 _SAFE_FILENAME_RE = re.compile(r"[^A-Za-z0-9._-]+")
 
+# Inline-preview classification (P2-5). The UI renders an image thumbnail
+# for "image", a first-page/file affordance for "pdf", and a generic
+# icon + filename/size for "file". Derived from content_type first
+# (authoritative, validated at upload) with an extension fallback for
+# rows whose content_type was never stored. Kept here so both the API
+# layer and any future server-side render share one source of truth.
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
+_PDF_EXTS = {".pdf"}
+# Only image subtypes a browser <img> can actually render inline. DWG/DXF
+# carry image/vnd.* MIMEs but are CAD formats, not browser-renderable, so
+# they must classify as 'file' (icon), not 'image' (broken thumbnail).
+_RENDERABLE_IMAGE_MIMES = {
+    "image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp",
+}
+
+
+def preview_kind(content_type: str | None, filename: str | None) -> str:
+    """Classify an attachment for inline preview: 'image' | 'pdf' | 'file'.
+
+    Never raises — an unrecognized type degrades gracefully to 'file', the
+    icon+metadata fallback the UI always knows how to render.
+    """
+    ct = (content_type or "").lower().split(";")[0].strip()
+    if ct in _RENDERABLE_IMAGE_MIMES:
+        return "image"
+    if ct == "application/pdf":
+        return "pdf"
+    # Fall back to the extension when the stored MIME is empty/garbled.
+    ext = os.path.splitext(filename or "")[1].lower()
+    if ext in _IMAGE_EXTS:
+        return "image"
+    if ext in _PDF_EXTS:
+        return "pdf"
+    return "file"
+
 
 class AttachmentError(Exception):
     """Raised for client-visible upload failures (bad MIME, oversized, etc.)."""

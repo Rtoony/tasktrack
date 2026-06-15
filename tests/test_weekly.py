@@ -13,10 +13,15 @@ from app.models import (
     Employee,
     EmployeeSkillScore,
     PersonnelIssue,
+    ProjectWorkTask,
     SkillCategory,
     WorkTask,
 )
-from app.services.weekly import weekly_snapshot
+from app.services.weekly import (
+    BREAKDOWN_KEY_LIMIT,
+    UNASSIGNED_LABEL,
+    weekly_snapshot,
+)
 
 # ── Pure-data aggregator ─────────────────────────────────────────────────
 
@@ -313,3 +318,158 @@ def test_days_arg_garbage_defaults_to_7(auth_client):
     r = auth_client.get("/api/v1/weekly?days=banana")
     assert r.status_code == 200
     assert r.get_json()["days"] == 7
+
+
+# ── Status / assignee / age breakdowns (P2-3 report-engine extension) ─────
+
+
+def test_breakdown_absent_by_default(temp_app):
+    """The default payload must NOT carry a `breakdown` block — keeps the
+    standard shape and its existing consumers untouched."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(WorkTask(title="x", status="In Progress"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7)
+    assert "breakdown" not in snap["buckets"]["work_tasks"]
+
+
+def test_breakdown_by_status_counts_all_rows(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(WorkTask(title="a", status="In Progress"))
+        sess.add(WorkTask(title="b", status="In Progress"))
+        sess.add(WorkTask(title="c", status="On Hold"))
+        sess.add(WorkTask(title="d", status="Complete"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    by_status = snap["buckets"]["work_tasks"]["breakdown"]["by_status"]
+    assert by_status == {"In Progress": 2, "On Hold": 1, "Complete": 1}
+
+
+def test_breakdown_by_assignee_only_counts_open(temp_app):
+    """by_assignee groups OPEN rows by the table's assignee field; done
+    rows are excluded, missing names roll into UNASSIGNED_LABEL."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(WorkTask(title="a", status="In Progress", requested_by="Dana"))
+        sess.add(WorkTask(title="b", status="On Hold", requested_by="Dana"))
+        sess.add(WorkTask(title="c", status="In Progress", requested_by=""))
+        sess.add(WorkTask(title="d", status="Complete", requested_by="Dana"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    by_assignee = snap["buckets"]["work_tasks"]["breakdown"]["by_assignee"]
+    assert by_assignee == {"Dana": 2, UNASSIGNED_LABEL: 1}
+
+
+def test_breakdown_uses_engineer_field_for_project_tasks(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(ProjectWorkTask(title="p1", status="In Progress", engineer="Lee"))
+        sess.add(ProjectWorkTask(title="p2", status="In Progress", engineer="Lee"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    bd = snap["buckets"]["project_work_tasks"]["breakdown"]
+    assert bd["by_assignee"] == {"Lee": 2}
+
+
+def test_breakdown_no_assignee_dim_for_inbox(temp_app):
+    """inbox_items has no owner column → no by_assignee key, but the other
+    two dimensions are still present."""
+    with temp_app.app_context():
+        sess = get_session()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    bd = snap["buckets"]["inbox_items"]["breakdown"]
+    assert "by_assignee" not in bd
+    assert "by_status" in bd
+    assert "age_buckets" in bd
+
+
+def test_breakdown_age_buckets_only_count_open(temp_app):
+    """A fresh open row lands in 0-2d; an old open row lands in 31d+;
+    a Complete row is excluded from age buckets entirely."""
+    with temp_app.app_context():
+        sess = get_session()
+        fresh = WorkTask(title="fresh", status="In Progress")
+        old = WorkTask(title="old", status="In Progress")
+        done = WorkTask(title="done", status="Complete")
+        sess.add_all([fresh, old, done])
+        sess.commit()
+        old.created_at = datetime.utcnow() - timedelta(days=60)
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    ages = snap["buckets"]["work_tasks"]["breakdown"]["age_buckets"]
+    assert ages["0-2d"] == 1
+    assert ages["31d+"] == 1
+    assert sum(ages.values()) == 2  # the Complete row is not counted
+
+
+def test_breakdown_redacts_personnel_assignee_for_non_admin(temp_app):
+    """Sensitive trackers must not leak person names through the assignee
+    rollup when the caller isn't admin."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Private Person",
+            issue_description="sensitive",
+            status="Open",
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True, include_admin=False)
+    by_assignee = snap["buckets"]["personnel_issues"]["breakdown"]["by_assignee"]
+    assert "Private Person" not in by_assignee
+    assert by_assignee.get("Restricted") == 1
+    assert "Private Person" not in str(snap)
+
+
+def test_breakdown_shows_personnel_assignee_for_admin(temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Named Person",
+            issue_description="sensitive",
+            status="Open",
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True, include_admin=True)
+    by_assignee = snap["buckets"]["personnel_issues"]["breakdown"]["by_assignee"]
+    assert by_assignee.get("Named Person") == 1
+
+
+def test_breakdown_caps_distinct_assignees(temp_app):
+    """More distinct assignees than BREAKDOWN_KEY_LIMIT collapses the tail
+    into a single 'Other (N)' entry so the JSON stays bounded."""
+    extra = 8
+    with temp_app.app_context():
+        sess = get_session()
+        for i in range(BREAKDOWN_KEY_LIMIT + extra):
+            sess.add(WorkTask(title=f"t{i}", status="In Progress",
+                              requested_by=f"person-{i:03d}"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, breakdown=True)
+    by_assignee = snap["buckets"]["work_tasks"]["breakdown"]["by_assignee"]
+    assert len(by_assignee) == BREAKDOWN_KEY_LIMIT + 1
+    other_key = next(k for k in by_assignee if k.startswith("Other ("))
+    assert by_assignee[other_key] == extra
+
+
+def test_breakdown_route_opt_in(auth_client):
+    base = auth_client.get("/api/v1/weekly").get_json()
+    assert "breakdown" not in next(iter(base["buckets"].values()))
+    bd = auth_client.get("/api/v1/weekly?breakdown=1").get_json()
+    assert "breakdown" in next(iter(bd["buckets"].values()))
+
+
+def test_breakdown_html_renders_rollups(auth_client, temp_app):
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(WorkTask(title="rollup-task", status="In Progress",
+                          requested_by="Sam"))
+        sess.commit()
+    r = auth_client.get("/weekly?breakdown=1")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "By status" in html
+    assert "Open by assignee" in html
+    assert "Open by age" in html
+    assert "Sam" in html

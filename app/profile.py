@@ -64,6 +64,15 @@ TOKEN_API_RATE_LIMIT_PER_HR_PER_IP = _int("TOKEN_API_RATE_LIMIT_PER_HR_PER_IP", 
 # Flip off to rely on explicit POST /api/v1/inbox/<id>/suggest only.
 INBOX_AUTO_SUGGEST = _bool("INBOX_AUTO_SUGGEST", True)
 
+# ── Inbox auto-file (Triage Phase 2b — confidence-gated bypass) ────────────
+# Global kill-switch for confidence-gated auto-filing of inbox items that
+# match a TRUSTED deterministic template (Trust.auto_file) at or above its
+# min_confidence with every required field present. DEFAULT OFF — until
+# Phase-3 outcomes data justifies per-template enablement, every captured
+# item still waits for a human at the assignment modal exactly as before.
+# When OFF this is a strict no-op vs. the suggest-only Phase-2 behavior.
+INBOX_AUTO_FILE = _bool("INBOX_AUTO_FILE", False)
+
 
 def summary() -> dict:
     return {
@@ -73,4 +82,5 @@ def summary() -> dict:
         "LOG_FORMAT": LOG_FORMAT,
         "INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP": INTAKE_FORM_RATE_LIMIT_PER_HR_PER_IP,
         "INBOX_AUTO_SUGGEST": INBOX_AUTO_SUGGEST,
+        "INBOX_AUTO_FILE": INBOX_AUTO_FILE,
     }
