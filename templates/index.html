@@ -128,6 +128,39 @@
     .calendar-event-card { grid-template-columns:1fr; gap:0.45rem; }
     .calendar-event-actions { align-items:flex-start; flex-direction:row; flex-wrap:wrap; }
   }
+  /* P2-2: month/week grid view. Reuses the agenda data already in tableCache.calendar;
+     a third lens on the same events, not a new data path. */
+  .calendar-grid-wrap { margin-bottom:1rem; }
+  .calendar-grid-toolbar { display:flex; align-items:center; gap:0.6rem; margin-bottom:0.7rem; flex-wrap:wrap; }
+  .calendar-grid-nav { display:inline-flex; gap:0.3rem; }
+  .calendar-grid-period { font-size:0.95rem; font-weight:700; color:var(--text); min-width:170px; }
+  .calendar-grid-spacer { flex:1 1 auto; }
+  .calendar-grid { display:grid; grid-template-columns:repeat(7, 1fr); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; background:var(--border-light); gap:1px; box-shadow:var(--shadow-sm); }
+  .calendar-grid.week-mode { grid-auto-rows:minmax(150px, auto); }
+  .calendar-grid-dow { background:color-mix(in srgb, var(--surface) 82%, var(--bg)); padding:0.4rem 0.55rem; font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.04em; color:var(--text-light); text-align:center; }
+  .calendar-grid-cell { background:var(--surface); min-height:104px; padding:0.35rem 0.4rem; display:flex; flex-direction:column; gap:0.25rem; cursor:pointer; transition:background 0.12s; position:relative; }
+  .calendar-grid-cell:hover { background:color-mix(in srgb, var(--surface) 80%, var(--accent-light, var(--bg))); }
+  .calendar-grid-cell.other-month { background:color-mix(in srgb, var(--surface) 60%, var(--bg)); }
+  .calendar-grid-cell.is-today { box-shadow:inset 0 0 0 2px var(--accent); }
+  .calendar-grid-cell.is-weekend { background:color-mix(in srgb, var(--surface) 92%, var(--bg)); }
+  .calendar-grid-daynum { font-size:0.74rem; font-weight:700; color:var(--text-muted); align-self:flex-end; }
+  .calendar-grid-cell.is-today .calendar-grid-daynum { color:var(--accent); }
+  .calendar-grid-cell.other-month .calendar-grid-daynum { opacity:0.5; }
+  .calendar-grid-events { display:flex; flex-direction:column; gap:0.18rem; min-height:0; }
+  .calendar-grid-event { display:flex; align-items:center; gap:0.3rem; border-radius:5px; padding:0.1rem 0.32rem; font-size:0.7rem; line-height:1.25; cursor:pointer; background:var(--accent-light, color-mix(in srgb, var(--accent) 14%, var(--surface))); color:var(--text); border:1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .calendar-grid-event:hover { filter:brightness(0.97); border-color:var(--accent); }
+  .calendar-grid-event.cancelled, .calendar-grid-event.done { opacity:0.6; }
+  .calendar-grid-event .ge-time { font-family:'IBM Plex Mono', monospace; font-weight:700; font-size:0.64rem; color:var(--accent); flex:0 0 auto; }
+  .calendar-grid-event .ge-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .calendar-grid-event .ge-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); flex:0 0 auto; }
+  .calendar-grid-more { font-size:0.66rem; font-weight:700; color:var(--text-light); cursor:pointer; padding:0.05rem 0.32rem; }
+  .calendar-grid-more:hover { color:var(--accent); }
+  .calendar-grid-empty { padding:2rem; text-align:center; color:var(--text-light); }
+  @media (max-width: 720px) {
+    .calendar-grid-cell { min-height:62px; padding:0.2rem; }
+    .calendar-grid-event .ge-time { display:none; }
+    .calendar-grid-period { min-width:0; }
+  }
   @media (max-width: 1100px) {
     .kanban-board { grid-template-columns:repeat(2, 1fr); }
   }
@@ -1740,6 +1773,8 @@
       <input class="filter-select" id="filter-calendar-q" type="text" placeholder="Find agenda..." oninput="loadTable('calendar')" style="width:145px">
       <div class="view-toggle" aria-label="Calendar view">
         <button class="view-toggle-btn active" type="button" data-calendar-view="agenda" onclick="setCalendarView('agenda')">Agenda</button>
+        <button class="view-toggle-btn" type="button" data-calendar-view="month" onclick="setCalendarView('month')">Month</button>
+        <button class="view-toggle-btn" type="button" data-calendar-view="week" onclick="setCalendarView('week')">Week</button>
         <button class="view-toggle-btn" type="button" data-calendar-view="table" onclick="setCalendarView('table')">Table</button>
       </div>
       <a class="btn btn-sm btn-export" href="/api/v1/calendar_events/export.csv">CSV</a>
@@ -1751,6 +1786,19 @@
         <div class="empty-title">No calendar agenda items</div>
         <p class="empty-copy">Adjust filters or add a meeting, deadline, milestone, prep block, or reminder.</p>
       </div>
+    </div>
+    <div class="calendar-grid-wrap" id="calendar-grid-view" style="display:none">
+      <div class="calendar-grid-toolbar">
+        <div class="calendar-grid-nav">
+          <button class="btn btn-sm btn-export" type="button" onclick="calendarGridShift(-1)" title="Previous">&#8249;</button>
+          <button class="btn btn-sm btn-export" type="button" onclick="calendarGridToday()">Today</button>
+          <button class="btn btn-sm btn-export" type="button" onclick="calendarGridShift(1)" title="Next">&#8250;</button>
+        </div>
+        <div class="calendar-grid-period" id="calendar-grid-period"></div>
+        <div class="calendar-grid-spacer"></div>
+        <span class="section-subtitle">Click a day to add an event · click an event to open it.</span>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
     </div>
     <div class="table-wrap" id="calendar-table-view" style="display:none">
       <table><thead><tr>
@@ -5341,7 +5389,12 @@ async function loadTable(table) {
   }
 
   tbody.replaceChildren();
-  if (table === 'calendar') renderCalendarAgenda(filtered);
+  if (table === 'calendar') {
+    renderCalendarAgenda(filtered);
+    // P2-2: keep the month/week grid in sync with the same fetch (it reads the
+    // unfiltered cache so navigation isn't trapped by the window dropdown).
+    if (calendarViewMode === 'month' || calendarViewMode === 'week') renderCalendarGrid();
+  }
   // Prune bulk selections that fell out of the current filter set.
   if (table === 'triage') syncTriageBulkSelection(filtered);
   if (!filtered.length) { empty.style.display='block'; return; }
@@ -5451,10 +5504,13 @@ function setCalendarView(mode) {
     btn.classList.toggle('active', btn.dataset.calendarView === mode);
   });
   const agenda = document.getElementById('calendar-agenda-view');
+  const grid = document.getElementById('calendar-grid-view');
   const table = document.getElementById('calendar-table-view');
   if (agenda) agenda.style.display = (mode === 'agenda') ? '' : 'none';
+  if (grid) grid.style.display = (mode === 'month' || mode === 'week') ? '' : 'none';
   if (table) table.style.display = (mode === 'table') ? '' : 'none';
   if (mode === 'agenda') renderCalendarAgenda(currentFilteredCalendarRows());
+  if (mode === 'month' || mode === 'week') renderCalendarGrid();
 }
 
 function currentFilteredCalendarRows() {
@@ -5645,6 +5701,175 @@ function makeCalendarAgendaCard(r) {
 
   card.appendChild(time); card.appendChild(main); card.appendChild(actions);
   return card;
+}
+
+/* ── Calendar month / week grid view (P2-2) ─────────────────────────────
+   A third lens on the same events that live in tableCache.calendar. The grid
+   navigates an anchor date independently of the agenda's window dropdown, so
+   prev/next/today scrolls through real months/weeks; clicking a day opens a
+   prefilled new-event drawer, clicking an event opens that event's drawer.
+   No new fetch, no new data path — reminders/CRUD are untouched. */
+let calendarGridAnchor = new Date();
+const CAL_GRID_MAX_PER_CELL = 4;
+
+function calendarGridShift(delta) {
+  const d = new Date(calendarGridAnchor);
+  if (calendarViewMode === 'week') d.setDate(d.getDate() + delta * 7);
+  else d.setMonth(d.getMonth() + delta);
+  calendarGridAnchor = d;
+  renderCalendarGrid();
+}
+
+function calendarGridToday() {
+  calendarGridAnchor = new Date();
+  renderCalendarGrid();
+}
+
+function calendarLocalDateKey(dt) {
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+
+/* Group the visible (status/type/project/text-filtered, but NOT window-filtered)
+   calendar rows by their local YYYY-MM-DD start key. The window dropdown is
+   deliberately bypassed so the grid can page to any month. */
+function calendarGridEventsByDay() {
+  let rows = (tableCache.calendar || []).slice();
+  const statusFilter = document.getElementById('filter-calendar-status')?.value || '';
+  const typeFilter = document.getElementById('filter-calendar-type')?.value || '';
+  const project = (document.getElementById('filter-calendar-project')?.value || '').trim().toLowerCase();
+  const query = (document.getElementById('filter-calendar-q')?.value || '').trim().toLowerCase();
+  if (statusFilter) rows = rows.filter(r => r.status === statusFilter);
+  if (typeFilter) rows = rows.filter(r => r.event_type === typeFilter);
+  if (project) rows = rows.filter(r => String(r.project_number || '').toLowerCase().includes(project));
+  if (query) rows = rows.filter(r => calendarTextMatches(r, query));
+
+  const byDay = new Map();
+  rows.forEach(r => {
+    const dt = calendarStartDate(r);
+    if (!dt) return;
+    const key = calendarLocalDateKey(dt);
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(r);
+  });
+  byDay.forEach(list => list.sort(calendarAgendaSort));
+  return byDay;
+}
+
+function renderCalendarGrid() {
+  const host = document.getElementById('calendar-grid');
+  const period = document.getElementById('calendar-grid-period');
+  if (!host) return;
+  host.replaceChildren();
+  const week = calendarViewMode === 'week';
+  host.classList.toggle('week-mode', week);
+
+  const anchor = new Date(calendarGridAnchor);
+  // First cell: for month view, back up to the Sunday on/before the 1st of the
+  // anchor's month; for week view, the Sunday of the anchor's week.
+  let start;
+  if (week) {
+    start = new Date(anchor); start.setDate(anchor.getDate() - anchor.getDay());
+  } else {
+    const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    start = new Date(first); start.setDate(first.getDate() - first.getDay());
+  }
+  start.setHours(0, 0, 0, 0);
+  const cellCount = week ? 7 : 42;
+
+  if (period) {
+    if (week) {
+      const end = new Date(start); end.setDate(start.getDate() + 6);
+      const sameMonth = start.getMonth() === end.getMonth();
+      const left = start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const right = end.toLocaleDateString('en-US', sameMonth ? { day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' });
+      period.textContent = `${left} – ${right}`;
+    } else {
+      period.textContent = anchor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+  }
+
+  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(d => {
+    const dow = document.createElement('div'); dow.className = 'calendar-grid-dow'; dow.textContent = d;
+    host.appendChild(dow);
+  });
+
+  const byDay = calendarGridEventsByDay();
+  const todayKey = calendarLocalDateKey(new Date());
+  const anchorMonth = anchor.getMonth();
+
+  for (let i = 0; i < cellCount; i++) {
+    const dayDate = new Date(start); dayDate.setDate(start.getDate() + i);
+    const key = calendarLocalDateKey(dayDate);
+    const cell = document.createElement('div');
+    cell.className = 'calendar-grid-cell';
+    cell.dataset.date = key;
+    if (!week && dayDate.getMonth() !== anchorMonth) cell.classList.add('other-month');
+    if (key === todayKey) cell.classList.add('is-today');
+    if (dayDate.getDay() === 0 || dayDate.getDay() === 6) cell.classList.add('is-weekend');
+    cell.title = 'Add an event on ' + dayDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    cell.addEventListener('click', () => calendarGridAddEvent(key));
+
+    const num = document.createElement('div'); num.className = 'calendar-grid-daynum'; num.textContent = String(dayDate.getDate());
+    cell.appendChild(num);
+
+    const list = document.createElement('div'); list.className = 'calendar-grid-events';
+    const events = byDay.get(key) || [];
+    const shown = events.slice(0, CAL_GRID_MAX_PER_CELL);
+    shown.forEach(r => list.appendChild(makeCalendarGridEvent(r)));
+    if (events.length > shown.length) {
+      const more = document.createElement('div');
+      more.className = 'calendar-grid-more';
+      more.textContent = '+' + (events.length - shown.length) + ' more';
+      more.title = 'Open the agenda for this day';
+      more.addEventListener('click', (ev) => { ev.stopPropagation(); calendarGridOpenDay(key); });
+      list.appendChild(more);
+    }
+    cell.appendChild(list);
+    host.appendChild(cell);
+  }
+}
+
+function makeCalendarGridEvent(r) {
+  const el = document.createElement('div');
+  el.className = 'calendar-grid-event ' + String(r.status || '').toLowerCase().replace(/\s+/g, '-');
+  el.title = (r.title || '(untitled)') + ' · ' + formatEventType(r.event_type || 'event') + (r.project_number ? ' · ' + r.project_number : '');
+  if (isAllDayEvent(r)) {
+    const dot = document.createElement('span'); dot.className = 'ge-dot'; el.appendChild(dot);
+  } else {
+    const t = document.createElement('span'); t.className = 'ge-time'; t.textContent = calendarTimeLabel(r); el.appendChild(t);
+  }
+  const title = document.createElement('span'); title.className = 'ge-title'; title.textContent = r.title || '(untitled)';
+  el.appendChild(title);
+  el.addEventListener('click', (ev) => { ev.stopPropagation(); editRecord('calendar', r.id); });
+  return el;
+}
+
+/* Clicking an empty day opens the new-event drawer prefilled with that date at
+   09:00 (the same prefill path used by the project-workspace "add event"). */
+function calendarGridAddEvent(dateKey) {
+  openModal('calendar', {
+    start_at: dateKey + 'T09:00',
+    event_type: 'meeting',
+    status: 'scheduled',
+    visibility: 'internal',
+  });
+}
+
+/* "+N more" jumps to the agenda lens scoped to that day so every event is
+   reachable without cramming the cell. */
+function calendarGridOpenDay(dateKey) {
+  const win = document.getElementById('filter-calendar-window');
+  const q = document.getElementById('filter-calendar-q');
+  if (win) win.value = 'all';
+  if (q) q.value = '';
+  setCalendarView('agenda');
+  loadTable('calendar').then(() => {
+    const day = [...document.querySelectorAll('#calendar-agenda .calendar-day')]
+      .find(el => el.querySelector('.calendar-day-title'));
+    if (day) day.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+  toast('Showing all dates — scroll to ' + dateKey);
 }
 
 /* ── Calendar reminder quick controls (P1-2) ───────────────────────────

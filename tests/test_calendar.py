@@ -437,6 +437,45 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert 'calendarDatePart' in html
     assert 'tbody-calendar' in html
 
+
+def test_calendar_month_week_grid_surface_present(auth_client):
+    """P2-2: the month/week grid view ships as a third calendar lens.
+
+    The grid renders client-side from the same /api/v1/calendar_events fetch
+    that already powers the agenda + table views (verified by the range/CRUD
+    tests above), so this asserts the surface — toggles, container, and the
+    JS entry points — is wired into the SPA and reuses the existing data path
+    rather than introducing a new endpoint.
+    """
+    html = auth_client.get("/").data.decode("utf-8")
+
+    # Month + Week view toggles alongside the existing Agenda/Table toggles.
+    assert 'data-calendar-view="month"' in html
+    assert 'data-calendar-view="week"' in html
+    assert 'data-calendar-view="agenda"' in html
+    assert 'data-calendar-view="table"' in html
+
+    # Grid container + navigation controls.
+    assert 'id="calendar-grid-view"' in html
+    assert 'id="calendar-grid"' in html
+    assert 'id="calendar-grid-period"' in html
+    assert "calendarGridShift(-1)" in html
+    assert "calendarGridShift(1)" in html
+    assert "calendarGridToday()" in html
+
+    # Render + interaction entry points.
+    assert "function renderCalendarGrid()" in html
+    assert "function calendarGridEventsByDay()" in html
+    assert "function makeCalendarGridEvent(r)" in html
+    assert "function calendarGridAddEvent(dateKey)" in html
+    # Day-click creates a prefilled event via the existing modal (no new path).
+    assert "openModal('calendar', {" in html
+    # Event-click opens the existing record drawer.
+    assert "editRecord('calendar', r.id)" in html
+    # setCalendarView routes month/week to the grid.
+    assert "if (mode === 'month' || mode === 'week') renderCalendarGrid();" in html
+
+
 def test_calendar_routes_require_login(client):
     assert client.get("/api/v1/calendar/upcoming").status_code == 401
     assert client.get("/api/v1/calendar/reminders").status_code == 401
