@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Triage Outcomes - {{ brand_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#38bdf8; --warn:#fbbf24; --good:#34d399; --radius:6px; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.9rem; }
+  header { background:rgba(24,33,43,0.92); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
+  .head-inner { max-width:1160px; margin:0 auto; padding:0 1.5rem; min-height:54px; display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .brand { font-weight:600; font-family:'IBM Plex Mono', monospace; color:var(--text-muted); }
+  .brand span { color:var(--accent); }
+  .nav a { color:var(--text-muted); text-decoration:none; margin-left:1rem; font-size:0.82rem; }
+  .nav a:hover { color:var(--accent); }
+  main { max-width:1160px; margin:0 auto; padding:1.5rem 1.5rem 3rem; }
+  h1 { font-size:1.55rem; margin-bottom:0.2rem; }
+  h2 { font-size:1.0rem; margin:1.4rem 0 0.6rem; }
+  .sub { color:var(--text-muted); max-width:820px; margin-bottom:1rem; }
+  .card { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); padding:1rem; margin-bottom:1rem; }
+  .actions { display:flex; gap:0.5rem; flex-wrap:wrap; align-items:end; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.42rem 0.72rem; font-weight:700; font-size:0.78rem; text-decoration:none; cursor:pointer; }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  form.filters { display:flex; gap:0.65rem; align-items:end; flex-wrap:wrap; }
+  label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; margin-bottom:0.25rem; }
+  input { width:7rem; padding:0.42rem 0.5rem; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
+  .stats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.7rem; margin-bottom:0.5rem; }
+  .stat { background:rgba(24,33,43,0.96); border:1px solid var(--border); border-radius:var(--radius); padding:0.75rem; }
+  .stat-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.63rem; }
+  .stat-value { color:var(--accent); font-size:1.35rem; font-weight:700; margin-top:0.25rem; }
+  table { width:100%; border-collapse:collapse; font-size:0.84rem; }
+  th,td { padding:0.52rem; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  th { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.64rem; }
+  td.num, th.num { text-align:right; font-family:'IBM Plex Mono', monospace; }
+  .mono { font-family:'IBM Plex Mono', monospace; color:var(--text); }
+  .empty { color:var(--text-dim); font-style:italic; }
+  .hi { color:var(--good); }
+  .lo { color:var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <div class="brand">{{ brand_name }}<span>/triage-outcomes</span></div>
+    <nav class="nav">
+      <a href="/reports">Reports</a>
+      <a href="/reports/intake">Intake</a>
+      <a href="/">App</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1>Triage Outcomes</h1>
+  <p class="sub">How well each suggestion source (deterministic
+    <span class="mono">rule:&lt;template&gt;</span> or AI model) predicts where
+    assigned inbox items actually land, how often its drafted fields survive to
+    the final record, and how fast items get assigned. Use this to decide which
+    templates graduate to Phase-2b auto-file.</p>
+
+  <div class="card">
+    <form class="filters" method="get" action="/reports/triage-outcomes">
+      <div><label>Days</label><input type="number" name="days" min="1" max="3650" value="{{ packet.filters.days }}"></div>
+      <div><label>Limit</label><input type="number" name="limit" min="1" max="5000" value="{{ packet.filters.limit }}"></div>
+      <button class="btn" type="submit">Apply</button>
+      <a class="btn secondary" href="/api/v1/reports/triage-outcomes.csv?days={{ packet.filters.days }}&limit={{ packet.filters.limit }}">Download CSV</a>
+    </form>
+    <p class="meta" style="color:var(--text-dim);font-size:0.74rem;margin-top:0.6rem;">
+      Generated {{ packet.generated_at }} · {{ packet.summary.considered }} assigned items considered
+      {% if packet.summary.skipped_unparseable %}· {{ packet.summary.skipped_unparseable }} skipped (bad suggestion json){% endif %}
+    </p>
+  </div>
+
+  {% macro pct(v) %}{% if v is none %}<span class="empty">—</span>{% else %}{{ (v * 100) | round(1) }}%{% endif %}{% endmacro %}
+  {% macro secs(t) %}{% if t.mean is none %}<span class="empty">—</span>{% else %}{{ t.mean }}s{% endif %}{% endmacro %}
+
+  <div class="stats">
+    <div class="stat"><div class="stat-label">Volume</div><div class="stat-value">{{ packet.summary.volume }}</div></div>
+    <div class="stat"><div class="stat-label">Target accuracy</div><div class="stat-value">{{ pct(packet.summary.target_accuracy) }}</div></div>
+    <div class="stat"><div class="stat-label">Field accuracy</div><div class="stat-value">{{ pct(packet.summary.field_accuracy) }}</div></div>
+    <div class="stat"><div class="stat-label">Mean time-to-assign</div><div class="stat-value">{{ secs(packet.summary.time_to_assignment_seconds) }}</div></div>
+  </div>
+
+  <h2>By source</h2>
+  <div class="card">
+    {% if packet.by_source %}
+    <table>
+      <thead><tr>
+        <th>Source</th><th class="num">Volume</th><th class="num">Target acc.</th>
+        <th class="num">Field acc.</th><th class="num">Fields kept/cmp</th>
+        <th class="num">Mean TTA</th><th class="num">Median TTA</th>
+      </tr></thead>
+      <tbody>
+      {% for r in packet.by_source %}
+        <tr>
+          <td class="mono">{{ r.source }}</td>
+          <td class="num">{{ r.volume }}</td>
+          <td class="num">{{ pct(r.target_accuracy) }}</td>
+          <td class="num">{{ pct(r.field_accuracy) }}</td>
+          <td class="num">{{ r.fields_kept }}/{{ r.fields_compared }}</td>
+          <td class="num">{{ secs(r.time_to_assignment_seconds) }}</td>
+          <td class="num">{% if r.time_to_assignment_seconds.median is not none %}{{ r.time_to_assignment_seconds.median }}s{% else %}<span class="empty">—</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="empty">No assigned items with suggestions in this window yet.</p>{% endif %}
+  </div>
+
+  <h2>By chosen target</h2>
+  <div class="card">
+    {% if packet.by_target %}
+    <table>
+      <thead><tr>
+        <th>Target</th><th class="num">Volume</th><th class="num">Target acc.</th>
+        <th class="num">Field acc.</th><th class="num">Mean TTA</th>
+      </tr></thead>
+      <tbody>
+      {% for r in packet.by_target %}
+        <tr>
+          <td>{{ r.label }} <span class="mono" style="color:var(--text-dim);">{{ r.target_table }}</span></td>
+          <td class="num">{{ r.volume }}</td>
+          <td class="num">{{ pct(r.target_accuracy) }}</td>
+          <td class="num">{{ pct(r.field_accuracy) }}</td>
+          <td class="num">{{ secs(r.time_to_assignment_seconds) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<p class="empty">No data yet.</p>{% endif %}
+  </div>
+</main>
+</body>
+</html>
