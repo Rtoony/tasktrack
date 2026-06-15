@@ -39,6 +39,32 @@ from .tickets import (
 
 WEEKLY_TRACKER_EXCLUDES = {"feedback_items"}
 
+# Primary single-value "who owns this" field per tracker, used for the
+# by-assignee breakdown. Tables absent from this map simply get no
+# assignee breakdown (inbox/personal/calendar have no owner column).
+# personnel_issues IS listed but its names are redaction-gated below.
+ASSIGNEE_FIELD = {
+    "work_tasks":         "requested_by",
+    "project_work_tasks": "engineer",
+    "training_tasks":     "requested_by",
+    "personnel_issues":   "person_name",
+}
+
+# Age buckets (days since creation) for still-open items. Each entry is
+# (low, high) in days, low-inclusive / high-inclusive; the final bucket
+# is open-ended (high=None).
+AGE_BUCKET_EDGES = [(0, 2), (3, 7), (8, 30), (31, None)]
+AGE_BUCKET_LABELS = ["0-2d", "3-7d", "8-30d", "31d+"]
+
+# Cap on distinct keys per breakdown dimension so a table with hundreds of
+# distinct assignees can't bloat the JSON. Everything past the top-N (by
+# count) rolls into a single "Other (N)" entry.
+BREAKDOWN_KEY_LIMIT = 25
+
+# Labels for special assignee/status cells.
+REDACTED_ASSIGNEE = "Restricted"
+UNASSIGNED_LABEL = "Unassigned"
+
 # Display labels for the weekly buckets — friendlier than the raw table name.
 BUCKET_LABELS = {
     "work_tasks":         "CAD Dev",
@@ -100,9 +126,101 @@ def _title_for(row, table: str, *, include_sensitive: bool = False) -> str:
     return f"#{getattr(row, 'id', '?')}"
 
 
+def _created_dt(row) -> datetime | None:
+    """Best-effort creation datetime for a row (created_at, else
+    reported_date for personnel_issues). Returns None if unparseable."""
+    for attr in ("created_at", "reported_date"):
+        val = getattr(row, attr, None)
+        if not val:
+            continue
+        if isinstance(val, datetime):
+            return val
+        try:
+            return datetime.fromisoformat(str(val).replace(" ", "T"))
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _age_bucket_label(created: datetime | None, now: datetime) -> str:
+    """Map an item's age (now - created, in days) onto an AGE_BUCKET label.
+    Items with no parseable creation date land in the oldest bucket so they
+    aren't silently dropped from the open-work age picture."""
+    if created is None:
+        return AGE_BUCKET_LABELS[-1]
+    age_days = (now - created).days
+    if age_days < 0:
+        age_days = 0
+    for (low, high), label in zip(AGE_BUCKET_EDGES, AGE_BUCKET_LABELS, strict=True):
+        if age_days >= low and (high is None or age_days <= high):
+            return label
+    return AGE_BUCKET_LABELS[-1]
+
+
+def _cap_counts(counts: dict[str, int]) -> dict[str, int]:
+    """Sort a {key: count} map descending and roll everything past
+    BREAKDOWN_KEY_LIMIT into a single 'Other (N)' entry so the JSON stays
+    bounded regardless of cardinality."""
+    if len(counts) <= BREAKDOWN_KEY_LIMIT:
+        return dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))
+    ordered = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    top = ordered[:BREAKDOWN_KEY_LIMIT]
+    other_total = sum(c for _, c in ordered[BREAKDOWN_KEY_LIMIT:])
+    out = dict(top)
+    if other_total:
+        out[f"Other ({len(ordered) - BREAKDOWN_KEY_LIMIT})"] = other_total
+    return out
+
+
+def _breakdowns_for_rows(rows: list, table: str, done: set, now: datetime,
+                         *, include_sensitive: bool) -> dict:
+    """Compute the by-status / by-assignee / age-bucket breakdowns.
+
+    - by_status:   ALL visible rows grouped by their status value.
+    - by_assignee: still-OPEN rows grouped by the table's assignee field
+                   (only for tables in ASSIGNEE_FIELD). Sensitive
+                   personnel names are redacted to 'Restricted' when the
+                   caller isn't admin.
+    - age_buckets: still-OPEN rows grouped by age-since-creation.
+    """
+    by_status: dict[str, int] = {}
+    by_assignee: dict[str, int] = {}
+    age_buckets: dict[str, int] = {label: 0 for label in AGE_BUCKET_LABELS}
+
+    assignee_field = ASSIGNEE_FIELD.get(table)
+    redact_assignee = table == "personnel_issues" and not include_sensitive
+
+    for r in rows:
+        status = getattr(r, "status", None) or "Unspecified"
+        by_status[status] = by_status.get(status, 0) + 1
+
+        is_open = status not in done if hasattr(r, "status") else True
+        if not is_open:
+            continue
+
+        age_buckets[_age_bucket_label(_created_dt(r), now)] += 1
+
+        if assignee_field:
+            if redact_assignee:
+                name = REDACTED_ASSIGNEE
+            else:
+                raw = getattr(r, assignee_field, None)
+                name = str(raw).strip() if raw and str(raw).strip() else UNASSIGNED_LABEL
+            by_assignee[name] = by_assignee.get(name, 0) + 1
+
+    out = {
+        "by_status": _cap_counts(by_status),
+        "age_buckets": age_buckets,
+    }
+    if assignee_field:
+        out["by_assignee"] = _cap_counts(by_assignee)
+    return out
+
+
 def _bucket_for_table(sess: Session, table: str, since: datetime,
                       user_id: int | None = None,
-                      include_sensitive: bool = False) -> dict:
+                      include_sensitive: bool = False,
+                      breakdown: bool = False) -> dict:
     Model = TABLE_MODELS.get(table)
     if Model is None:
         return {}
@@ -153,7 +271,7 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
     items_created.sort(key=lambda d: d.get("created_at") or "", reverse=True)
     items_completed.sort(key=lambda d: d.get("completed_at") or "", reverse=True)
 
-    return {
+    bucket = {
         "table": table,
         "label": BUCKET_LABELS.get(table, table),
         "created": len(items_created),
@@ -163,6 +281,12 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
         "items_created": items_created[:ITEM_LIMIT],
         "items_completed": items_completed[:ITEM_LIMIT],
     }
+    if breakdown:
+        bucket["breakdown"] = _breakdowns_for_rows(
+            rows, table, done, datetime.utcnow(),
+            include_sensitive=include_sensitive,
+        )
+    return bucket
 
 
 def _skill_score_changes(sess: Session, since: datetime) -> list[dict]:
@@ -242,11 +366,15 @@ def _recent_incidents(sess: Session, since: datetime, *,
 
 def weekly_snapshot(sess: Session, since: datetime | None = None,
                     days: int = 7, include_admin: bool = False,
-                    user_id: int | None = None) -> dict:
+                    user_id: int | None = None,
+                    breakdown: bool = False) -> dict:
     """Compute the weekly digest.
 
     If `since` is None, derives it from `days` (default 7) against now-UTC.
     `include_admin=True` turns on the skill-score-changes bucket.
+    `breakdown=True` adds a per-bucket `breakdown` block (by_status /
+    by_assignee / age_buckets) for status-rollup reporting. It is opt-in so
+    the default payload shape (and its callers) stay unchanged.
 
     SQLite stores naive datetimes (no tzinfo). The comparators below all
     receive a naive `since`; the JSON shape carries an ISO string that
@@ -266,7 +394,7 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
             continue
         b = _bucket_for_table(
             sess, table, since_naive, user_id=user_id,
-            include_sensitive=include_admin,
+            include_sensitive=include_admin, breakdown=breakdown,
         )
         if not b:
             continue
@@ -291,4 +419,8 @@ def weekly_snapshot(sess: Session, since: datetime | None = None,
     return snapshot
 
 
-__all__ = ["weekly_snapshot", "BUCKET_LABELS", "ITEM_LIMIT"]
+__all__ = [
+    "weekly_snapshot", "BUCKET_LABELS", "ITEM_LIMIT",
+    "AGE_BUCKET_LABELS", "ASSIGNEE_FIELD", "BREAKDOWN_KEY_LIMIT",
+    "REDACTED_ASSIGNEE", "UNASSIGNED_LABEL",
+]
