@@ -1,0 +1,23 @@
+[Unit]
+Description=TaskTrack — dispatch due calendar reminders (P1-2, Telegram)
+After=network-online.target collab-tracker.service
+Wants=network-online.target
+# Pulls TELEGRAM_BOT_TOKEN + TELEGRAM_CLAUDE_CHAT_ID from the "Messaging"
+# vault group (same creds the master-sync digest uses) and the DB path /
+# token from "TaskTrack" / "Infrastructure". Won't start without a live
+# BW_SESSION; if Telegram creds are missing the sweep logs a warning and
+# leaves reminder_sent_at unstamped so it retries on the next run.
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/rtoony/projects/collab-tracker
+ExecStartPre=/home/rtoony/bin/nexus-svc-inject tasktrack-reminders "TaskTrack" "Infrastructure" "Messaging"
+ExecStart=/home/rtoony/miniconda3/bin/python3 -m flask send-reminders
+ExecStopPost=/bin/rm -f /dev/shm/nexus-env-tasktrack-reminders
+EnvironmentFile=-/dev/shm/nexus-env-tasktrack-reminders
+Environment=FLASK_APP=wsgi
+Environment=PATH=/home/rtoony/bin:/home/rtoony/miniconda3/bin:/usr/local/bin:/usr/bin:/bin
+# oneshot — the timer relaunches on schedule.
+
+[Install]
+WantedBy=default.target

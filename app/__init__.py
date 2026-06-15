@@ -174,11 +174,13 @@ def create_app(db_path=None) -> Flask:
         create_admin_command,
         db_upgrade_command,
         init_db_command,
+        send_reminders_command,
     )
     app.cli.add_command(init_db_command)
     app.cli.add_command(db_upgrade_command)
     app.cli.add_command(create_admin_command)
     app.cli.add_command(adoption_metrics_command)
+    app.cli.add_command(send_reminders_command)
 
     return app
 
