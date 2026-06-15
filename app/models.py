@@ -409,6 +409,9 @@ class CalendarEvent(Base):
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
     follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # P1-2: stamped once a reminder_date reminder has been dispatched (Telegram).
+    # NULL = not yet sent; a timestamp = sent, so the sweep never re-sends.
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     __table_args__ = (
         Index("idx_calendar_events_start_at", "start_at"),

@@ -181,7 +181,16 @@ function IntakeForm(){
   async function submit(){
     const e = {};
     const need = (k,msg)=>{ if(!f[k] || !String(f[k]).trim()) e[k]=msg; };
-    if(openIntake) need('submitter_name','Tell us who to follow up with.');
+    if(openIntake){
+      need('submitter_name','Tell us who to follow up with.');
+      // Re-derived codev tweak (iii): require an email on the open B&R intake
+      // form so every external request has a real follow-up channel.
+      if(!f.submitter_email || !String(f.submitter_email).trim()){
+        e.submitter_email='Add an email so we can follow up.';
+      } else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(f.submitter_email).trim())){
+        e.submitter_email='That email doesn’t look right.';
+      }
+    }
     if(type==='general'){ need('summary','Tell us what you need.'); need('details','Add a little detail.'); }
     if(type==='project_work'){ need('project','A project number is required for project work.'); need('summary','Describe the task.'); }
     if(type==='cad'){ need('summary','What should CAD build or fix?'); }
@@ -256,8 +265,8 @@ function IntakeForm(){
             <Field label="Your name" req error={errors.submitter_name}>
               <input className={"input"+(errors.submitter_name?' bad':'')} value={f.submitter_name||''} onChange={e=>set('submitter_name',e.target.value)} placeholder="First Last"/>
             </Field>
-            <Field label="Email" hint="for follow-up">
-              <input className="input" type="email" value={f.submitter_email||''} onChange={e=>set('submitter_email',e.target.value)} placeholder="you@brelje-race.com"/>
+            <Field label="Email" req hint="for follow-up" error={errors.submitter_email}>
+              <input className={"input"+(errors.submitter_email?' bad':'')} type="email" value={f.submitter_email||''} onChange={e=>set('submitter_email',e.target.value)} placeholder="you@brelje-race.com"/>
             </Field>
           </div>
         </div>

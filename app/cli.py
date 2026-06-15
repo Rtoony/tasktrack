@@ -147,3 +147,40 @@ def adoption_metrics_command(days: int, json_output: bool):
     click.echo(f"future_calendar_events: {summary['future_calendar_events']}")
     click.echo(f"open_inbox: {summary['open_inbox']}")
     click.echo(f"targets_met: {summary['targets_met']}")
+
+
+@click.command("send-reminders")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Report what would be sent without sending or stamping anything.",
+)
+@with_appcontext
+def send_reminders_command(dry_run: bool):
+    """P1-2: dispatch due calendar reminders via Telegram.
+
+    Finds calendar_events whose reminder_date is now due (and not yet sent),
+    DMs the operator via the existing master-sync Telegram path, and stamps
+    reminder_sent_at so each reminder fires exactly once. Intended to be run
+    on a systemd timer (see ops/systemd/tasktrack-reminders.*).
+    """
+    from .services.reminders import (
+        dispatch_reminders,
+        due_reminders,
+        format_reminder,
+    )
+
+    sess = get_session()
+    if dry_run:
+        due = due_reminders(sess)
+        click.echo(f"send-reminders (dry-run): {len(due)} due")
+        for row in due:
+            click.echo(f"--- event #{row.id}")
+            click.echo(format_reminder(row))
+        return
+
+    summary = dispatch_reminders(sess)
+    click.echo(
+        f"send-reminders: due={summary['due']} sent={summary['sent']} "
+        f"failed={summary['failed']} ids={summary['ids']}"
+    )

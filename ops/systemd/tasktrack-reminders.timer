@@ -1,0 +1,15 @@
+[Unit]
+Description=TaskTrack — reminder sweep every 15 min (P1-2)
+
+[Timer]
+# Sweep every 15 minutes. reminder_date resolution is minute-level, so a
+# 15-min cadence keeps the worst-case lateness small without hammering the
+# DB or Telegram. reminder_sent_at de-dupes, so an extra sweep is harmless.
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=1min
+Persistent=true
+Unit=tasktrack-reminders.service
+
+[Install]
+WantedBy=timers.target
