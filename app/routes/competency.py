@@ -29,6 +29,12 @@ from ..services.competency import (
     seed_default_categories,
     upsert_score,
 )
+from ..services.competency_training import (
+    CompetencyTrainingError,
+    cell_link_summary,
+    create_training_from_gap,
+    link_existing_training,
+)
 
 bp = Blueprint("competency", __name__)
 
@@ -447,3 +453,71 @@ def recompute_scores():
     count = recompute_all(sess)
     sess.commit()
     return jsonify({"updated": count})
+
+
+# ── Competency → Training bridge (WORK_PLAN P2-6) ──────────────────────────
+#
+# A competency gap (a low (employee, category) cell) is a virtual source —
+# not a tracker row — so it rides its own bridge rather than BRIDGE_MAP. The
+# bridge can either spawn a fresh training task or link an existing one, and
+# reflects the linkage both ways via activity_log markers (see
+# services/competency_training.py). Admin-only, like the rest of the matrix.
+
+
+@bp.route("/api/v1/skills/<int:employee_id>/<int:category_id>/training",
+          methods=["GET"])
+@admin_required
+def list_cell_training_links(employee_id, category_id):
+    """Gap status + training tasks already linked to this competency cell."""
+    sess = get_session()
+    try:
+        payload = cell_link_summary(sess, employee_id, category_id)
+    except CompetencyTrainingError as e:
+        return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
+    return jsonify(payload)
+
+
+@bp.route("/api/v1/skills/<int:employee_id>/<int:category_id>/training",
+          methods=["POST"])
+@admin_required
+def bridge_cell_to_training(employee_id, category_id):
+    """Create OR link a training task for a competency gap.
+
+    Body (all optional):
+        training_task_id : link this existing task instead of creating one
+        overrides        : {field: value} carried onto a newly created task
+        require_gap      : bool (default true) — refuse non-gap cells
+    """
+    data = request.get_json(silent=True) or {}
+    sess = get_session()
+
+    link_id = data.get("training_task_id")
+    try:
+        if link_id not in (None, ""):
+            training, created = link_existing_training(
+                sess, employee_id, category_id, int(link_id))
+        else:
+            overrides = data.get("overrides") or {}
+            if not isinstance(overrides, dict):
+                return jsonify({"error": "overrides must be an object",
+                                "request_id": _rid()}), 400
+            require_gap = data.get("require_gap", True)
+            if isinstance(require_gap, str):
+                require_gap = require_gap.strip().lower() not in ("0", "false", "no")
+            training, created = create_training_from_gap(
+                sess, employee_id, category_id,
+                overrides=overrides, require_gap=bool(require_gap))
+    except (TypeError, ValueError):
+        return jsonify({"error": "training_task_id must be an integer",
+                        "request_id": _rid()}), 400
+    except CompetencyTrainingError as e:
+        return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
+
+    sess.commit()
+    return jsonify({
+        "employee_id": employee_id,
+        "category_id": category_id,
+        "created": created,
+        "training_task_id": training.id,
+        "training_task": to_dict(training),
+    }), 201 if created else 200
