@@ -13,8 +13,8 @@ from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import ReportPreset
 from ..services.agenda import today_agenda
-from ..services.csv_safe import csv_safe
 from ..services.competency_reports import competency_report, competency_report_csv
+from ..services.csv_safe import csv_safe
 from ..services.incident_reports import (
     INCIDENT_CSV_FIELDS,
     incident_csv_rows,
@@ -31,6 +31,7 @@ from ..services.project_reports import (
     portfolio_project_report,
     project_status_report,
 )
+from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
 bp = Blueprint("reports", __name__)
 
@@ -86,6 +87,12 @@ REPORT_SECTIONS = [
         "href": "/reports/intake",
     },
     {
+        "key": "triage-outcomes",
+        "title": "Triage Outcomes",
+        "subtitle": "Suggestion accuracy — auto-file graduation.",
+        "href": "/reports/triage-outcomes",
+    },
+    {
         "key": "incidents",
         "title": "Incidents",
         "subtitle": "Admin-only sensitive reports.",
@@ -124,6 +131,8 @@ def _active_report_section() -> str:
         return "today"
     if path == "/reports/intake":
         return "intake"
+    if path == "/reports/triage-outcomes":
+        return "triage-outcomes"
     return "overview"
 
 
@@ -1057,6 +1066,53 @@ def intake_report_page():
     packet = intake_source_report(get_session(), **filters)
     return render_template(
         "intake_report.html",
+        packet=packet,
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
+# ── Triage Outcomes (Phase 3) ────────────────────────────────────────────
+#
+# Measures suggestion accuracy / field edit-rate / time-to-assignment per
+# source (rule:<template> or model) over assigned inbox items, so an
+# operator can decide which templates graduate to Phase-2b auto-file.
+# Read-only over advisory data.
+
+def _request_outcomes_filters() -> dict:
+    return {
+        "days": _int_arg("days", 90, 1, 3650),
+        "limit": _int_arg("limit", 1000, 1, 5000),
+    }
+
+
+@bp.route("/api/v1/reports/triage-outcomes", methods=["GET"])
+@login_required
+def triage_outcomes_json():
+    filters = _request_outcomes_filters()
+    packet = triage_outcomes_report(get_session(), **filters)
+    return jsonify(packet)
+
+
+@bp.route("/api/v1/reports/triage-outcomes.csv", methods=["GET"])
+@login_required
+def triage_outcomes_csv_route():
+    filters = _request_outcomes_filters()
+    packet = triage_outcomes_report(get_session(), **filters)
+    return Response(
+        triage_outcomes_csv(packet),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=triage_outcomes_{datetime.now().strftime('%Y%m%d')}.csv"},
+    )
+
+
+@bp.route("/reports/triage-outcomes", methods=["GET"])
+@login_required
+def triage_outcomes_page():
+    filters = _request_outcomes_filters()
+    packet = triage_outcomes_report(get_session(), **filters)
+    return render_template(
+        "triage_outcomes.html",
         packet=packet,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),

@@ -43,6 +43,15 @@ from ..config import ALLOWED_TABLES, INTERNAL_ITEM_CATEGORIES
 # the classifier + rule-seed contracts elsewhere in the codebase.
 _SUGGESTION_FIELD_EXCLUDES = ("needs_review", "source", "ai_raw_input", "ai_model")
 
+# Confidence ordering (low < medium < high) for the Phase-2b min_confidence
+# floor comparison. Anything unrecognized sorts as the lowest rank so a bad
+# value can never accidentally clear a floor.
+_CONFIDENCE_RANK = {"low": 0, "medium": 1, "high": 2}
+
+
+def _confidence_rank(value) -> int:
+    return _CONFIDENCE_RANK.get(str(value or "").strip().lower(), -1)
+
 # A ####.## civil project number, e.g. 1234.56 (also tolerant of 1234-56).
 _PROJECT_RE = re.compile(r"(?<!\d)(\d{4})[.\-](\d{2})(?!\d)")
 
@@ -374,6 +383,28 @@ register(Template(
 ))
 
 
+def match_and_build(title: str, body: str = "",
+                    source: str = "") -> tuple[Template, dict] | None:
+    """Match a template and build its suggestion, returning BOTH.
+
+    Returns ``(template, suggestion)`` or None when nothing matched.
+    Single shared core for both ``suggest_from_templates`` (which only
+    needs the suggestion) and the Phase-2b auto-file gate (which also
+    needs the matched template's ``Trust`` metadata). Handles the
+    multi-target B&R form via its dedicated builder.
+    """
+    tmpl = match_template(title, body, source)
+    if tmpl is None:
+        return None
+    if tmpl.name == "br-intake-form":
+        built = _br_suggestion(title or "", body or "", source or "")
+        if built is None:
+            # Defensive: the multi-target build failed — don't claim a match.
+            return None
+        return tmpl, built
+    return tmpl, build_suggestion(tmpl, title, body, source)
+
+
 # The B&R template is multi-target, so suggest_from_templates routes it to
 # its dedicated builder rather than the generic single-route one.
 def suggest_from_templates(title: str, body: str = "",
@@ -384,17 +415,68 @@ def suggest_from_templates(title: str, body: str = "",
     entry point the inbox suggest flow calls before falling back to
     ``run_classify``.
     """
-    tmpl = match_template(title, body, source)
-    if tmpl is None:
+    result = match_and_build(title, body, source)
+    return result[1] if result is not None else None
+
+
+# ── Phase 2b: confidence-gated auto-file eligibility ──────────────────────
+#
+# A suggestion auto-files ONLY when ALL hold (TRIAGE_DESIGN Phase 2b):
+#   1. It came from a deterministic template whose Trust.auto_file is True.
+#   2. Its confidence meets the template's Trust.min_confidence floor.
+#   3. (When Trust.requires_complete) every REQUIRED field of the resolved
+#      target table is present and non-empty in the drafted fields.
+# The global INBOX_AUTO_FILE kill-switch is enforced by the CALLER, not
+# here — this helper is a pure, side-effect-free predicate so it stays
+# testable and the kill-switch decision lives in one obvious place.
+
+def auto_file_decision(title: str, body: str = "",
+                       source: str = "") -> dict | None:
+    """Evaluate Phase-2b auto-file eligibility for raw inbox text.
+
+    Returns None when no template matched at all (so the caller knows to
+    leave the AI classifier path untouched). Otherwise returns a dict:
+
+        {"template": Template, "suggestion": dict, "eligible": bool,
+         "reason": str, "missing": list[str]}
+
+    ``eligible`` is True only when the template is trusted, the confidence
+    clears the floor, and required fields are complete. ``reason`` /
+    ``missing`` explain a refusal for the audit trail. PURE — never writes.
+    """
+    result = match_and_build(title, body, source)
+    if result is None:
         return None
-    if tmpl.name == "br-intake-form":
-        built = _br_suggestion(title or "", body or "", source or "")
-        if built is not None:
-            return built
-        # Defensive: if the multi-target build somehow fails, don't claim a
-        # match — fall through to the AI classifier instead.
-        return None
-    return build_suggestion(tmpl, title, body, source)
+    tmpl, suggestion = result
+    trust = tmpl.trust
+    target = suggestion.get("target_table")
+    fields = suggestion.get("fields") or {}
+
+    if not trust.auto_file:
+        return {"template": tmpl, "suggestion": suggestion, "eligible": False,
+                "reason": "template not trusted for auto-file", "missing": []}
+
+    if _confidence_rank(suggestion.get("confidence")) < _confidence_rank(trust.min_confidence):
+        return {"template": tmpl, "suggestion": suggestion, "eligible": False,
+                "reason": (f"confidence {suggestion.get('confidence')!r} below "
+                           f"floor {trust.min_confidence!r}"),
+                "missing": []}
+
+    missing: list[str] = []
+    if trust.requires_complete:
+        if target not in ALLOWED_TABLES or target == "inbox_items":
+            return {"template": tmpl, "suggestion": suggestion, "eligible": False,
+                    "reason": f"invalid target {target!r}", "missing": []}
+        required = ALLOWED_TABLES[target]["required"]
+        missing = [req for req in required
+                   if not str(fields.get(req) or "").strip()]
+        if missing:
+            return {"template": tmpl, "suggestion": suggestion, "eligible": False,
+                    "reason": "required fields incomplete", "missing": missing}
+
+    return {"template": tmpl, "suggestion": suggestion, "eligible": True,
+            "reason": "trusted template, confidence met, fields complete",
+            "missing": []}
 
 
 __all__ = [
@@ -404,5 +486,7 @@ __all__ = [
     "register",
     "match_template",
     "build_suggestion",
+    "match_and_build",
     "suggest_from_templates",
+    "auto_file_decision",
 ]

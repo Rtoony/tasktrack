@@ -5,6 +5,7 @@ row when" — Phase 5 will rebuild it with structured actor_user_id +
 source + before/after JSON. For now we keep the free-text user_name
 shape that the existing UI reads.
 """
+from flask import has_request_context
 from flask import session as flask_session
 from sqlalchemy.orm import Session
 
@@ -16,8 +17,12 @@ def log_activity(sess: Session, table, record_id, action, field="", old="", new=
 
     The caller commits (or rolls back) the session as part of the
     surrounding request's transaction.
+
+    Safe to call outside a request context (e.g. from the capture-time
+    background auto-suggest/auto-file thread): with no flask.session to
+    read, the actor falls back to "System" rather than raising.
     """
-    user = flask_session.get("user_name", "System")
+    user = flask_session.get("user_name", "System") if has_request_context() else "System"
     sess.add(ActivityLog(
         table_name=table,
         record_id=record_id,
