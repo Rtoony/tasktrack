@@ -280,6 +280,13 @@
   .section-subtitle { font-size:0.78rem; color:var(--text-muted); margin-top:0.2rem; }
   .filter-select { padding:0.3rem 0.5rem; font-family:inherit; font-size:0.75rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); color:var(--text); cursor:pointer; }
   .filter-select:focus { outline:none; border-color:var(--accent); }
+  /* P1-5 Saved Views: per-tab control group injected into each tracker
+     filter-bar by JS. Visually mirrors the existing filter controls. */
+  .saved-views { display:inline-flex; align-items:center; gap:0.3rem; }
+  .saved-views .btn-sm { padding:0.3rem 0.6rem; font-size:0.72rem; }
+  .saved-views-del { border:1px solid var(--border); background:var(--surface); color:var(--text-muted); border-radius:var(--radius); cursor:pointer; font-size:0.85rem; line-height:1; padding:0.25rem 0.45rem; }
+  .saved-views-del:hover { color:var(--danger); border-color:var(--danger); }
+  .saved-views-del:disabled { opacity:0.4; cursor:default; }
 
   .btn { display:inline-flex; align-items:center; gap:5px; padding:0.4rem 0.85rem; font-family:inherit; font-size:0.78rem; font-weight:500; border:none; border-radius:var(--radius); cursor:pointer; transition:all 0.15s; }
   .btn-primary { background:var(--accent); color:#fff; }
@@ -3426,6 +3433,9 @@ function activateTab(tabName, options={}) {
   // loadCompetency(), which post-save reloads rely on to keep the selection.
   if (currentTab === 'competency') { compScorecardEmpId = null; compSelected = null; loadCompetency(); }
   if (API_MAP[currentTab]) loadTable(currentTab);
+  // P1-5: refresh this tab's saved-views dropdown on activation (per-user,
+  // per-tab). Fire-and-forget — the table loads independently.
+  if (SAVED_VIEW_TABS.includes(currentTab)) loadSavedViews(currentTab);
   if (options.history !== false) pushShellHistory(currentTab);
   return true;
 }
@@ -3433,6 +3443,154 @@ function activateTab(tabName, options={}) {
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
+
+/* ── Saved Views (WORK_PLAN P1-5) ──────────────────────────────────────
+   Per-user, per-tab named filter/sort configurations. Each tracker tab's
+   filter-bar gets a "Save view" button + a views dropdown injected at init.
+   A view captures every `filter-<tab>-*` control in the section plus the
+   tab's sortState entry, stores it as an opaque blob server-side, and
+   re-applies it by setting those same controls and reloading the table.
+   This stays generic across all tracker tabs — no per-tab special casing —
+   so it keeps working as each tab's filter set evolves. */
+const SAVED_VIEW_TABS = ['work', 'project', 'training', 'personnel', 'triage', 'calendar', 'personal'];
+const savedViewsCache = {};  // tab -> [view, ...]
+
+// Capture the live filter-bar state for a tab: the value of every
+// filter-<tab>-* control inside its section, plus the sort col/order.
+function captureViewState(tab) {
+  const section = document.getElementById('sec-' + tab);
+  const filters = {};
+  if (section) {
+    section.querySelectorAll('[id^="filter-' + tab + '-"]').forEach(el => {
+      filters[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
+    });
+  }
+  const st = sortState[tab] || {};
+  return { filters, sort: { col: st.col || null, order: st.order || null } };
+}
+
+// Re-apply a captured state to the tab's controls + sortState, then reload.
+function applyViewState(tab, state) {
+  const filters = (state && state.filters) || {};
+  Object.entries(filters).forEach(([id, val]) => {
+    const el = document.getElementById(id);
+    if (!el) return;  // control was removed/renamed since the view was saved
+    if (el.type === 'checkbox') el.checked = !!val;
+    else el.value = val;
+  });
+  const sort = (state && state.sort) || {};
+  if (sort.col && sortState[tab]) {
+    sortState[tab].col = sort.col;
+    sortState[tab].order = sort.order === 'desc' ? 'desc' : 'asc';
+  }
+  if (API_MAP[tab]) loadTable(tab);
+}
+
+function savedViewsControl(tab) {
+  return document.querySelector('.saved-views[data-tab="' + tab + '"]');
+}
+
+function renderSavedViewsOptions(tab) {
+  const ctrl = savedViewsControl(tab);
+  if (!ctrl) return;
+  const sel = ctrl.querySelector('select');
+  const del = ctrl.querySelector('.saved-views-del');
+  const views = savedViewsCache[tab] || [];
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = '';
+  ph.textContent = views.length ? 'Saved views…' : 'No saved views';
+  sel.appendChild(ph);
+  views.forEach(v => {
+    const o = document.createElement('option');
+    o.value = String(v.id);
+    o.textContent = v.name;
+    sel.appendChild(o);
+  });
+  if (del) del.disabled = true;
+}
+
+async function loadSavedViews(tab) {
+  if (!SAVED_VIEW_TABS.includes(tab)) return;
+  const data = await api('GET', '/api/v1/saved-views?tab=' + encodeURIComponent(tab));
+  if (!data) return;
+  savedViewsCache[tab] = Array.isArray(data.views) ? data.views : [];
+  renderSavedViewsOptions(tab);
+}
+
+async function saveCurrentView(tab) {
+  const name = (prompt('Name this view (e.g. "My overdue", "Due this week"):') || '').trim();
+  if (!name) return;
+  const res = await api('POST', '/api/v1/saved-views', {
+    name, tab, state: captureViewState(tab),
+  });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not save view'); return; }
+  await loadSavedViews(tab);
+  const sel = savedViewsControl(tab)?.querySelector('select');
+  if (sel) sel.value = String(res.id);
+  const del = savedViewsControl(tab)?.querySelector('.saved-views-del');
+  if (del) del.disabled = false;
+  toast('Saved view "' + name + '"');
+}
+
+function onSavedViewSelected(tab, value) {
+  const del = savedViewsControl(tab)?.querySelector('.saved-views-del');
+  if (del) del.disabled = !value;
+  if (!value) return;
+  const view = (savedViewsCache[tab] || []).find(v => String(v.id) === String(value));
+  if (view) applyViewState(tab, view.state);
+}
+
+async function deleteSelectedView(tab) {
+  const sel = savedViewsControl(tab)?.querySelector('select');
+  const id = sel && sel.value;
+  if (!id) return;
+  const view = (savedViewsCache[tab] || []).find(v => String(v.id) === String(id));
+  if (!confirm('Delete saved view "' + (view ? view.name : id) + '"?')) return;
+  const res = await api('DELETE', '/api/v1/saved-views/' + id);
+  if (!res || res.error) { toast('Could not delete view'); return; }
+  await loadSavedViews(tab);
+  toast('Deleted view');
+}
+
+// Inject the control group into each tracker tab's filter-bar.
+function initSavedViews() {
+  SAVED_VIEW_TABS.forEach(tab => {
+    const section = document.getElementById('sec-' + tab);
+    const bar = section && section.querySelector('.filter-bar');
+    if (!bar || savedViewsControl(tab)) return;
+
+    const wrap = document.createElement('span');
+    wrap.className = 'saved-views';
+    wrap.dataset.tab = tab;
+
+    const sel = document.createElement('select');
+    sel.className = 'filter-select';
+    sel.title = 'Load a saved view';
+    sel.addEventListener('change', () => onSavedViewSelected(tab, sel.value));
+
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'btn btn-sm btn-export';
+    saveBtn.textContent = 'Save view';
+    saveBtn.title = 'Save the current filters & sort as a named view';
+    saveBtn.addEventListener('click', () => saveCurrentView(tab));
+
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'saved-views-del';
+    del.textContent = '✕';
+    del.title = 'Delete the selected saved view';
+    del.disabled = true;
+    del.addEventListener('click', () => deleteSelectedView(tab));
+
+    wrap.appendChild(sel);
+    wrap.appendChild(saveBtn);
+    wrap.appendChild(del);
+    bar.appendChild(wrap);
+    renderSavedViewsOptions(tab);
+  });
+}
 
 /* ── Competency matrix (CAD/GIS 0-3 task coverage) ────────────────
    /api/v1/skills/matrix?detail=1 returns categories, task dimensions,
@@ -3827,6 +3985,7 @@ function renderCompetencyDetail() {
 // Live filter input — debounced re-render without re-fetching.
 document.addEventListener('DOMContentLoaded', () => {
   populateManagedOptionControls();
+  initSavedViews();
   const filt = document.getElementById('comp-filter');
   if (filt) {
     let t;

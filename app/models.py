@@ -631,6 +631,38 @@ class ReportPreset(Base):
     )
 
 
+class SavedView(Base):
+    """A user-saved filter/sort configuration for an interactive tracker tab.
+
+    Distinct from ReportPreset (which targets the read-only management
+    *report* surfaces): a SavedView captures the live filter-bar state of
+    one of the interactive tracker tabs (work / project / training /
+    personnel / triage / calendar / personal) so the operator can re-apply
+    a named configuration like "My overdue" or "Due this week" with one
+    click. Views are strictly per-user — owner_user_id scopes every read
+    and write; there is intentionally no sharing flag (the report surface
+    already covers shared, curated views).
+
+    `state_json` is an opaque blob authored by the frontend. It holds the
+    captured filter-control values keyed by their DOM ids plus the sort
+    column/order. The backend treats it as a string and never interprets
+    it, which keeps the API stable as the per-tab filter set evolves.
+    """
+    __tablename__ = "saved_views"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    tab: Mapped[str] = mapped_column(Text, nullable=False)
+    state_json: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_user_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+    updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
+
+    __table_args__ = (
+        Index("idx_saved_views_owner_tab", "owner_user_id", "tab"),
+    )
+
+
 class ProjectSite(Base):
     """One physical pin location for a project.
 
@@ -772,7 +804,7 @@ __all__ = [
     "PersonnelIssue", "PersonalItem", "InboxItem", "CalendarEvent",
     "ActivityLog", "Comment", "TelegramChatAccess",
     "Attachment", "Link",
-    "Employee", "Project", "ProjectOverlay", "ReportPreset",
+    "Employee", "Project", "ProjectOverlay", "ReportPreset", "SavedView",
     "SkillCategory", "EmployeeSkillScore", "EmployeeSkillSubscore",
     "to_dict",
 ]
