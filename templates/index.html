@@ -1822,7 +1822,7 @@
     <div class="modal-body">
       <p class="feedback-intro">Use this while testing: describe the problem or desired tweak, optionally attach a screenshot, and TaskTrack will keep the current page, tab, viewport, and browser context with the record.</p>
       <div class="field"><label>Title</label><input id="feedback-title" type="text" placeholder="Short label for the issue or tweak"></div>
-      <div class="field"><label>Details</label><textarea id="feedback-body" spellcheck="true" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
+      <div class="field"><label>Details <span class="req-mark" aria-hidden="true">*</span></label><textarea id="feedback-body" required spellcheck="true" placeholder="What happened, what did you expect, and what should change?"></textarea></div>
       <div class="feedback-grid">
         <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
         <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option><option>None</option></select></div>
@@ -1968,6 +1968,17 @@ const API_MAP = {
 // personal_items table until a later migration renames the storage layer.
 // The category JSON below preserves existing rows while the UI uses neutral labels.
 const INTERNAL_QUEUE_TABS = ['personal'];
+// Re-derived codev tweak (i): the Training tab and the Personal/Office tab are
+// hidden from the side nav while they hold 0 active rows. The currently-active
+// tab is never hidden (the user is looking at it).
+const HIDE_WHEN_EMPTY_TABS = ['training', 'personal'];
+function maybeHideEmptyTab(table, activeCount) {
+  if (!HIDE_WHEN_EMPTY_TABS.includes(table)) return;
+  const btn = document.querySelector('.tab-btn[data-tab="' + table + '"]');
+  if (!btn) return;
+  if (btn.classList.contains('active')) { btn.style.display = ''; return; }
+  btn.style.display = activeCount > 0 ? '' : 'none';
+}
 // audit #27: PERSONAL_CATEGORIES + INTERNAL_QUEUE_CATEGORIES were dead after the
 // #14 consolidation (category now comes from the form/filter) — removed.
 
@@ -2768,6 +2779,13 @@ async function submitFeedback() {
     statusEl.textContent = 'Title is required.';
     return;
   }
+  // Re-derived codev tweak (ii): require the Details body on submission so
+  // feedback arrives actionable (Type already defaults to a value).
+  const bodyVal = document.getElementById('feedback-body').value.trim();
+  if (!bodyVal) {
+    statusEl.textContent = 'Details are required — describe the issue or idea.';
+    return;
+  }
   feedbackSubmitInFlight = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
   statusEl.textContent = 'Saving...';
@@ -2778,7 +2796,7 @@ async function submitFeedback() {
       const component = document.getElementById('feedback-component').value.trim();
       const payload = {
         title,
-        body: document.getElementById('feedback-body').value.trim(),
+        body: bodyVal,
         feedback_type: document.getElementById('feedback-type').value,
         priority: document.getElementById('feedback-priority').value,
         status: 'New',
@@ -5139,16 +5157,23 @@ async function loadTable(table) {
     // status filter the user has selected.
     // Internal queue counts = active queue (New + In Progress) within the
     // tab's category (since the table is shared across tabs).
+    let activeCount;
     if (table === 'triage') {
-      countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
+      activeCount = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
     } else if (table === 'calendar') {
-      countEl.textContent = data.filter(r => r.status === 'scheduled' || r.status === 'tentative').length;
+      activeCount = data.filter(r => r.status === 'scheduled' || r.status === 'tentative').length;
     } else if (INTERNAL_QUEUE_TABS.includes(table)) {
       // #14: count all active personal items (any category) in the badge.
-      countEl.textContent = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
+      activeCount = data.filter(r => r.status === 'New' || r.status === 'In Progress').length;
     } else {
-      countEl.textContent = data.filter(isActiveCountRow).length;
+      activeCount = data.filter(isActiveCountRow).length;
     }
+    countEl.textContent = activeCount;
+    // Re-derived codev tweak (i): hide the Training and Personal/Office tabs
+    // while they hold 0 active rows — the live DB rarely has Training/Office
+    // work, so an always-present empty tab is just noise. Never hide the tab
+    // the user is currently looking at (would strand the view).
+    maybeHideEmptyTab(table, activeCount);
   }
 
   tbody.replaceChildren();
