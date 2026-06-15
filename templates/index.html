@@ -5598,7 +5598,18 @@ function makeCalendarAgendaCard(r) {
     meta.appendChild(p);
   }
   if (r.location) { const loc = document.createElement('span'); loc.className = 'calendar-chip'; loc.textContent = r.location; meta.appendChild(loc); }
-  if (r.reminder_date) { const rem = document.createElement('span'); rem.className = 'calendar-chip reminder'; rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date); meta.appendChild(rem); }
+  if (r.reminder_date) {
+    // P1-2: the reminder chip doubles as a one-click clear control. Clicking it
+    // clears reminder_date (PUT '' -> server resets reminder_sent_at), so an
+    // operator can drop a reminder without opening the full editor.
+    const rem = document.createElement('button');
+    rem.type = 'button';
+    rem.className = 'calendar-chip reminder';
+    rem.textContent = 'Reminder ' + formatDateTime(r.reminder_date) + ' ×';
+    rem.title = 'Clear this reminder';
+    rem.addEventListener('click', (ev) => { ev.stopPropagation(); clearEventReminder(r.id); });
+    meta.appendChild(rem);
+  }
   main.appendChild(meta);
   if (r.description) { const desc = document.createElement('div'); desc.className = 'calendar-event-desc'; desc.textContent = descriptionPreview(r.description); main.appendChild(desc); }
 
@@ -5606,6 +5617,17 @@ function makeCalendarAgendaCard(r) {
   const status = document.createElement('span'); status.className = 'badge badge-' + String(r.status || '').toLowerCase().replace(/\s+/g, '-').replace(/_/g, '-'); status.textContent = r.status || '';
   const vis = document.createElement('span'); vis.className = 'badge badge-' + String(r.visibility || 'internal').toLowerCase().replace(/\s+/g, '-'); vis.textContent = r.visibility || 'internal';
   actions.appendChild(status); actions.appendChild(vis);
+  if (r.id && !r.reminder_date) {
+    // P1-2: quick "set a reminder" affordance for events that have none yet.
+    // Prompts for a date/time, PUTs reminder_date, and the live sweep fires it.
+    const remind = document.createElement('button');
+    remind.className = 'btn btn-sm btn-export';
+    remind.type = 'button';
+    remind.textContent = '⏰ Remind';
+    remind.title = 'Set a reminder for this event';
+    remind.addEventListener('click', (ev) => { ev.stopPropagation(); setEventReminder(r); });
+    actions.appendChild(remind);
+  }
   if (r.id) {
     const packet = document.createElement('button');
     packet.className = 'btn btn-sm btn-export';
@@ -5618,6 +5640,57 @@ function makeCalendarAgendaCard(r) {
 
   card.appendChild(time); card.appendChild(main); card.appendChild(actions);
   return card;
+}
+
+/* ── Calendar reminder quick controls (P1-2) ───────────────────────────
+   The full editor (modal) already exposes a reminder datetime field; these
+   are the in-line shortcuts on each event card so an operator can arm or drop
+   a reminder in one click. Both PUT reminder_date; the server resets
+   reminder_sent_at on any change so the live dispatch sweep re-arms. */
+
+/* Normalise a free-typed datetime into the ISO 'YYYY-MM-DDTHH:MM' the rest of
+   TaskTrack stores. Accepts a space or 'T' separator and an optional time
+   (defaults to 09:00 for a bare date). Returns '' if it can't be parsed. */
+function normalizeReminderInput(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!m) return '';
+  const [, y, mo, d, h, mi] = m;
+  const dt = new Date(Number(y), Number(mo) - 1, Number(d), Number(h ?? 9), Number(mi ?? 0));
+  if (Number.isNaN(dt.getTime())) return '';
+  const pad = n => String(n).padStart(2, '0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+async function setEventReminder(r) {
+  // Default the prompt to one day before the event start (or now+1h if no start),
+  // a sensible nudge lead-time the operator can override.
+  let suggested = '';
+  const start = r && r.start_at ? new Date(String(r.start_at).slice(0, 16)) : null;
+  const base = start && !Number.isNaN(start.getTime())
+    ? new Date(start.getTime() - 24 * 60 * 60 * 1000)
+    : new Date(Date.now() + 60 * 60 * 1000);
+  const pad = n => String(n).padStart(2, '0');
+  suggested = `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())} ${pad(base.getHours())}:${pad(base.getMinutes())}`;
+  const entered = window.prompt('Remind me at (YYYY-MM-DD HH:MM):', suggested);
+  if (entered === null) return;  // cancelled
+  const iso = normalizeReminderInput(entered);
+  if (!iso) { toast('Could not read that date/time'); return; }
+  const res = await api('PUT', '/api/v1/calendar_events/' + r.id, { reminder_date: iso });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not set reminder'); return; }
+  toast('Reminder set');
+  loadTable('calendar'); loadDashboard();
+}
+
+async function clearEventReminder(id) {
+  if (!window.confirm('Clear this reminder?')) return;
+  // Empty reminder_date -> server resets reminder_sent_at too (a "cleared then
+  // re-set" reminder must be able to fire again).
+  const res = await api('PUT', '/api/v1/calendar_events/' + id, { reminder_date: '' });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Could not clear reminder'); return; }
+  toast('Reminder cleared');
+  loadTable('calendar'); loadDashboard();
 }
 
 /* ── Kanban view (Phase 4) ─────────────────────────────────────────────
