@@ -17,14 +17,12 @@ These tests prove:
 - The built-in templates ship with auto_file=False, so even ON is inert
   for them — graduation is a deliberate Phase-3-driven act.
 """
-import json
 
 import pytest
 
 from app.db import get_session
 from app.models import ActivityLog, InboxItem, WorkTask
 from app.services import intake_templates as it
-
 
 # ── helpers / fixtures ─────────────────────────────────────────────────────
 
