@@ -58,7 +58,7 @@ from ..db import get_session
 from ..models import ActivityLog, InboxItem, to_dict
 from ..services import triage as triage_svc
 from ..services.audit import log_activity
-from ..services.intake_templates import suggest_from_templates
+from ..services.intake_templates import auto_file_decision, suggest_from_templates
 from ..services.tickets import create_direct_record
 from ..services.triage import run_classify
 from ..tokens import check_scoped_token
@@ -189,6 +189,12 @@ def run_suggest_for_item(sess, item):
     item.suggested_at = datetime.now()
     item.updated_at = datetime.now()
     _log_suggested(sess, item.id, suggestion["target_table"])
+    # Phase 2b: confidence-gated auto-file. A strict no-op unless the
+    # INBOX_AUTO_FILE kill-switch is ON *and* a trusted template cleared
+    # every gate — otherwise the item stays in the inbox for manual
+    # assignment exactly as in Phase 2. Best-effort: a failure here never
+    # disturbs the just-stored advisory suggestion.
+    maybe_auto_file(sess, item)
     return suggestion
 
 
@@ -464,21 +470,18 @@ def suggest(item_id):
     })
 
 
-# ── POST /api/v1/inbox/<id>/promote  (Assignment) ────────────────────────
+# ── Assignment payload (shared by promote + Phase-2b auto-file) ───────────
 
-@bp.route("/api/v1/inbox/<int:item_id>/promote", methods=["POST"])
-@login_required
-def promote(item_id):
-    sess = get_session()
-    item = sess.get(InboxItem, item_id)
-    if item is None:
-        return jsonify({"error": "Not found"}), 404
+def _build_assignment_payload(item, target_table, overrides=None):
+    """Build a tracker payload from an inbox item, the stored suggestion,
+    and optional field overrides — the single assignment-time mapping.
 
-    data = request.json or {}
-    target_table = (data.get("target_table") or "").strip()
-    if not target_table or target_table not in ALLOWED_TABLES or target_table == "inbox_items":
-        return jsonify({"error": f"unknown target_table: {target_table}"}), 400
-
+    Shared by the human promote path and the Phase-2b auto-file path so
+    both produce identical rows. NEVER carries needs_review (assignment
+    rows are reviewed — by a human at promote, or by a trusted template
+    gate at auto-file). Returns the payload dict (caller validates
+    required fields + inserts).
+    """
     cfg = ALLOWED_TABLES[target_table]
     payload = {}
     if "title" in cfg["fields"]:
@@ -526,7 +529,6 @@ def promote(item_id):
 
     # Caller-supplied field overrides land last (the assignment modal
     # sends the full reviewed field set here).
-    overrides = data.get("overrides") or {}
     if isinstance(overrides, dict):
         for k, v in overrides.items():
             if k in cfg["fields"]:
@@ -545,6 +547,116 @@ def promote(item_id):
             and not str(payload.get("severity") or "").strip()
             and item.priority in ("Low", "Medium", "High", "Critical")):  # audit #10: don't drop Critical
         payload["severity"] = item.priority
+
+    return payload
+
+
+# ── Phase 2b: confidence-gated auto-file ─────────────────────────────────
+#
+# When the INBOX_AUTO_FILE kill-switch is ON and a captured item matches a
+# TRUSTED deterministic template (Trust.auto_file) at/above its confidence
+# floor with all required fields present, file it straight into its target
+# tracker — bypassing manual triage. It goes through the SAME assignment
+# code path (_build_assignment_payload + create_direct_record) a human
+# promote uses, is tagged "auto-file:<template>" in source + activity log,
+# and the inbox item is Archived with the link. Always auditable, trivially
+# revertible (flip the switch, or drop the template's auto_file). DEFAULT
+# OFF — a true no-op vs. Phase-2 suggest-only behavior.
+
+def auto_file_enabled(app) -> bool:
+    """Global kill-switch gate (INBOX_AUTO_FILE, env, default OFF)."""
+    return bool(app.config.get("INBOX_AUTO_FILE", False))
+
+
+def maybe_auto_file(sess, item):
+    """File the item automatically iff every Phase-2b gate clears.
+
+    Returns the new record id on a successful auto-file, else None (the
+    normal case while the switch is OFF or the template isn't trusted).
+    Best-effort and fail-safe: any problem leaves the item in the inbox
+    with its advisory suggestion intact — auto-file never loses an item.
+    """
+    if not auto_file_enabled(current_app):
+        return None
+    # Don't re-file an already-promoted/archived item (idempotent re-runs).
+    if (item.promoted_to_table or "").strip() or item.status == "Archived":
+        return None
+
+    decision = auto_file_decision(item.title, item.body or "", item.source or "")
+    if decision is None or not decision["eligible"]:
+        return None
+
+    tmpl = decision["template"]
+    target_table = decision["suggestion"]["target_table"]
+    if target_table not in ALLOWED_TABLES or target_table == "inbox_items":
+        return None
+
+    cfg = ALLOWED_TABLES[target_table]
+    payload = _build_assignment_payload(item, target_table)
+    # Stamp the audit trail on the new row's source when the table has one.
+    if "source" in cfg["fields"]:
+        payload["source"] = f"auto-file:{tmpl.name}"
+
+    # Final required-field guard (belt & suspenders — decision already
+    # checked the drafted fields, but _build_assignment_payload is the
+    # authoritative mapping, so validate its actual output before insert).
+    missing = [req for req in cfg["required"]
+               if not str(payload.get(req) or "").strip()]
+    if missing:
+        LOG.warning("auto-file skipped for inbox item %s: payload missing %s",
+                    item.id, missing)
+        return None
+
+    record_id, error = create_direct_record(
+        sess, target_table, payload,
+        source_name=f"auto-file:{tmpl.name}",
+        action="submitted",
+        action_detail=f"auto-filed from inbox#{item.id} via {tmpl.name}",
+    )
+    if error:
+        LOG.warning("auto-file insert failed for inbox item %s: %s",
+                    item.id, error)
+        return None
+
+    item.promoted_to_table = target_table
+    item.promoted_to_id = record_id
+    item.status = "Archived"
+    item.updated_at = datetime.now()
+    detail = f"auto-file:{tmpl.name} -> {target_table}#{record_id}"
+    if has_request_context():
+        log_activity(sess, "inbox_items", item.id, "auto_filed", new=detail)
+    else:
+        sess.add(ActivityLog(
+            table_name="inbox_items",
+            record_id=item.id,
+            action="auto_filed",
+            field_name="",
+            old_value="",
+            new_value=detail,
+            user_name="System",
+        ))
+    LOG.info("auto-filed inbox item %s -> %s#%s via %s",
+             item.id, target_table, record_id, tmpl.name)
+    return record_id
+
+
+# ── POST /api/v1/inbox/<id>/promote  (Assignment) ────────────────────────
+
+@bp.route("/api/v1/inbox/<int:item_id>/promote", methods=["POST"])
+@login_required
+def promote(item_id):
+    sess = get_session()
+    item = sess.get(InboxItem, item_id)
+    if item is None:
+        return jsonify({"error": "Not found"}), 404
+
+    data = request.json or {}
+    target_table = (data.get("target_table") or "").strip()
+    if not target_table or target_table not in ALLOWED_TABLES or target_table == "inbox_items":
+        return jsonify({"error": f"unknown target_table: {target_table}"}), 400
+
+    cfg = ALLOWED_TABLES[target_table]
+    payload = _build_assignment_payload(item, target_table, data.get("overrides"))
 
     # Structured required-field validation: tell the assignment UI
     # exactly which fields are still missing.
