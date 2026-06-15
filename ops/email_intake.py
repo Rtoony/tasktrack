@@ -276,6 +276,10 @@ def main() -> int:
     port = int(_env("INTAKE_IMAP_PORT", "993"))
     folder = _env("INTAKE_IMAP_FOLDER", "INBOX")
     use_ssl = _env("INTAKE_IMAP_SSL", "1") not in ("0", "false", "False")
+    # Optional sender allow-list: only triage mail FROM these domains (comma list,
+    # e.g. "brce.com"). Empty = triage everything in the folder (original behavior).
+    # Lets a shared agent-I/O mailbox triage only firm mail and leave other mail alone.
+    from_domains = [d.strip().lower() for d in (_env("INTAKE_FROM_DOMAINS", "") or "").split(",") if d.strip()]
     max_messages = int(_env("INTAKE_MAX_MESSAGES", "10"))
     max_attachment_bytes = int(_env("INTAKE_MAX_ATTACHMENT_BYTES", str(50 * 1024 * 1024)))
 
@@ -305,6 +309,14 @@ def main() -> int:
                 continue
             raw = data[0][1]
             msg = email.message_from_bytes(raw, policy=email.policy.default)
+            if from_domains:
+                from_addr = email.utils.parseaddr(str(msg.get("From", "")))[1].lower()
+                from_dom = from_addr.rsplit("@", 1)[-1] if "@" in from_addr else ""
+                if not any(from_dom == d or from_dom.endswith("." + d) for d in from_domains):
+                    # Not a triage sender — leave UNSEEN for other agents, don't capture.
+                    LOG.info("skip id=%s sender=%s (not in INTAKE_FROM_DOMAINS=%s)",
+                             msg_id, from_addr or "?", ",".join(from_domains))
+                    continue
             title, body_block, sender = _compose_inbox_fields(msg)
             if not body_block:
                 LOG.info("skipping empty message id=%s", msg_id)
