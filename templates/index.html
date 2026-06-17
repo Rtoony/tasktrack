@@ -436,8 +436,9 @@
   .modal-close:hover { background:var(--bg); color:var(--text); }
   .modal-body { padding:0.4rem 1.25rem 1.25rem; }
   .modal-footer { padding:0.6rem 1.25rem 1rem; display:flex; gap:0.5rem; justify-content:flex-end; border-top:1px solid var(--border-light); }
-  .record-overlay { align-items:stretch; justify-content:flex-end; }
-  .record-drawer { width:min(620px, 100vw); max-width:none; height:100vh; max-height:none; border-left:1px solid var(--border); border-radius:0; display:flex; flex-direction:column; overflow:hidden; animation:drawerIn 0.18s cubic-bezier(0,0,0.3,1); }
+  /* #62: record/detail cards open CENTERED like Capture Feedback (was a right-edge full-height drawer). */
+  .record-overlay { align-items:center; justify-content:center; }
+  .record-drawer { width:min(620px, 100vw); max-width:none; max-height:90vh; border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); display:flex; flex-direction:column; overflow:hidden; animation:modalIn 0.15s ease-out; }
   .record-drawer .modal-header { align-items:flex-start; gap:1rem; padding:1rem 1.25rem 0.85rem; border-bottom:1px solid var(--border); background:var(--surface); }
   .record-drawer .modal-body { flex:1; overflow-y:auto; padding:1rem 1.25rem 1.25rem; }
   .record-drawer .modal-footer { padding:0.75rem 1.25rem; border-top:1px solid var(--border); background:var(--surface); flex-wrap:wrap; }
@@ -462,6 +463,8 @@
   .feedback-fab { position:fixed; right:1.1rem; bottom:1.1rem; z-index:120; border:0; background:#161616; color:#fff; border-radius:999px; padding:0.7rem 1rem; font-size:0.78rem; font-weight:700; letter-spacing:0.01em; box-shadow:var(--shadow-md); cursor:pointer; }
   .feedback-fab:hover { background:#393939; }
   .feedback-modal { max-width:640px; }
+  /* #62: Capture Feedback stacks ABOVE an open record card (both are .modal-overlay z1200). */
+  #feedback-overlay { z-index:1260; }
   .feedback-modal .modal-header { border-bottom:1px solid var(--border); padding-bottom:0.8rem; }
   .feedback-intro { color:var(--text-muted); font-size:0.8rem; line-height:1.5; margin-bottom:0.9rem; }
   .feedback-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
@@ -635,6 +638,7 @@
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
   .field label { display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
+  .field label .req-star { color:#da1e28; font-weight:700; }
   .field input,.field select,.field textarea { width:100%; padding:0.45rem 0.65rem; font-family:inherit; font-size:0.84rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); color:var(--text); transition:border-color 0.15s; }
   .field input:focus,.field select:focus,.field textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
   .field textarea { resize:vertical; min-height:56px; }
@@ -7476,6 +7480,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -7484,7 +7489,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —'}]},
     {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'task_description',label:'Task Description',type:'textarea',required:true},
+    {key:'task_description',label:'Task Description',type:'textarea',placeholder:'Optional — a clear title is often enough'},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
@@ -7495,6 +7500,7 @@ const FORMS = {
     {key:'confirmation_notes',label:'Confirmation Notes',type:'textarea',placeholder:'Pending Confirmation phase: what needs review, approval, or sign-off.'},
     {key:'completion_notes',label:'Completion Notes',type:'textarea',placeholder:'Complete phase: what was delivered, where it landed, and final caveats.'},
     {key:'notes',label:'General Notes',type:'textarea'},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -7701,7 +7707,7 @@ function findProjectByNumber(projects, projectNumber) {
 function renderField(f,value) {
   value=value||'';
   const wrap=document.createElement('div'); wrap.className='field';
-  const label=document.createElement('label'); label.textContent=f.label; wrap.appendChild(label);
+  const label=document.createElement('label'); label.textContent=f.label; if (f.required) { const _rq=document.createElement('span'); _rq.className='req-star'; _rq.textContent=' *'; _rq.title='Required'; label.appendChild(_rq); } wrap.appendChild(label);
   let input;
   if (f.type==='managed-option-select') {
     input=document.createElement('select'); input.id='f-'+f.key;
@@ -7926,6 +7932,16 @@ function renderField(f,value) {
     }
   } else if (f.type==='textarea') {
     input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
+  } else if (f.type==='ai-summary') {
+    // #34: editable AI summary draft + a button that drafts it (locally) from the saved task.
+    const ta=document.createElement('textarea'); ta.id='f-'+f.key; ta.textContent=value; ta.spellcheck=true;
+    ta.placeholder='Plain-language summary of this task. Click "Draft with AI", then edit/keep it.';
+    wrap.appendChild(ta);
+    const btn=document.createElement('button'); btn.type='button'; btn.className='btn btn-ghost btn-sm';
+    btn.style.cssText='margin-top:0.4rem;'; btn.textContent='✨ Draft with AI';
+    btn.addEventListener('click', ()=>draftSummary(btn));
+    wrap.appendChild(btn);
+    return wrap;
   } else if (f.type==='placeholder-panel') {
     const panel=document.createElement('div'); panel.className='placeholder-panel';
     const title=document.createElement('div'); title.className='placeholder-title'; title.textContent=f.label;
@@ -8295,6 +8311,11 @@ function validateForm(table, data) {
   const projectIdEl = document.getElementById('f-project_id');
   if (!projectIdEl || !projectIdEl.value) {
     toast('Pick a project from the registry before saving');
+    return false;
+  }
+  if (!String(data.title || '').trim()) {
+    toast('Task Title is required');
+    document.getElementById('f-title')?.focus();
     return false;
   }
   // audit #1: billing_phase is a managed dropdown value, not ## — no client mask.
@@ -8763,11 +8784,35 @@ async function saveRecord() {
   // #14: Personal items carry an explicit category from the form select;
   // default to Follow-up if somehow blank.
   if (table === 'personal' && !data.category) data.category = 'Follow-up';
-  if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
-  else await api('POST','/api/v1/'+API_MAP[table],data);
+  const res = editingId
+    ? await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data)
+    : await api('POST','/api/v1/'+API_MAP[table],data);
+  // #65/#64: the POST/PUT response was previously discarded, so a server-side
+  // validation error (e.g. a missing required field -> 400 {error}) still fired
+  // the "created" toast while nothing actually saved — the "button does nothing"
+  // symptom. Surface the real error and keep the modal open instead of faking success.
+  if (!res || res.error) {
+    toast(res && res.error ? res.error : 'Save failed — please try again');
+    return;
+  }
   closeModal(); loadTable(table);
   if (table === 'calendar') loadDashboard();
   toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+}
+
+// #34: draft a plain-language summary of the OPEN task via a local model and fill
+// the editable AI Summary box (suggest-and-confirm — the normal Save persists it).
+// Needs a saved record (the endpoint reads the stored fields).
+async function draftSummary(btn) {
+  if (!editingId) { toast('Save the task first, then draft a summary.'); return; }
+  const ta = document.getElementById('f-ai_summary');
+  if (!ta) return;
+  const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Drafting…';
+  try {
+    const res = await api('POST', '/api/v1/'+API_MAP[editingTable]+'/'+editingId+'/summarize');
+    if (!res || res.error) { toast(res && res.error ? res.error : 'Summary failed'); }
+    else { ta.value = res.summary || ''; toast('Draft ready — edit if needed, then Save.'); }
+  } finally { btn.disabled = false; btn.textContent = prev; }
 }
 
 // #31: Ctrl/Cmd+Enter saves+closes the record drawer, mirroring the blue Save

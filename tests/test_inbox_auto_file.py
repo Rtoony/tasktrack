@@ -150,8 +150,8 @@ def test_decision_incomplete_required_blocks(monkeypatch):
     tmpl = it.Template(
         name="test-incomplete",
         match=lambda t, b, s: (t or "").lower().startswith("incomplete:"),
-        # project_work_tasks requires project_name/number/task_description/title;
-        # supply only title so the gate trips.
+        # project_work_tasks requires project_name/number/title (#65: task_description
+        # is no longer required); supply only title so the gate trips on the rest.
         parse=lambda t, b, s: {"title": "only a title"},
         route="project_work_tasks",
         rationale="incomplete",
@@ -162,7 +162,7 @@ def test_decision_incomplete_required_blocks(monkeypatch):
     d = it.auto_file_decision("incomplete: x", "", "")
     assert d["eligible"] is False
     assert d["reason"] == "required fields incomplete"
-    assert set(d["missing"]) >= {"project_name", "project_number", "task_description"}
+    assert set(d["missing"]) >= {"project_name", "project_number"}
 
 
 # ── OFF is a strict no-op (default behavior) ───────────────────────────────

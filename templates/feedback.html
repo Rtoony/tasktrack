@@ -162,6 +162,7 @@ details.context-raw summary { cursor:pointer; color:var(--muted); font-size:0.72
             <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Ready to Test')">Ready to Test</button>
             <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Accepted')">Accept</button>
             <button class="btn btn-ghost" type="button" onclick="setFeedbackStatus('Archived')">Archive</button>
+            <button class="btn btn-danger" type="button" onclick="deleteFeedback()">Delete</button>
           </div>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
             <button class="btn btn-ghost" type="button" onclick="clearForm()">Clear</button>
@@ -463,6 +464,19 @@ async function setFeedbackStatus(status) {
   if (!selectedId) { toast('Select feedback first'); return; }
   document.getElementById('feedback-status').value = status;
   await saveFeedback(new Event('submit'));
+}
+// #61: hard-delete feedback created in error (Archive only hides it). Destructive
+// and irreversible, so confirm first; backend logs a 'deleted' activity row.
+async function deleteFeedback() {
+  if (!selectedId) { toast('Select feedback first'); return; }
+  const title = (feedbackRows.find(r => r.id === selectedId) || {}).title || `#${selectedId}`;
+  if (!confirm(`Permanently delete feedback "${title}"? This cannot be undone. (Use Archive to just hide it.)`)) return;
+  try {
+    await api('DELETE', `/api/v1/feedback_items/${selectedId}`);
+    toast('Feedback deleted');
+    clearForm();
+    await loadFeedback();
+  } catch (err) { toast(err.message || 'Delete failed'); }
 }
 async function loadFeedback(selectId) {
   try {

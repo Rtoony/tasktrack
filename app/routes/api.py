@@ -27,6 +27,7 @@ from ..models import (
 from ..services.audit import log_activity
 from ..services.csv_safe import csv_safe
 from ..services.intake_reports import intake_source_report
+from ..services.task_summary import draft_summary, SUMMARY_TABLES
 from ..services.tickets import (
     TABLE_MODELS,
     done_statuses_for_table,
@@ -765,6 +766,29 @@ def delete_record(table, record_id):
     log_activity(sess, table, record_id, "deleted", new=label)
     sess.commit()
     return jsonify({"deleted": record_id})
+
+
+@bp.route("/api/v1/<table>/<int:record_id>/summarize", methods=["POST"])
+@login_required
+def summarize_record(table, record_id):
+    """#34: draft a plain-language AI summary of a task (suggest-and-confirm).
+
+    Returns the draft only — it is NOT persisted. The client shows it for the
+    operator to accept/edit, and the normal PUT saves it into ai_summary."""
+    if table not in SUMMARY_TABLES:
+        return jsonify({"error": "summaries are only available for Project and CAD Dev tasks"}), 400
+    Model = TABLE_MODELS[table]
+    sess = get_session()
+    row = sess.get(Model, record_id)
+    if row is None or not _record_detail_visible_to_current_user(table, row):
+        return jsonify({"error": "Not found"}), 404
+    try:
+        summary = draft_summary(table, to_dict(row))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:  # gateway/model failure — surface, don't fake success
+        return jsonify({"error": f"summary unavailable: {exc}"}), 502
+    return jsonify({"summary": summary})
 
 
 def _archivable_model(table):

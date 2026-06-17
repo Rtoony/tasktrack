@@ -118,6 +118,12 @@ def intake_env(monkeypatch):
     monkeypatch.setenv("INTAKE_MAX_ATTACHMENT_BYTES", str(50 * 1024 * 1024))
     monkeypatch.setenv("TASKTRACK_TOKEN", TRIAGE_TOKEN)
     monkeypatch.setenv("TASKTRACK_URL", "http://tasktrack.test")
+    # 8e76c0c added INTAKE_FROM_DOMAINS as a knob the poller reads. The dev shell /
+    # vault injection carries the real firm filter ("brce.com"), which would
+    # (correctly) skip the gmail.com test sender and make these tests fail only on
+    # the injected host. Clear it so the default "capture everything" path is tested;
+    # the filter itself is covered by test_main_skips_sender_outside_from_domains.
+    monkeypatch.delenv("INTAKE_FROM_DOMAINS", raising=False)
 
 
 def _run_main(monkeypatch, raw_messages, responses):
@@ -255,6 +261,18 @@ def test_main_handles_dedupe_200(monkeypatch, intake_env):
     assert code == 0
     assert posted[1][0].endswith("/api/v1/attachments/inbox_items/42")
     assert stored == [(b"1", "+FLAGS", "\\Seen")]
+
+
+def test_main_skips_sender_outside_from_domains(monkeypatch, intake_env):
+    """INTAKE_FROM_DOMAINS limits capture to firm mail: an off-domain sender is
+    left UNSEEN and never POSTed. Regression guard for the 8e76c0c filter (and the
+    reason these tests must clear the inherited INTAKE_FROM_DOMAINS)."""
+    monkeypatch.setenv("INTAKE_FROM_DOMAINS", "brce.com")
+    raw = _email().as_bytes()  # sender is rtoony@gmail.com — outside brce.com
+    code, posted, stored = _run_main(monkeypatch, [raw], _capture_then_attach_responses)
+    assert code == 0
+    assert posted == []   # nothing captured
+    assert stored == []   # left unread for other agents
 
 
 # ── 3. HTTP-level: capture accepts the poller's triage-scoped token ──────

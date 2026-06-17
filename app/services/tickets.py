@@ -509,9 +509,8 @@ def validate_record_data(table, data, creating=False, sess: Session | None = Non
     if creating or "engineer" in data:
         data["engineer"] = engineer
 
-    if creating or "task_description" in data:
-        if not task_description:
-            return "'task_description' is required"
+    # #65: task_description is no longer required — a clear title often suffices.
+    if "task_description" in data:
         data["task_description"] = task_description
 
     if due_at:
