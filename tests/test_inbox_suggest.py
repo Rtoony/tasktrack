@@ -484,8 +484,8 @@ def test_promote_400_lists_missing_required_fields(auth_client):
     assert r.status_code == 400
     body = r.get_json()
     assert body["error"] == "missing required fields"
-    assert set(body["missing"]) == {"project_name", "project_number",
-                                    "task_description"}
+    # #65: task_description is no longer required for project_work_tasks.
+    assert set(body["missing"]) == {"project_name", "project_number"}
 
 
 def test_promote_400_personal_items_missing_category(auth_client):
