@@ -7480,6 +7480,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -7499,6 +7500,7 @@ const FORMS = {
     {key:'confirmation_notes',label:'Confirmation Notes',type:'textarea',placeholder:'Pending Confirmation phase: what needs review, approval, or sign-off.'},
     {key:'completion_notes',label:'Completion Notes',type:'textarea',placeholder:'Complete phase: what was delivered, where it landed, and final caveats.'},
     {key:'notes',label:'General Notes',type:'textarea'},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
@@ -7930,6 +7932,16 @@ function renderField(f,value) {
     }
   } else if (f.type==='textarea') {
     input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
+  } else if (f.type==='ai-summary') {
+    // #34: editable AI summary draft + a button that drafts it (locally) from the saved task.
+    const ta=document.createElement('textarea'); ta.id='f-'+f.key; ta.textContent=value; ta.spellcheck=true;
+    ta.placeholder='Plain-language summary of this task. Click "Draft with AI", then edit/keep it.';
+    wrap.appendChild(ta);
+    const btn=document.createElement('button'); btn.type='button'; btn.className='btn btn-ghost btn-sm';
+    btn.style.cssText='margin-top:0.4rem;'; btn.textContent='✨ Draft with AI';
+    btn.addEventListener('click', ()=>draftSummary(btn));
+    wrap.appendChild(btn);
+    return wrap;
   } else if (f.type==='placeholder-panel') {
     const panel=document.createElement('div'); panel.className='placeholder-panel';
     const title=document.createElement('div'); title.className='placeholder-title'; title.textContent=f.label;
@@ -8786,6 +8798,21 @@ async function saveRecord() {
   closeModal(); loadTable(table);
   if (table === 'calendar') loadDashboard();
   toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+}
+
+// #34: draft a plain-language summary of the OPEN task via a local model and fill
+// the editable AI Summary box (suggest-and-confirm — the normal Save persists it).
+// Needs a saved record (the endpoint reads the stored fields).
+async function draftSummary(btn) {
+  if (!editingId) { toast('Save the task first, then draft a summary.'); return; }
+  const ta = document.getElementById('f-ai_summary');
+  if (!ta) return;
+  const prev = btn.textContent; btn.disabled = true; btn.textContent = 'Drafting…';
+  try {
+    const res = await api('POST', '/api/v1/'+API_MAP[editingTable]+'/'+editingId+'/summarize');
+    if (!res || res.error) { toast(res && res.error ? res.error : 'Summary failed'); }
+    else { ta.value = res.summary || ''; toast('Draft ready — edit if needed, then Save.'); }
+  } finally { btn.disabled = false; btn.textContent = prev; }
 }
 
 // #31: Ctrl/Cmd+Enter saves+closes the record drawer, mirroring the blue Save
