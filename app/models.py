@@ -146,6 +146,8 @@ class WorkTask(Base):
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
     follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # feedback #34: local-AI-drafted plain-language summary (suggest-and-confirm).
+    ai_summary: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class ProjectWorkTask(Base):
@@ -183,6 +185,8 @@ class ProjectWorkTask(Base):
     archived_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
     # feedback #44: 0/1 follow-up flag (a star), independent of the due-date system.
     follow_up: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # feedback #34: local-AI-drafted plain-language summary (suggest-and-confirm).
+    ai_summary: Mapped[str] = mapped_column(Text, server_default=text("''"))
 
 
 class TrainingTask(Base):
