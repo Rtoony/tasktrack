@@ -56,7 +56,7 @@ ALLOWED_TABLES = {
             "project_id",
             "engineer_id",
         ],
-        "required": ["project_name", "title", "project_number", "task_description"],
+        "required": ["project_name", "title", "project_number"],
         "label": "Project Task",
         "status_flow": ["Not Started", "In Progress", "Pending Confirmation", "Complete"],
     },

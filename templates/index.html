@@ -635,6 +635,7 @@
   /* ── Form ─────────────────────────────────── */
   .field { margin-bottom:0.8rem; }
   .field label { display:block; font-size:0.72rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:0.25rem; }
+  .field label .req-star { color:#da1e28; font-weight:700; }
   .field input,.field select,.field textarea { width:100%; padding:0.45rem 0.65rem; font-family:inherit; font-size:0.84rem; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); color:var(--text); transition:border-color 0.15s; }
   .field input:focus,.field select:focus,.field textarea:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
   .field textarea { resize:vertical; min-height:56px; }
@@ -7484,7 +7485,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —'}]},
     {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'task_description',label:'Task Description',type:'textarea',required:true},
+    {key:'task_description',label:'Task Description',type:'textarea',placeholder:'Optional — a clear title is often enough'},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
     {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
@@ -7701,7 +7702,7 @@ function findProjectByNumber(projects, projectNumber) {
 function renderField(f,value) {
   value=value||'';
   const wrap=document.createElement('div'); wrap.className='field';
-  const label=document.createElement('label'); label.textContent=f.label; wrap.appendChild(label);
+  const label=document.createElement('label'); label.textContent=f.label; if (f.required) { const _rq=document.createElement('span'); _rq.className='req-star'; _rq.textContent=' *'; _rq.title='Required'; label.appendChild(_rq); } wrap.appendChild(label);
   let input;
   if (f.type==='managed-option-select') {
     input=document.createElement('select'); input.id='f-'+f.key;
@@ -8297,6 +8298,11 @@ function validateForm(table, data) {
     toast('Pick a project from the registry before saving');
     return false;
   }
+  if (!String(data.title || '').trim()) {
+    toast('Task Title is required');
+    document.getElementById('f-title')?.focus();
+    return false;
+  }
   // audit #1: billing_phase is a managed dropdown value, not ## — no client mask.
   if (String(data.time_required_minutes || '').trim()) {
     const minutes = Number(data.time_required_minutes);
@@ -8763,8 +8769,17 @@ async function saveRecord() {
   // #14: Personal items carry an explicit category from the form select;
   // default to Follow-up if somehow blank.
   if (table === 'personal' && !data.category) data.category = 'Follow-up';
-  if (editingId) await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data);
-  else await api('POST','/api/v1/'+API_MAP[table],data);
+  const res = editingId
+    ? await api('PUT','/api/v1/'+API_MAP[table]+'/'+editingId,data)
+    : await api('POST','/api/v1/'+API_MAP[table],data);
+  // #65/#64: the POST/PUT response was previously discarded, so a server-side
+  // validation error (e.g. a missing required field -> 400 {error}) still fired
+  // the "created" toast while nothing actually saved — the "button does nothing"
+  // symptom. Surface the real error and keep the modal open instead of faking success.
+  if (!res || res.error) {
+    toast(res && res.error ? res.error : 'Save failed — please try again');
+    return;
+  }
   closeModal(); loadTable(table);
   if (table === 'calendar') loadDashboard();
   toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
