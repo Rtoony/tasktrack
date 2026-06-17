@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>/* #59: apply saved/preferred theme BEFORE render to avoid a flash */(function(){try{var t=localStorage.getItem('tt-theme');if(!t)t=(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light';if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();</script>
 <title>{{ brand_name }}</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#0f62fe">
@@ -27,6 +28,24 @@
     --shadow-lg: 0 8px 24px rgba(0,0,0,0.18);
     --radius: 0; --radius-lg: 0;
   }
+
+  /* #59: Dark mode — Carbon-dark palette. Toggled via data-theme="dark" on <html>
+     (persisted in localStorage 'tt-theme', falls back to prefers-color-scheme).
+     The app header is already dark in both modes, so only the content tokens flip. */
+  html[data-theme="dark"] {
+    --bg:#161616; --surface:#262626; --border:#393939; --border-light:#2a2a2a;
+    --text:#f4f4f4; --text-muted:#a8a8a8; --text-light:#8d8d8d;
+    --accent:#4589ff; --accent-hover:#78a9ff; --accent-light:#1d2a41;
+    --danger:#fa4d56; --danger-hover:#ff8389; --danger-light:#3a1619;
+    --warn:#f1c21b; --warn-light:#2c2611;
+    --success:#42be65; --success-light:#15301d;
+    --shadow-sm:none; --shadow-md:0 2px 6px rgba(0,0,0,0.45);
+    --shadow-lg:0 8px 24px rgba(0,0,0,0.6);
+  }
+  /* Per-tab rules reset --accent-light to a pale (light-theme) tint; in dark mode
+     fold it to a dark elevated tint so accent-filled backgrounds stay legible.
+     Outscopes the body:has(...) per-tab rules. */
+  html[data-theme="dark"] body:has(.tab-btn.active) { --accent-light:#1d2a41; }
 
   /* Per-tab accent colors. The :has() selector tints --accent based on
      which tab is currently active. Keeps the rest of the dark palette
@@ -63,6 +82,7 @@
   .btn-logout:hover,.btn-admin-link:hover { background:var(--bg); color:var(--text); }
   .header .btn-logout,.header .btn-admin-link { border-color:#525252; color:#c6c6c6; white-space:nowrap; }
   .header .btn-logout:hover,.header .btn-admin-link:hover { background:#262626; color:#fff; }
+  .theme-toggle { font-size:0.95rem; line-height:1; padding:0.2rem 0.5rem; }  /* #59 dark-mode toggle */
   .app-shell { display:flex; align-items:stretch; min-height:calc(100vh - 56px); }
   .app-shell-standalone { display:block; }
   /* Phase-4 Kanban toggle + lanes — opt-in alternative view for the
@@ -242,7 +262,7 @@
   .core-tracker-table { margin-top:0.12rem; font-family:'IBM Plex Mono',monospace; color:var(--text-light); font-size:0.66rem; }
   .core-tracker-count { font-family:'IBM Plex Mono',monospace; font-size:1.45rem; font-weight:600; line-height:1; }
   .core-tracker-caption { font-size:0.62rem; color:var(--text-light); text-transform:uppercase; letter-spacing:0.04em; }
-  .core-mini-bar { display:flex; height:0.42rem; background:#e0e0e0; margin-top:0.9rem; overflow:hidden; }
+  .core-mini-bar { display:flex; height:0.42rem; background:var(--border); margin-top:0.9rem; overflow:hidden; }
   .core-mini-seg { min-width:2px; height:100%; }
   .core-tracker-foot { display:flex; align-items:center; justify-content:space-between; gap:0.75rem; margin-top:0.55rem; font-size:0.72rem; color:var(--text-muted); }
   .core-work-grid { display:grid; grid-template-columns:1.25fr 1fr 1fr; gap:0.75rem; }
@@ -259,7 +279,7 @@
   .core-row-title { display:block; font-size:0.82rem; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .core-row-meta { margin-top:0.18rem; display:flex; flex-wrap:wrap; gap:0.35rem; align-items:center; color:var(--text-light); font-size:0.68rem; }
   .core-row-side { display:flex; align-items:center; justify-content:flex-end; gap:0.4rem; flex-wrap:wrap; max-width:45%; }
-  .core-tag { display:inline-flex; align-items:center; gap:0.25rem; height:1.25rem; padding:0 0.45rem; font-size:0.68rem; font-weight:500; white-space:nowrap; background:#e0e0e0; color:#393939; }
+  .core-tag { display:inline-flex; align-items:center; gap:0.25rem; height:1.25rem; padding:0 0.45rem; font-size:0.68rem; font-weight:500; white-space:nowrap; background:var(--border); color:var(--text-muted); }
   .core-tag.blue { background:#d0e2ff; color:#0043ce; }
   .core-tag.green { background:#a7f0ba; color:#0e6027; }
   .core-tag.red { background:#ffd7d9; color:#a2191f; }
@@ -340,7 +360,7 @@
   .tracker-summary-value.success { color:var(--success); }
   .tracker-summary-label { margin-top:0.25rem; color:var(--text-light); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .tracker-summary-note { margin-top:0.15rem; color:var(--text-muted); font-size:0.68rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .tracker-status-strip { display:flex; height:0.38rem; margin-top:0.5rem; background:#e0e0e0; overflow:hidden; }
+  .tracker-status-strip { display:flex; height:0.38rem; margin-top:0.5rem; background:var(--border); overflow:hidden; }
   .tracker-status-seg { min-width:2px; }
 
   .triage-queue-table .triage-queue-row td { vertical-align:top; }
@@ -663,7 +683,7 @@
   .att-row { display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0.4rem; border:1px solid var(--border-light); border-radius:var(--radius); font-size:0.78rem; }
   /* P2-5 inline preview thumbnail/icon */
   .att-thumb-wrap { flex:0 0 auto; display:inline-flex; line-height:0; }
-  .att-thumb { width:40px; height:40px; border-radius:var(--radius); border:1px solid var(--border-light); object-fit:cover; background:#fff; display:block; }
+  .att-thumb { width:40px; height:40px; border-radius:var(--radius); border:1px solid var(--border-light); object-fit:cover; background:var(--surface); display:block; }
   .att-thumb-icon { display:inline-flex; align-items:center; justify-content:center; font-size:0.6rem; font-weight:700; letter-spacing:0.02em; color:var(--text-muted); background:color-mix(in srgb, var(--surface) 80%, var(--bg)); }
   .att-thumb-pdf { color:#b91c1c; border-color:#b91c1c; }
   .att-row .att-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -903,6 +923,7 @@
         <span class="health-dot" id="health-dot"></span>
       </span>
       {% endif %}
+      <button type="button" class="btn-admin-link theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" aria-label="Toggle dark mode">&#127769;</button>
       <span class="user-name">{{ user_name }}</span>
       <a href="/logout" class="btn-logout">Sign out</a>
     </div>
@@ -2150,6 +2171,24 @@ const SHELL_BRAND = {{ brand_name|tojson }};
 function esc(s) { const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
 let toastTimer = null;
 function toast(msg) { const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('toast-link'); t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2500); }
+// #59: site-wide dark-mode toggle. data-theme on <html>, persisted in localStorage.
+// The no-flash inline script in <head> applies it before render; this just flips it.
+function toggleTheme() {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const next = dark ? 'light' : 'dark';
+  if (next === 'dark') document.documentElement.setAttribute('data-theme','dark');
+  else document.documentElement.removeAttribute('data-theme');
+  try { localStorage.setItem('tt-theme', next); } catch (e) {}
+  updateThemeToggleIcon();
+}
+function updateThemeToggleIcon() {
+  const b = document.querySelector('.theme-toggle');
+  if (!b) return;
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  b.textContent = dark ? '☀️' : '🌙';  // ☀️ when dark (click=light), 🌙 when light
+  b.title = dark ? 'Switch to light mode' : 'Switch to dark mode';
+}
+document.addEventListener('DOMContentLoaded', updateThemeToggleIcon);
 /* Toast variant with a clickable action (e.g., link to a just-created
    record). pointer-events are enabled only for this variant via the
    .toast-link class so plain toasts never intercept clicks. */
