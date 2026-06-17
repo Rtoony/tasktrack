@@ -5,9 +5,10 @@ summary of a task from its current fields. Suggest-and-confirm: this only
 RETURNS a draft — the operator accepts/edits it, and the normal record PUT
 persists it into `ai_summary`. Nothing here writes the DB.
 
-Local-first by default (TASKTRACK_SUMMARY_MODEL=qwen3-coder); generous
-max_tokens so a reasoning model doesn't truncate to empty (the documented
-local-model reasoning-burn failure mode).
+Local-first by default (TASKTRACK_SUMMARY_MODEL=gemma4-26b — a valid local
+alias on the gateway, verified to produce clean prose ~5s); generous max_tokens
+so a reasoning model doesn't truncate to empty (the documented local-model
+reasoning-burn failure mode).
 """
 import os
 import re
@@ -21,7 +22,7 @@ LITELLM_API_KEY = (
     or os.environ.get("LITELLM_MASTER_KEY")
     or ""
 )
-SUMMARY_MODEL = os.environ.get("TASKTRACK_SUMMARY_MODEL", "qwen3-coder")
+SUMMARY_MODEL = os.environ.get("TASKTRACK_SUMMARY_MODEL", "gemma4-26b")
 SUMMARY_TIMEOUT_S = int(os.environ.get("TASKTRACK_SUMMARY_TIMEOUT_S", "90"))
 SUMMARY_MAX_TOKENS = int(os.environ.get("TASKTRACK_SUMMARY_MAX_TOKENS", "1200"))
 
