@@ -436,8 +436,9 @@
   .modal-close:hover { background:var(--bg); color:var(--text); }
   .modal-body { padding:0.4rem 1.25rem 1.25rem; }
   .modal-footer { padding:0.6rem 1.25rem 1rem; display:flex; gap:0.5rem; justify-content:flex-end; border-top:1px solid var(--border-light); }
-  .record-overlay { align-items:stretch; justify-content:flex-end; }
-  .record-drawer { width:min(620px, 100vw); max-width:none; height:100vh; max-height:none; border-left:1px solid var(--border); border-radius:0; display:flex; flex-direction:column; overflow:hidden; animation:drawerIn 0.18s cubic-bezier(0,0,0.3,1); }
+  /* #62: record/detail cards open CENTERED like Capture Feedback (was a right-edge full-height drawer). */
+  .record-overlay { align-items:center; justify-content:center; }
+  .record-drawer { width:min(620px, 100vw); max-width:none; max-height:90vh; border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); display:flex; flex-direction:column; overflow:hidden; animation:modalIn 0.15s ease-out; }
   .record-drawer .modal-header { align-items:flex-start; gap:1rem; padding:1rem 1.25rem 0.85rem; border-bottom:1px solid var(--border); background:var(--surface); }
   .record-drawer .modal-body { flex:1; overflow-y:auto; padding:1rem 1.25rem 1.25rem; }
   .record-drawer .modal-footer { padding:0.75rem 1.25rem; border-top:1px solid var(--border); background:var(--surface); flex-wrap:wrap; }
@@ -462,6 +463,8 @@
   .feedback-fab { position:fixed; right:1.1rem; bottom:1.1rem; z-index:120; border:0; background:#161616; color:#fff; border-radius:999px; padding:0.7rem 1rem; font-size:0.78rem; font-weight:700; letter-spacing:0.01em; box-shadow:var(--shadow-md); cursor:pointer; }
   .feedback-fab:hover { background:#393939; }
   .feedback-modal { max-width:640px; }
+  /* #62: Capture Feedback stacks ABOVE an open record card (both are .modal-overlay z1200). */
+  #feedback-overlay { z-index:1260; }
   .feedback-modal .modal-header { border-bottom:1px solid var(--border); padding-bottom:0.8rem; }
   .feedback-intro { color:var(--text-muted); font-size:0.8rem; line-height:1.5; margin-bottom:0.9rem; }
   .feedback-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0.75rem; }
