@@ -120,6 +120,9 @@ class WorkTask(Base):
     # lives in the managed option set `work_category`. cad_skill_area stays
     # the discipline/skill axis; category is the kind-of-work axis.
     category: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # #46: request Type (Idea / Bug / Feature / Improvement). cad_skill_area kept
+    # but dropped from the form (redundant with category + the competency rubric).
+    task_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     description: Mapped[str] = mapped_column(Text, server_default=text("''"))
     requested_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -156,6 +159,8 @@ class ProjectWorkTask(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: project work Type (Design / Review / Submittal / Field / Admin / Other).
+    task_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
     billing_phase: Mapped[str] = mapped_column(Text, server_default=text("''"))
     engineer: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -194,6 +199,8 @@ class TrainingTask(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: training Type (Skill Coaching / Onboarding / Software Rollout / ...).
+    training_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     trainees: Mapped[str] = mapped_column(Text, server_default=text("''"))
     requested_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
     skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -237,6 +244,9 @@ class PersonnelIssue(Base):
     observed_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     issue_description: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: coaching Type — Coaching / Near-miss / Recognition / Process gap. Lets the
+    # form log wins (Recognition), not just problems — the non-punitive lever.
+    coaching_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     incident_context: Mapped[str] = mapped_column(Text, server_default=text("''"))
     recommended_training: Mapped[str] = mapped_column(Text, server_default=text("''"))
     severity: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))
