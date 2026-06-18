@@ -37,6 +37,7 @@ ALLOWED_TABLES = {
         "fields": [
             "project_name",
             "title",
+            "task_type",
             "project_number",
             "billing_phase",
             "engineer",
@@ -66,6 +67,7 @@ ALLOWED_TABLES = {
     "training_tasks": {
         "fields": [
             "title",
+            "training_type",
             "trainees",
             "requested_by",
             "skill_area",
@@ -93,6 +95,7 @@ ALLOWED_TABLES = {
             "observed_by",
             "cad_skill_area",
             "issue_description",
+            "coaching_type",
             "incident_context",
             "recommended_training",
             "severity",

@@ -159,6 +159,8 @@ class ProjectWorkTask(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_name: Mapped[str] = mapped_column(Text, server_default=text("''"))
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: project work Type (Design / Review / Submittal / Field / Admin / Other).
+    task_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     project_number: Mapped[str] = mapped_column(Text, server_default=text("''"))
     billing_phase: Mapped[str] = mapped_column(Text, server_default=text("''"))
     engineer: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -197,6 +199,8 @@ class TrainingTask(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: training Type (Skill Coaching / Onboarding / Software Rollout / ...).
+    training_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     trainees: Mapped[str] = mapped_column(Text, server_default=text("''"))
     requested_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
     skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
@@ -240,6 +244,9 @@ class PersonnelIssue(Base):
     observed_by: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     issue_description: Mapped[str] = mapped_column(Text, nullable=False)
+    # #46: coaching Type — Coaching / Near-miss / Recognition / Process gap. Lets the
+    # form log wins (Recognition), not just problems — the non-punitive lever.
+    coaching_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     incident_context: Mapped[str] = mapped_column(Text, server_default=text("''"))
     recommended_training: Mapped[str] = mapped_column(Text, server_default=text("''"))
     severity: Mapped[str] = mapped_column(Text, server_default=text("'Medium'"))

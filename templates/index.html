@@ -7610,32 +7610,33 @@ const FORMS = {
     {key:'links',label:'Links',type:'links'},
   ],
   project:[
+    // #46: regrouped Capture -> In-Progress -> Done; Type added; engineer_id (dup of
+    // engineer) dropped from form; the 5 phase-notes collapsed into one Notes box
+    // (the scope/progress/confirmation/completion columns stay in the DB, unrendered).
     {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —'}]},
     {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
+    {key:'_row',fields:[{key:'task_type',label:'Type',type:'select',options:['','Design','Review','Submittal','Field','Admin','Other']},{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT}]},
     {key:'task_description',label:'Task Description',type:'textarea',placeholder:'Optional — a clear title is often enough'},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
-    {key:'engineer_id',label:'Engineer (registry)',type:'fk-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional FK to the Employees registry.'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
+    {key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']},
     {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local',step:900},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local',step:900}]},
     {key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'},
-    {key:'scope_notes',label:'Planning / Scope Notes',type:'textarea',placeholder:'Not Started phase: scope, setup, prerequisites, or assignment context.'},
-    {key:'progress_notes',label:'Progress Notes',type:'textarea',placeholder:'In Progress phase: current work, blockers, or next production step.'},
-    {key:'confirmation_notes',label:'Confirmation Notes',type:'textarea',placeholder:'Pending Confirmation phase: what needs review, approval, or sign-off.'},
-    {key:'completion_notes',label:'Completion Notes',type:'textarea',placeholder:'Complete phase: what was delivered, where it landed, and final caveats.'},
-    {key:'notes',label:'General Notes',type:'textarea'},
+    {key:'notes',label:'Notes',type:'textarea',placeholder:'Scope, progress, what needs sign-off, and what was delivered — one place.'},
     {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
     {key:'project_location',label:'Project location',type:'project-map'},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
   training:[
+    // #46: Type chip added; Goal + Context collapsed into one box (additional_context
+    // column kept in DB, unrendered). Light touch — the form was already lean.
     {key:'title',label:'Title',type:'text',required:true},
+    {key:'training_type',label:'Type',type:'select',options:['','Skill Coaching','New Hire Onboarding','Software Rollout','Process Refresh','Certification']},
     {key:'trainees',label:'Staff Members',type:'employee-multi-name-select',idsKey:'trainee_ids',placeholder:'Pick one or more employees'},
-    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this'},
     {key:'skill_area',label:'Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/training_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose skill area —',hint:'Admin-managed training vocabulary.'},
-    {key:'training_goals',label:'Training Goals',type:'textarea'},
-    {key:'additional_context',label:'Additional Context',type:'textarea'},
+    {key:'training_goals',label:'Goal / Context',type:'textarea',placeholder:'What should be learned — plus any context (who, why, prerequisites).'},
+    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
@@ -7644,17 +7645,19 @@ const FORMS = {
     {key:'links',label:'Links',type:'links'},
   ],
   personnel:[
-    {key:'issue_description',label:'Incident Summary',type:'textarea',required:true,placeholder:'What happened? Brief factual summary.'},
-    {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'#56: pick one or more employees from the list (no free-typing). Leave blank for a 0-person incident (process / equipment gap).'},
-    {key:'observed_by',label:'Reported By',type:'employee-name-select',placeholder:'Pick the reporter'},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',syncIdSource:'skill_category_id',emptyLabel:'— choose CAD skill area —',syncIdKey:'skill_category_id',hint:'Admin-managed CAD vocabulary. Matching rubric categories also link the Skill Category field below.'},
-    {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},
-    {key:'immediate_solution',label:'Immediate Fix / Workaround Applied',type:'textarea',placeholder:'What did you do in the moment to unblock the work?'},
-    {key:'recommended_training',label:'Recommended Training / Follow-Up',type:'textarea',placeholder:'What coaching, review, or training should happen next?'},
-    {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links the incident to the Competency rubric (Phase 1).'},
+    // #46: reframed as a non-punitive COACHING LOG. coaching_type can log WINS
+    // (Recognition), not just problems. cad_skill_area cut (dup of skill_category_id);
+    // incident_context folded into "What happened"; the two coaching boxes relabeled
+    // positively. Linking a skill category does NOT change anyone's competency score.
+    {key:'coaching_type',label:'Type',type:'select',options:['','Coaching','Near-miss','Recognition','Process / equipment gap']},
+    {key:'issue_description',label:'What happened',type:'textarea',required:true,placeholder:'Briefly — what happened and what work exposed it? (Or a win worth noting.)'},
+    {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Pick one or more employees from the list (no free-typing). Leave blank for a 0-person note (process / equipment).'},
+    {key:'observed_by',label:'Noted By',type:'employee-name-select',placeholder:'Pick who observed it'},
+    {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links to the Competency rubric for context — does NOT change anyone\'s score.'},
     {key:'_row',fields:[{key:'severity',label:'Impact',...INCIDENT_SEVERITY_SELECT},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
-    {key:'estimated_time_loss_minutes',label:'Estimated Time Loss (minutes)',type:'number',placeholder:'0'},
-    {key:'follow_up_date',label:'Follow-Up Date',type:'date'},
+    {key:'immediate_solution',label:'What we did right away',type:'textarea',placeholder:'Any in-the-moment fix or workaround (optional).'},
+    {key:'recommended_training',label:'Growth plan / coaching',type:'textarea',placeholder:'How we grow from this — coaching, review, or training (optional).'},
+    {key:'_row',fields:[{key:'follow_up_date',label:'Follow-Up Date',type:'date'},{key:'estimated_time_loss_minutes',label:'Time Loss (min)',type:'number',placeholder:'0'}]},
     {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
     {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
     {key:'project_location',label:'Project location',type:'project-map'},

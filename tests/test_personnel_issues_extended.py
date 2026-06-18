@@ -81,10 +81,11 @@ def test_dashboard_uses_controlled_cad_skill_area_dropdown(auth_client):
     r = auth_client.get("/")
     assert r.status_code == 200
     html = r.get_data(as_text=True)
-    assert html.count("key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select'") == 2
-    assert "endpoint:'/api/v1/options/cad_skill_area'" in html
-    assert "syncIdKey:'skill_category_id'" in html
-    assert "syncIdSource:'skill_category_id'" in html
+    # #46: cad_skill_area was cut from the CAD Dev + Incident forms (redundant with
+    # work_category and the skill_category_id rubric FK) — it should no longer render.
+    assert "key:'cad_skill_area'" not in html
+    # the controlled endpoint-select infrastructure is still used by other dropdowns
+    # (work_category, billing_phase, training_skill_area).
     assert "f.type==='endpoint-select'" in html
     assert "Current value: " in html
 
