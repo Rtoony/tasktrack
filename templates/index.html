@@ -3839,9 +3839,9 @@ function renderMatrix() {
     th.addEventListener('click', () => openEmployeeScorecard(emp.id));
     trh.appendChild(th);
   });
-  ['Indep+', 'Teach'].forEach(label => {
+  ['Capable+', 'Mentor'].forEach(label => {
     const th = document.createElement('th');
-    th.style.cssText = 'text-align:center; padding:0.5rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); min-width:70px; position:sticky; right:' + (label === 'Teach' ? '0' : '70px') + '; background:var(--surface); z-index:2;';
+    th.style.cssText = 'text-align:center; padding:0.5rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); min-width:70px; position:sticky; right:' + (label === 'Mentor' ? '0' : '70px') + '; background:var(--surface); z-index:2;';
     th.textContent = label;
     trh.appendChild(th);
   });
