@@ -120,6 +120,9 @@ class WorkTask(Base):
     # lives in the managed option set `work_category`. cad_skill_area stays
     # the discipline/skill axis; category is the kind-of-work axis.
     category: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # #46: request Type (Idea / Bug / Feature / Improvement). cad_skill_area kept
+    # but dropped from the form (redundant with category + the competency rubric).
+    task_type: Mapped[str] = mapped_column(Text, server_default=text("''"))
     cad_skill_area: Mapped[str] = mapped_column(Text, server_default=text("''"))
     description: Mapped[str] = mapped_column(Text, server_default=text("''"))
     requested_by: Mapped[str] = mapped_column(Text, server_default=text("''"))

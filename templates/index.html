@@ -7595,11 +7595,10 @@ const FORMS = {
   work:[
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'category',label:'Category',type:'endpoint-select',endpoint:'/api/v1/options/work_category',valueKey:'value',displayKey:'label',emptyLabel:'— choose category —',hint:'What kind of work this is (CAD Standards Portal, LISP / Automation, ...). Admin-managed list.'},
-    {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose CAD skill area —',hint:'Admin-managed list from Admin Home → Managed Dropdowns.'},
+    {key:'task_type',label:'Type',type:'select',options:['','Idea','Bug','Feature','Improvement'],hint:'#46: what kind of request — Idea / Bug / Feature / Improvement.'},
     {key:'description',label:'Requested Change',type:'textarea'},
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
     {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
-    {key:'software',label:'Software / Tools',type:'text',placeholder:'autocad, civil3d, bluebeam'},
     {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked'},
     {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},

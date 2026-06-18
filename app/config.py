@@ -9,6 +9,7 @@ ALLOWED_TABLES = {
         "fields": [
             "title",
             "category",
+            "task_type",
             "cad_skill_area",
             "description",
             "requested_by",
