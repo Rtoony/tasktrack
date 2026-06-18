@@ -1512,11 +1512,12 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Competency</h2>
-        <div class="section-subtitle">CAD/GIS competency coverage on a 0-3 supervision scale. N/A means the task is not in that person's role; 0 is a real training target, 2 is independent, and 3 is go-to/teaches.</div>
+        <div class="section-subtitle">CAD/GIS competency coverage on a 0-3 growth scale. N/A means the task is not in that person's role; 0 is a training target (Learning), 2 is Capable, and 3 is a Mentor.</div>
       </div>
       <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
-        <option value="technical" selected>Engineering + Drafting</option>
+        <option value="technical" selected>General — Eng + Drafting</option>
+        <option value="all">All (tracked)</option>
         <option value="engineer">Engineers</option>
         <option value="engineer in training">Engineers-in-Training</option>
         <option value="drafter">Drafters</option>
@@ -1524,6 +1525,7 @@
       <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
         <option value="">Employee scorecard...</option>
       </select>
+      <button class="btn btn-sm btn-primary" type="button" onclick="openQuickBaseline()" title="#51: walk the technical staff and set a preliminary rating from a plain-language description">&#9889; Quick Baseline</button>
       <label class="filter-select" title="Usually off. Use this to audit who has been excluded from competency ratings." style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
         <input type="checkbox" id="comp-include-untracked" onchange="loadCompetency()" style="margin:0">
         <span style="font-size:0.78rem">Show excluded</span>
@@ -1847,6 +1849,12 @@
 
 <!-- ── Feedback Modal ─────────────────────────── -->
 <button class="feedback-fab" type="button" onclick="openFeedbackSmart()">Feedback</button>
+<div class="modal-overlay" id="baseline-overlay">
+  <div class="modal" style="max-width:660px">
+    <div class="modal-header"><h3 id="baseline-title">Quick Baseline</h3><button class="modal-close" type="button" onclick="closeBaseline()">&times;</button></div>
+    <div class="modal-body" id="baseline-body"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="feedback-overlay">
   <div class="modal feedback-modal">
     <div class="modal-header">
@@ -3744,7 +3752,11 @@ function visibleCompetencyEmployees() {
     // #52: Engineer-in-Training is a technical role — counts in the default
     // "Engineering + Drafting" view and has its own filter. Canonical role value:
     // "engineer in training" (lowercase free-text, set per-employee via the registry).
-    const roleOk = roleFilter === 'technical'
+    // #57: "all" = every tracked employee (no role restriction); "technical" =
+    // the general engineering+drafting cohort; otherwise an exact role match.
+    const roleOk = roleFilter === 'all'
+      ? true
+      : roleFilter === 'technical'
       ? (role === 'engineer' || role === 'drafter' || role === 'engineer in training')
       : role === roleFilter;
     return roleOk && (!nameFilter || e.display_name.toLowerCase().includes(nameFilter));
@@ -3802,9 +3814,9 @@ function renderCompetencySummary() {
     ['Visible people', emps.length],
     ['CAD/GIS tasks', tasks.length],
     ['Rated cells', rated + ' / ' + total],
-    ['Independent+ coverage', pct + '%'],
+    ['Capable+ coverage', pct + '%'],
     ['Training targets', training],
-    ['Go-to / teaches', teach],
+    ['Mentors', teach],
   ].map(([label, value]) => '<div style="border:1px solid var(--border);border-radius:12px;padding:0.65rem;background:var(--surface)"><div style="font-size:0.67rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">' + esc(label) + '</div><div style="font-size:1.25rem;font-weight:750;margin-top:0.2rem">' + esc(String(value)) + '</div></div>').join('');
 }
 
@@ -3834,9 +3846,9 @@ function renderMatrix() {
     th.addEventListener('click', () => openEmployeeScorecard(emp.id));
     trh.appendChild(th);
   });
-  ['Indep+', 'Teach'].forEach(label => {
+  ['Capable+', 'Mentor'].forEach(label => {
     const th = document.createElement('th');
-    th.style.cssText = 'text-align:center; padding:0.5rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); min-width:70px; position:sticky; right:' + (label === 'Teach' ? '0' : '70px') + '; background:var(--surface); z-index:2;';
+    th.style.cssText = 'text-align:center; padding:0.5rem; border-bottom:1px solid var(--border); font-weight:700; color:var(--accent); min-width:70px; position:sticky; right:' + (label === 'Mentor' ? '0' : '70px') + '; background:var(--surface); z-index:2;';
     th.textContent = label;
     trh.appendChild(th);
   });
@@ -3896,6 +3908,80 @@ function renderScorecardSelect() {
   ).join('');
 }
 
+// ── #51 Wave 3: prelim "describe -> rate" batch interview ──────────────────
+let baselineCohort = [], baselineIdx = 0, baselineDraft = null;
+function quickBaselineLevelLabel(v) {
+  const l = (compState.levels || []).find(x => String(x.score) === String(v));
+  return l ? l.label : String(v);
+}
+function openQuickBaseline() {
+  baselineCohort = (compState.employees || []).filter(e =>
+    e.competency_tracked && ['engineer','drafter','engineer in training'].includes(String(e.role||'').toLowerCase()));
+  if (!baselineCohort.length) { toast('No technical staff to rate yet.'); return; }
+  baselineIdx = 0;
+  document.getElementById('baseline-overlay').classList.add('open');
+  renderBaselinePerson();
+}
+function closeBaseline() { document.getElementById('baseline-overlay').classList.remove('open'); loadCompetency(); }
+function renderBaselinePerson() {
+  const emp = baselineCohort[baselineIdx];
+  baselineDraft = null;
+  document.getElementById('baseline-title').textContent = 'Quick Baseline — ' + (baselineIdx+1) + ' of ' + baselineCohort.length;
+  document.getElementById('baseline-body').innerHTML =
+    '<div style="font-weight:750;font-size:1.05rem">' + esc(formatPersonName(emp.display_name)) + '</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin:0.2rem 0 0.6rem">' + esc(emp.role||'') +
+      ' · describe their CAD/GIS abilities in plain words; the AI drafts a preliminary rating you confirm.</div>' +
+    '<textarea id="baseline-desc" rows="4" spellcheck="true" style="width:100%;padding:0.5rem;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text)" placeholder="e.g. Rock-solid in AutoCAD and our standards, still learning Civil 3D, great attitude, hasn&#39;t touched GIS."></textarea>' +
+    '<div style="display:flex;gap:0.5rem;margin:0.55rem 0"><button class="btn btn-primary" type="button" onclick="draftBaseline()">&#10024; Draft ratings</button>' +
+      '<button class="btn btn-ghost" type="button" onclick="nextBaseline()">Skip</button></div>' +
+    '<div id="baseline-result"></div>';
+}
+async function draftBaseline() {
+  const emp = baselineCohort[baselineIdx];
+  const desc = (document.getElementById('baseline-desc').value || '').trim();
+  if (!desc) { toast('Describe them first.'); return; }
+  const result = document.getElementById('baseline-result');
+  result.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem 0">Drafting… (~30s, local model)</div>';
+  const res = await api('POST', '/api/v1/skills/interview-draft', { employee_id: emp.id, description: desc });
+  if (!res || res.error) { result.innerHTML = ''; toast(res && res.error ? res.error : 'Draft failed'); return; }
+  baselineDraft = res;
+  renderBaselineDraft(res);
+}
+function renderBaselineDraft(d) {
+  const opt = (s) => ['','0','1','2','3'].map(v =>
+    '<option value="'+v+'"'+((s==null&&v==='')||String(s)===v?' selected':'')+'>'+(v===''?'N/A':v+' · '+esc(quickBaselineLevelLabel(v)))+'</option>').join('');
+  let h = '<div style="border-top:1px solid var(--border);padding-top:0.55rem;margin-top:0.4rem">';
+  (d.ratings||[]).forEach(r => {
+    h += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">' +
+      '<div style="flex:1"><div style="font-size:0.83rem;font-weight:600">'+esc(r.category_name||'')+'</div>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted)">'+esc(r.note||'')+'</div></div>' +
+      '<select data-cat="'+r.category_id+'" class="filter-select" style="min-width:130px">'+opt(r.score)+'</select></div>';
+  });
+  h += '<div style="font-size:0.8rem;margin-top:0.4rem"><b>Strengths:</b> '+esc(d.strengths||'')+'</div>' +
+       '<div style="font-size:0.8rem"><b>Next to learn:</b> '+esc(d.growth||'')+'</div>' +
+       '<div style="font-size:0.8rem;margin-top:0.35rem">Trajectory: <select id="baseline-traj" class="filter-select">' +
+         '<option value="rising"'+(d.trajectory==='rising'?' selected':'')+'>Rising</option>' +
+         '<option value="steady"'+(d.trajectory==='steady'?' selected':'')+'>Steady</option></select></div>' +
+       '<div style="display:flex;gap:0.5rem;margin-top:0.7rem"><button class="btn btn-primary" type="button" onclick="saveBaselineAndNext()">Save preliminary + next →</button></div>';
+  h += '</div>';
+  document.getElementById('baseline-result').innerHTML = h;
+}
+async function saveBaselineAndNext() {
+  const emp = baselineCohort[baselineIdx];
+  const ratings = [...document.querySelectorAll('#baseline-result select[data-cat]')].map(sel =>
+    ({ category_id: Number(sel.dataset.cat), score: sel.value === '' ? null : Number(sel.value) }));
+  const trajectory = document.getElementById('baseline-traj') ? document.getElementById('baseline-traj').value : '';
+  const res = await api('POST', '/api/v1/skills/interview-save', { employee_id: emp.id, ratings, trajectory });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Save failed'); return; }
+  toast('Saved ' + (res.saved || 0) + ' ratings for ' + formatPersonName(emp.display_name));
+  nextBaseline();
+}
+function nextBaseline() {
+  baselineIdx++;
+  if (baselineIdx >= baselineCohort.length) { toast('Baseline pass complete — nice.'); closeBaseline(); return; }
+  renderBaselinePerson();
+}
+
 function openEmployeeScorecard(rawEmpId) {
   const empId = Number(rawEmpId || 0);
   compScorecardEmpId = empId || null;
@@ -3941,7 +4027,7 @@ function renderEmployeeScorecard() {
       '<div style="display:flex;align-items:center;gap:0.85rem;min-width:min(100%,420px)">' + employeeAvatarHtml(emp, 88) +
         '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
-        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = applies but cannot do yet; 2 = independent; 3 = go-to/teaches.</div></div>' +
+        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (training target); 2 = Capable; 3 = Mentor.</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
         '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
@@ -3969,10 +4055,10 @@ function scoreOptions(value) {
   const selected = value === null || value === undefined ? '' : String(value);
   const opts = [
     ['', 'N/A'],
-    ['0', '0 · Can\'t yet'],
-    ['1', '1 · Supervised'],
-    ['2', '2 · Independent'],
-    ['3', '3 · Go-to / teaches'],
+    ['0', '0 · Learning'],
+    ['1', '1 · Developing'],
+    ['2', '2 · Capable'],
+    ['3', '3 · Mentor'],
   ];
   return opts.map(([val, label]) => '<option value="' + val + '"' + (String(val) === selected ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
 }
@@ -7560,8 +7646,7 @@ const FORMS = {
   ],
   personnel:[
     {key:'issue_description',label:'Incident Summary',type:'textarea',required:true,placeholder:'What happened? Brief factual summary.'},
-    {key:'person_name',label:'People Involved (comma-separated, optional)',type:'text',placeholder:'Alice Smith, Bob Jones \u2014 or leave blank for 0-person incidents'},
-    {key:'person_ids',label:'People (registry FK \u00b7 multi-select)',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Optional. Pick one or more employees. The People text field above is also parsed for matching names \u2014 either path works.'},
+    {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'#56: pick one or more employees from the list (no free-typing). Leave blank for a 0-person incident (process / equipment gap).'},
     {key:'observed_by',label:'Reported By',type:'employee-name-select',placeholder:'Pick the reporter'},
     {key:'cad_skill_area',label:'CAD Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/cad_skill_area',valueKey:'value',displayKey:'label',syncIdSource:'skill_category_id',emptyLabel:'— choose CAD skill area —',syncIdKey:'skill_category_id',hint:'Admin-managed CAD vocabulary. Matching rubric categories also link the Skill Category field below.'},
     {key:'incident_context',label:'Incident Context',type:'textarea',placeholder:'What happened, when did it show up, and what work exposed the gap?'},

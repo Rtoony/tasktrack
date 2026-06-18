@@ -76,7 +76,12 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
     if not include_untracked:
         emp_stmt = emp_stmt.where(Employee.competency_tracked == 1)
     employees = sess.scalars(emp_stmt).all()
-    if role:
+    # #57: "technical"/"general" is a cohort (the engineering+drafting bucket),
+    # not a literal role value; everything else is an exact role match.
+    if role in ("technical", "general"):
+        _tech = {"engineer", "drafter", "engineer in training"}
+        employees = [e for e in employees if (e.role or "").lower() in _tech]
+    elif role:
         employees = [e for e in employees if (e.role or "") == role]
     if q:
         employees = [

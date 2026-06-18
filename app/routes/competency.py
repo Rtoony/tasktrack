@@ -29,6 +29,7 @@ from ..services.competency import (
     seed_default_categories,
     upsert_score,
 )
+from ..services.competency_interview import draft_interview_ratings
 
 bp = Blueprint("competency", __name__)
 
@@ -233,6 +234,78 @@ def upsert_score_route():
         return jsonify({"error": str(e), "request_id": _rid()}), e.status_code
     sess.commit()
     return jsonify(to_dict(row))
+
+
+# ── #51 Wave 3: prelim "describe -> rate" batch interview ───────────────────
+@bp.route("/api/v1/skills/interview-draft", methods=["POST"])
+@admin_required
+def interview_draft():
+    """Map a plain-language description of an employee to a preliminary per-category
+    rating DRAFT (local model). Does not persist — the SPA shows it for confirmation."""
+    data = request.get_json(silent=True) or {}
+    try:
+        employee_id = int(data.get("employee_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "employee_id (int) required", "request_id": _rid()}), 400
+    description = (data.get("description") or "").strip()
+    if not description:
+        return jsonify({"error": "describe the employee first", "request_id": _rid()}), 400
+    sess = get_session()
+    emp = sess.get(Employee, employee_id)
+    if emp is None:
+        return jsonify({"error": "employee not found", "request_id": _rid()}), 404
+    cats = sess.scalars(
+        select(SkillCategory).where(SkillCategory.active == 1).order_by(SkillCategory.display_order)
+    ).all()
+    cat_dicts = [{"id": c.id, "name": c.name, "description": c.description or ""} for c in cats]
+    try:
+        draft = draft_interview_ratings(emp.display_name, emp.role, cat_dicts, description)
+    except Exception as e:  # gateway/model failure — surface, never fake success
+        return jsonify({"error": f"draft unavailable: {e}", "request_id": _rid()}), 502
+    names = {c.id: c.name for c in cats}
+    for r in draft["ratings"]:
+        r["category_name"] = names.get(r["category_id"], "")
+    return jsonify(draft)
+
+
+@bp.route("/api/v1/skills/interview-save", methods=["POST"])
+@admin_required
+def interview_save():
+    """Persist the confirmed prelim ratings as preliminary_rating evidence + trajectory."""
+    data = request.get_json(silent=True) or {}
+    try:
+        employee_id = int(data.get("employee_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "employee_id (int) required", "request_id": _rid()}), 400
+    sess = get_session()
+    if sess.get(Employee, employee_id) is None:
+        return jsonify({"error": "employee not found", "request_id": _rid()}), 404
+    trajectory = (data.get("trajectory") or "").strip().lower()
+    if trajectory not in ("rising", "steady"):
+        trajectory = ""
+    saved = 0
+    for r in data.get("ratings", []):
+        try:
+            cid = int(r.get("category_id"))
+            score = r.get("score")
+            if score is None or score == "":
+                continue  # null / N-A categories are skipped, not zeroed
+            score = int(score)
+        except (TypeError, ValueError):
+            continue
+        if sess.get(SkillCategory, cid) is None:
+            continue
+        try:
+            row = upsert_score(sess, employee_id, cid, score,
+                               notes=(r.get("note") or "").strip(),
+                               source_kind="preliminary_rating")
+        except CompetencyError:
+            continue
+        if trajectory:
+            row.trajectory = trajectory
+        saved += 1
+    sess.commit()
+    return jsonify({"saved": saved, "employee_id": employee_id})
 
 
 @bp.route("/api/v1/skills/scores/bulk", methods=["POST"])

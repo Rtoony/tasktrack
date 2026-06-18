@@ -732,8 +732,10 @@ class EmployeeSkillScore(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     employee_id: Mapped[int] = mapped_column(Integer, nullable=False)
     category_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    score: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("5.0"))
+    score: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.0"))
     notes: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    # #51 Wave 2: Capability Snapshot potential/direction flag (Wave 3 fills it).
+    trajectory: Mapped[str | None] = mapped_column(Text)
     updated_by_user_id: Mapped[int | None] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP, server_default=text("CURRENT_TIMESTAMP"))
     confidence: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("0.0"))

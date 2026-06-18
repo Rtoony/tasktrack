@@ -151,6 +151,15 @@ def enrich_with_fks(sess: Session, table: str, record, *,
     return changed
 
 
+def _names_for_ids(sess: Session, ids: list[int]) -> list[str]:
+    """display_names for employee ids, preserving the given order."""
+    if not ids:
+        return []
+    rows = sess.scalars(select(Employee).where(Employee.id.in_(ids))).all()
+    by_id = {e.id: e.display_name for e in rows}
+    return [by_id[i] for i in ids if i in by_id]
+
+
 def _resolve_person_ids(sess: Session, record: PersonnelIssue) -> bool:
     """Split person_name on commas, resolve each name to an Employee.id,
     write the result as a JSON list into person_ids. Also seeds person_id
@@ -167,16 +176,24 @@ def _resolve_person_ids(sess: Session, record: PersonnelIssue) -> bool:
         if raw_ids and raw_ids.strip().startswith("["):
             existing = json.loads(raw_ids)
             if isinstance(existing, list) and existing:
-                # Just make sure person_id mirrors first entry.
-                first = existing[0]
-                try:
-                    first_int = int(first)
-                except (TypeError, ValueError):
-                    first_int = None
-                if first_int and not record.person_id:
-                    record.person_id = first_int
-                    return True
-                return False
+                int_ids: list[int] = []
+                for v in existing:
+                    try:
+                        int_ids.append(int(v))
+                    except (TypeError, ValueError):
+                        pass
+                changed = False
+                if int_ids and not record.person_id:
+                    record.person_id = int_ids[0]
+                    changed = True
+                # #56: the incident form dropped the free-text name field, so the
+                # FK multi-select is the source of truth — derive person_name from it
+                # to keep labels, search, and activity-log lines populated.
+                derived = ", ".join(_names_for_ids(sess, int_ids))
+                if derived and record.person_name != derived:
+                    record.person_name = derived
+                    changed = True
+                return changed
     except (json.JSONDecodeError, ValueError):
         pass  # fall through to comma-split
 
