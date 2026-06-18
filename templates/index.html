@@ -1525,6 +1525,7 @@
       <select id="comp-scorecard-select" class="filter-select" onchange="openEmployeeScorecard(this.value)" title="Open one employee scorecard for fast preliminary ratings">
         <option value="">Employee scorecard...</option>
       </select>
+      <button class="btn btn-sm btn-primary" type="button" onclick="openQuickBaseline()" title="#51: walk the technical staff and set a preliminary rating from a plain-language description">&#9889; Quick Baseline</button>
       <label class="filter-select" title="Usually off. Use this to audit who has been excluded from competency ratings." style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
         <input type="checkbox" id="comp-include-untracked" onchange="loadCompetency()" style="margin:0">
         <span style="font-size:0.78rem">Show excluded</span>
@@ -1848,6 +1849,12 @@
 
 <!-- ── Feedback Modal ─────────────────────────── -->
 <button class="feedback-fab" type="button" onclick="openFeedbackSmart()">Feedback</button>
+<div class="modal-overlay" id="baseline-overlay">
+  <div class="modal" style="max-width:660px">
+    <div class="modal-header"><h3 id="baseline-title">Quick Baseline</h3><button class="modal-close" type="button" onclick="closeBaseline()">&times;</button></div>
+    <div class="modal-body" id="baseline-body"></div>
+  </div>
+</div>
 <div class="modal-overlay" id="feedback-overlay">
   <div class="modal feedback-modal">
     <div class="modal-header">
@@ -3899,6 +3906,80 @@ function renderScorecardSelect() {
   sel.innerHTML = '<option value="">Employee scorecard...</option>' + visibleCompetencyEmployees().map(emp =>
     '<option value="' + emp.id + '"' + (String(emp.id) === current ? ' selected' : '') + '>' + esc(emp.display_name) + (emp.competency_tracked ? '' : ' (excluded)') + '</option>'
   ).join('');
+}
+
+// ── #51 Wave 3: prelim "describe -> rate" batch interview ──────────────────
+let baselineCohort = [], baselineIdx = 0, baselineDraft = null;
+function quickBaselineLevelLabel(v) {
+  const l = (compState.levels || []).find(x => String(x.score) === String(v));
+  return l ? l.label : String(v);
+}
+function openQuickBaseline() {
+  baselineCohort = (compState.employees || []).filter(e =>
+    e.competency_tracked && ['engineer','drafter','engineer in training'].includes(String(e.role||'').toLowerCase()));
+  if (!baselineCohort.length) { toast('No technical staff to rate yet.'); return; }
+  baselineIdx = 0;
+  document.getElementById('baseline-overlay').classList.add('open');
+  renderBaselinePerson();
+}
+function closeBaseline() { document.getElementById('baseline-overlay').classList.remove('open'); loadCompetency(); }
+function renderBaselinePerson() {
+  const emp = baselineCohort[baselineIdx];
+  baselineDraft = null;
+  document.getElementById('baseline-title').textContent = 'Quick Baseline — ' + (baselineIdx+1) + ' of ' + baselineCohort.length;
+  document.getElementById('baseline-body').innerHTML =
+    '<div style="font-weight:750;font-size:1.05rem">' + esc(formatPersonName(emp.display_name)) + '</div>' +
+    '<div style="font-size:0.74rem;color:var(--text-muted);margin:0.2rem 0 0.6rem">' + esc(emp.role||'') +
+      ' · describe their CAD/GIS abilities in plain words; the AI drafts a preliminary rating you confirm.</div>' +
+    '<textarea id="baseline-desc" rows="4" spellcheck="true" style="width:100%;padding:0.5rem;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text)" placeholder="e.g. Rock-solid in AutoCAD and our standards, still learning Civil 3D, great attitude, hasn&#39;t touched GIS."></textarea>' +
+    '<div style="display:flex;gap:0.5rem;margin:0.55rem 0"><button class="btn btn-primary" type="button" onclick="draftBaseline()">&#10024; Draft ratings</button>' +
+      '<button class="btn btn-ghost" type="button" onclick="nextBaseline()">Skip</button></div>' +
+    '<div id="baseline-result"></div>';
+}
+async function draftBaseline() {
+  const emp = baselineCohort[baselineIdx];
+  const desc = (document.getElementById('baseline-desc').value || '').trim();
+  if (!desc) { toast('Describe them first.'); return; }
+  const result = document.getElementById('baseline-result');
+  result.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem 0">Drafting… (~30s, local model)</div>';
+  const res = await api('POST', '/api/v1/skills/interview-draft', { employee_id: emp.id, description: desc });
+  if (!res || res.error) { result.innerHTML = ''; toast(res && res.error ? res.error : 'Draft failed'); return; }
+  baselineDraft = res;
+  renderBaselineDraft(res);
+}
+function renderBaselineDraft(d) {
+  const opt = (s) => ['','0','1','2','3'].map(v =>
+    '<option value="'+v+'"'+((s==null&&v==='')||String(s)===v?' selected':'')+'>'+(v===''?'N/A':v+' · '+esc(quickBaselineLevelLabel(v)))+'</option>').join('');
+  let h = '<div style="border-top:1px solid var(--border);padding-top:0.55rem;margin-top:0.4rem">';
+  (d.ratings||[]).forEach(r => {
+    h += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">' +
+      '<div style="flex:1"><div style="font-size:0.83rem;font-weight:600">'+esc(r.category_name||'')+'</div>' +
+      '<div style="font-size:0.7rem;color:var(--text-muted)">'+esc(r.note||'')+'</div></div>' +
+      '<select data-cat="'+r.category_id+'" class="filter-select" style="min-width:130px">'+opt(r.score)+'</select></div>';
+  });
+  h += '<div style="font-size:0.8rem;margin-top:0.4rem"><b>Strengths:</b> '+esc(d.strengths||'')+'</div>' +
+       '<div style="font-size:0.8rem"><b>Next to learn:</b> '+esc(d.growth||'')+'</div>' +
+       '<div style="font-size:0.8rem;margin-top:0.35rem">Trajectory: <select id="baseline-traj" class="filter-select">' +
+         '<option value="rising"'+(d.trajectory==='rising'?' selected':'')+'>Rising</option>' +
+         '<option value="steady"'+(d.trajectory==='steady'?' selected':'')+'>Steady</option></select></div>' +
+       '<div style="display:flex;gap:0.5rem;margin-top:0.7rem"><button class="btn btn-primary" type="button" onclick="saveBaselineAndNext()">Save preliminary + next →</button></div>';
+  h += '</div>';
+  document.getElementById('baseline-result').innerHTML = h;
+}
+async function saveBaselineAndNext() {
+  const emp = baselineCohort[baselineIdx];
+  const ratings = [...document.querySelectorAll('#baseline-result select[data-cat]')].map(sel =>
+    ({ category_id: Number(sel.dataset.cat), score: sel.value === '' ? null : Number(sel.value) }));
+  const trajectory = document.getElementById('baseline-traj') ? document.getElementById('baseline-traj').value : '';
+  const res = await api('POST', '/api/v1/skills/interview-save', { employee_id: emp.id, ratings, trajectory });
+  if (!res || res.error) { toast(res && res.error ? res.error : 'Save failed'); return; }
+  toast('Saved ' + (res.saved || 0) + ' ratings for ' + formatPersonName(emp.display_name));
+  nextBaseline();
+}
+function nextBaseline() {
+  baselineIdx++;
+  if (baselineIdx >= baselineCohort.length) { toast('Baseline pass complete — nice.'); closeBaseline(); return; }
+  renderBaselinePerson();
 }
 
 function openEmployeeScorecard(rawEmpId) {
