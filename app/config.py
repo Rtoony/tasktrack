@@ -506,11 +506,13 @@ SKILL_DIMENSION_DEFAULTS["default"] = [
     {"slug": "observed-readiness", "name": "Observed readiness", "weight": 1.0, "tier": "C", "anchor": "Observed supervision level for this task."},
 ]
 
+# #51: growth-framed labels (non-punitive). The 0-3 math + the supervision-decision
+# phrasing are unchanged; only the names move from deficit-coded to capability-coded.
 COMPETENCY_LEVELS = [
-    {"score": 0, "label": "Can't yet", "decision": "Training target"},
-    {"score": 1, "label": "Supervised", "decision": "Assign, but review output"},
-    {"score": 2, "label": "Independent", "decision": "Assign freely"},
-    {"score": 3, "label": "Go-to / teaches", "decision": "Assign + can train others"},
+    {"score": 0, "label": "Learning", "decision": "Training target"},
+    {"score": 1, "label": "Developing", "decision": "Assign, but review output"},
+    {"score": 2, "label": "Capable", "decision": "Assign freely"},
+    {"score": 3, "label": "Mentor", "decision": "Assign + can train others"},
 ]
 
 

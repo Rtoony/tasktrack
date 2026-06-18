@@ -3807,9 +3807,9 @@ function renderCompetencySummary() {
     ['Visible people', emps.length],
     ['CAD/GIS tasks', tasks.length],
     ['Rated cells', rated + ' / ' + total],
-    ['Independent+ coverage', pct + '%'],
+    ['Capable+ coverage', pct + '%'],
     ['Training targets', training],
-    ['Go-to / teaches', teach],
+    ['Mentors', teach],
   ].map(([label, value]) => '<div style="border:1px solid var(--border);border-radius:12px;padding:0.65rem;background:var(--surface)"><div style="font-size:0.67rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">' + esc(label) + '</div><div style="font-size:1.25rem;font-weight:750;margin-top:0.2rem">' + esc(String(value)) + '</div></div>').join('');
 }
 
@@ -3974,10 +3974,10 @@ function scoreOptions(value) {
   const selected = value === null || value === undefined ? '' : String(value);
   const opts = [
     ['', 'N/A'],
-    ['0', '0 · Can\'t yet'],
-    ['1', '1 · Supervised'],
-    ['2', '2 · Independent'],
-    ['3', '3 · Go-to / teaches'],
+    ['0', '0 · Learning'],
+    ['1', '1 · Developing'],
+    ['2', '2 · Capable'],
+    ['3', '3 · Mentor'],
   ];
   return opts.map(([val, label]) => '<option value="' + val + '"' + (String(val) === selected ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
 }
