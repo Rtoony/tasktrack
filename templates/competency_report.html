@@ -164,8 +164,8 @@
         <td><span class="score">{{ '%.1f'|format(cell.score) if cell.score is not none else '—' }}</span><div class="dim">{{ cell.confidence_band }} / n={{ cell.sample_size }}</div></td>
         <td>{% if cell.preliminary %}<span class="score">{{ '%.1f'|format(cell.preliminary.score) }}</span><div class="dim">{{ cell.preliminary.created_by_name or 'Unknown' }}{% if cell.preliminary.notes %} / {{ cell.preliminary.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
         <td>{% if cell.baseline %}<span class="score">{{ '%.1f'|format(cell.baseline.score) }}</span><div class="dim">{{ cell.baseline.created_by_name or 'Unknown' }}{% if cell.baseline.notes %} / {{ cell.baseline.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
-        {# #51 T1: a low score is an early-growth signal, not an error — never danger-red. 'needs ...' (process gaps) stay amber; a growth area reads neutral. Display maps 'low score' -> 'growth area' (internal status keys unchanged). #}
-        <td><span class="chip {{ 'ok' if cell.status == 'complete' else 'warn' if 'needs' in cell.status else '' }}">{{ cell.status|replace(',', ', ')|replace('_', ' ')|replace('low score', 'growth area') }}</span></td>
+        {# #51 T1: a low score is an early-growth signal, not an error — never danger-red. The CELL status (_cell_status) emits missing_*/low_score/complete: missing_* process gaps stay amber (chase the review); a low_score growth area reads neutral. Display maps 'low score' -> 'growth area' (internal status keys unchanged). #}
+        <td><span class="chip {{ 'ok' if cell.status == 'complete' else 'warn' if 'missing' in cell.status else '' }}">{{ cell.status|replace(',', ', ')|replace('_', ' ')|replace('low score', 'growth area') }}</span></td>
       </tr>
       {% endfor %}
     </tbody></table></div>

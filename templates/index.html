@@ -3909,13 +3909,16 @@ function renderMatrix() {
       const selected = compScorecardEmpId === emp.id;
       const naStyle = 'background:repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 5px, var(--surface) 5px, var(--surface) 10px); color:var(--text-muted);';
       td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
-                        (val != null ? 'background:' + scoreBandColor(val) + ';' : naStyle) +
+                        // #51: scoreBandColor returns light pastels, so pin a dark text color on a
+                        // scored cell — else the digit inherits --text (near-white in dark mode) and
+                        // the score is invisible on the pastel. N/A keeps its theme-aware muted text.
+                        (val != null ? 'background:' + scoreBandColor(val) + '; color:#1a2330;' : naStyle) +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
       if (val != null) {
         if (val >= 2) indep += 1;
         if (val >= 3) teach += 1;
         td.innerHTML = '<div style="font-weight:800;font-family:IBM Plex Mono,monospace">' + scoreLabel(val) + '</div>' +
-          (self ? '<div style="font-size:0.56rem;color:var(--text-muted);white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
+          (self ? '<div style="font-size:0.56rem;color:#566372;white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
       } else {
         td.innerHTML = '<div style="font-size:0.66rem">N/A</div>';
       }
@@ -6147,7 +6150,8 @@ function makeCoachingTypeCell(r) {
   span.textContent = t;
   span.style.cssText = 'display:inline-block;padding:0.1rem 0.5rem;border-radius:999px;font-size:0.69rem;font-weight:700;' +
     (isWin
-      ? 'background:rgba(52,211,153,0.16);color:#34d399;border:1px solid rgba(52,211,153,0.4);'
+      // theme-aware green (the app's --success tokens) so the win badge is legible in BOTH light and dark.
+      ? 'background:color-mix(in srgb, var(--success-light) 40%, var(--surface));color:var(--success);border:1px solid var(--success);'
       : 'background:rgba(96,165,250,0.10);color:var(--text-muted);border:1px solid var(--border);');
   td.appendChild(span);
   return td;
