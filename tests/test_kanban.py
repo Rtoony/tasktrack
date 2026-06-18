@@ -27,8 +27,10 @@ def test_dashboard_includes_kanban_markup(auth_client):
     assert 'Time Required (minutes)' in html
     assert 'scheduled_completion_at' in html
     assert 'time_required_minutes' in html
-    assert 'Planning / Scope Notes' in html
-    assert 'Confirmation Notes' in html
+    # #46: Project's 5 phase-notes boxes were collapsed into one Notes box, and the
+    # form gained a Type field — assert the new shape, not the removed labels.
+    assert 'Scope, progress, what needs sign-off' in html
+    assert "key:'task_type'" in html
     assert 'kanban-card-desc' in html
     assert 'formatDurationMinutes' in html
     assert "openFeedbackForRecord('project', r)" in html
