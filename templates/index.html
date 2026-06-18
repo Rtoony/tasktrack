@@ -1912,7 +1912,7 @@
     </div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-cancel" onclick="closeModal()">Close</button>
       <button class="btn btn-danger-ghost" type="button" id="drawer-delete-btn" style="display:none;" onclick="drawerDeleteCurrent()" title="Permanently delete this record (archive instead to keep it)">Delete</button>
       <span id="promote-wrap" style="display:none; margin-right:auto;">
         <select id="promote-select" class="filter-select" style="margin-right:0.4rem;">
@@ -8930,9 +8930,20 @@ async function saveRecord() {
     toast(res && res.error ? res.error : 'Save failed — please try again');
     return;
   }
-  closeModal(); loadTable(table);
+  // #63: Save no longer closes the drawer — keep it open so an in-progress item
+  // can be updated as you work it (Cancel / × still close). For a brand-new
+  // record we re-open in edit mode so editingId is set: further saves become
+  // PUTs and the attachments / links / comments panels (which need a saved id)
+  // go live — which also clears #66's "save first" step for a new triage item.
+  const wasNew = !editingId;
+  loadTable(table);
   if (table === 'calendar') loadDashboard();
-  toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+  toast(itemLabel(table) + (wasNew ? ' created' : ' updated') + ' — still open');
+  if (wasNew && res && res.id) {
+    openModal(table, res);   // flip into edit mode in place
+  } else {
+    window.__currentModalData = res;  // keep latest server state for feedback context
+  }
 }
 
 // #34: draft a plain-language summary of the OPEN task via a local model and fill
@@ -8950,8 +8961,9 @@ async function draftSummary(btn) {
   } finally { btn.disabled = false; btn.textContent = prev; }
 }
 
-// #31: Ctrl/Cmd+Enter saves+closes the record drawer, mirroring the blue Save
-// button. Scoped to the record overlay being open so it never fires over the
+// #31/#63: Ctrl/Cmd+Enter saves the record drawer, mirroring the blue Save
+// button (which now KEEPS the drawer open — see saveRecord; use Esc/Close to
+// dismiss). Scoped to the record overlay being open so it never fires over the
 // feedback or assignment modals (each owns its own keys).
 function initRecordModalShortcuts() {
   document.addEventListener('keydown', e => {
