@@ -84,8 +84,11 @@ def test_intake_review_queue_renders_for_authenticated_user(auth_client):
     assert "row.detail" in html
     assert "Quick presets" in html
     assert "Paper / OCR" in html
-    assert "--bg:#f4f4f4" in html
-    assert "--accent:#0f62fe" in html
+    # #59: intake_review was darkened to the canonical dark palette (was light
+    # --bg:#f4f4f4 / --accent:#0f62fe). Assert the dark values so this stays a
+    # palette-presence check, not a stale light-theme pin.
+    assert "--bg:#11161d" in html
+    assert "--accent:#60a5fa" in html
     assert "/intake/review?sources=paper-form,remarkable-ocr&needs_review=1&days=30&limit=100" in html
     assert "All Intake" in html
     assert "/reports/intake" in html
