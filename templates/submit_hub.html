@@ -7,11 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg:#f6f7f9; --surface:#fff; --border:#e2e5ea; --text:#1a1d23; --text-muted:#6b7280;
-    --accent:#2563eb; --accent-hover:#1d4ed8; --shadow:0 10px 24px rgba(0,0,0,0.08); --radius:12px;
+    --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4;
+    --accent:#60a5fa; --accent-hover:#3b82f6; --shadow:0 10px 24px rgba(0,0,0,0.45); --radius:12px;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:linear-gradient(180deg, #eef4ff 0%, var(--bg) 22%); color:var(--text); min-height:100vh; }
+  body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:linear-gradient(180deg, #1a2433 0%, var(--bg) 22%); color:var(--text); min-height:100vh; }
   .page { max-width:1080px; margin:0 auto; padding:2rem 1.2rem 3rem; }
   .hero, .card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
   .hero { padding:1.3rem 1.4rem; margin-bottom:1rem; }
@@ -23,25 +23,25 @@
   .card { padding:1rem; display:flex; flex-direction:column; }
   .card h2 { font-size:1rem; margin-bottom:0.3rem; display:flex; align-items:center; gap:0.4rem; }
   .card p { font-size:0.9rem; color:var(--text-muted); min-height:3.8em; margin-bottom:0.65rem; }
-  .card-meta { display:inline-flex; width:max-content; max-width:100%; padding:0.18rem 0.5rem; border-radius:999px; background:#eef4ff; color:#1d4ed8; font-size:0.72rem; font-weight:700; margin-bottom:0.55rem; }
+  .card-meta { display:inline-flex; width:max-content; max-width:100%; padding:0.18rem 0.5rem; border-radius:999px; background:rgba(96,165,250,0.16); color:#93c5fd; font-size:0.72rem; font-weight:700; margin-bottom:0.55rem; }
   .card-next { color:var(--text-muted); border-top:1px solid var(--border); padding-top:0.65rem; margin-bottom:0.9rem; font-size:0.82rem; line-height:1.45; }
-  .lock { display:inline-flex; align-items:center; padding:0.1rem 0.4rem; border-radius:999px; background:#f3f4f6; color:#6b7280; font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; }
+  .lock { display:inline-flex; align-items:center; padding:0.1rem 0.4rem; border-radius:999px; background:var(--surface-2); color:var(--text-muted); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; }
   .btn { display:inline-block; text-decoration:none; background:var(--accent); color:#fff; padding:0.7rem 0.95rem; border-radius:10px; font-size:0.88rem; font-weight:600; border:1px solid transparent; cursor:pointer; }
   .btn:hover { background:var(--accent-hover); }
-  .btn.copy { background:#fff; color:var(--accent); border-color:#bfdbfe; }
-  .btn.copy:hover { background:#eef4ff; }
+  .btn.copy { background:var(--surface-2); color:var(--accent); border-color:rgba(96,165,250,0.4); }
+  .btn.copy:hover { background:rgba(96,165,250,0.16); }
   .card-actions { display:flex; gap:0.5rem; flex-wrap:wrap; margin-top:auto; }
   .form-link { margin-top:0.75rem; padding-top:0.7rem; border-top:1px solid var(--border); }
   .form-link label { display:block; font-size:0.68rem; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; color:var(--text-muted); margin-bottom:0.28rem; }
   .share-row { display:flex; gap:0.45rem; align-items:center; }
-  .share-field { min-width:0; flex:1; border:1px solid var(--border); border-radius:8px; padding:0.55rem 0.6rem; font:0.76rem 'IBM Plex Mono',monospace; color:var(--text-muted); background:#f9fafb; }
+  .share-field { min-width:0; flex:1; border:1px solid var(--border); border-radius:8px; padding:0.55rem 0.6rem; font:0.76rem 'IBM Plex Mono',monospace; color:var(--text-muted); background:var(--bg); }
   .process { margin-top:1rem; padding:1rem 1.1rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); }
   .process h2 { font-size:1rem; margin-bottom:0.65rem; }
   .process ol { margin-left:1.2rem; color:var(--text-muted); line-height:1.55; }
   .process li { padding-left:0.2rem; margin-bottom:0.35rem; }
   .process strong { color:var(--text); }
   .quick-links { display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.8rem; }
-  .btn.secondary { background:#fff; color:var(--accent); border:1px solid #bfdbfe; }
+  .btn.secondary { background:var(--surface-2); color:var(--accent); border:1px solid rgba(96,165,250,0.4); }
   .back { display:inline-block; margin-top:1rem; color:var(--accent); text-decoration:none; font-weight:600; }
 </style>
 </head>
