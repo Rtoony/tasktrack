@@ -1587,6 +1587,7 @@
         <th data-col="priority" data-table="work">Priority <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="work">Status <span class="sort-arrow">&#9650;</span></th>
         <th data-col="due_date" data-table="work">Due <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="created_at" data-table="work">Added <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-work"></tbody></table>
       <div class="empty-state" id="empty-work" style="display:none">
@@ -1638,6 +1639,7 @@
         <th data-col="due_at" data-table="project">Due <span class="sort-arrow">&#9650;</span></th>
         <th data-col="scheduled_completion_at" data-table="project">Scheduled <span class="sort-arrow">&#9650;</span></th>
         <th data-col="time_required_minutes" data-table="project">Est. <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="created_at" data-table="project">Added <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-project"></tbody></table>
       <div class="empty-state" id="empty-project" style="display:none">
@@ -1687,6 +1689,7 @@
         <th data-col="priority" data-table="training">Priority <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="training">Status <span class="sort-arrow">&#9650;</span></th>
         <th data-col="due_date" data-table="training">Due <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="created_at" data-table="training">Added <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-training"></tbody></table>
       <div class="empty-state" id="empty-training" style="display:none">
@@ -1726,6 +1729,7 @@
         <th data-col="severity" data-table="personnel">Impact <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="personnel">Status <span class="sort-arrow">&#9650;</span></th>
         <th data-col="reported_date" data-table="personnel">Observed On <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="created_at" data-table="personnel">Added <span class="sort-arrow">&#9650;</span></th>
         <th></th>
       </tr></thead><tbody id="tbody-personnel"></tbody></table>
       <div class="empty-state" id="empty-personnel" style="display:none">
@@ -1908,7 +1912,7 @@
     </div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-cancel" onclick="closeModal()">Close</button>
       <button class="btn btn-danger-ghost" type="button" id="drawer-delete-btn" style="display:none;" onclick="drawerDeleteCurrent()" title="Permanently delete this record (archive instead to keep it)">Delete</button>
       <span id="promote-wrap" style="display:none; margin-right:auto;">
         <select id="promote-select" class="filter-select" style="margin-right:0.4rem;">
@@ -5491,6 +5495,7 @@ async function loadTable(table) {
       tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
+      tr.appendChild(makeDateCell(r.created_at));  // #67 sortable "Added" date
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='project') {
       if (r.needs_review) tr.classList.add('ai-review');
@@ -5504,6 +5509,7 @@ async function loadTable(table) {
       tr.appendChild(makeDateCell(r.due_at));
       tr.appendChild(makeDateCell(r.scheduled_completion_at));
       tr.appendChild(makeDurationCell(r.time_required_minutes));
+      tr.appendChild(makeDateCell(r.created_at));  // #67 sortable "Added" date
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='training') {
       if (r.needs_review) tr.classList.add('ai-review');
@@ -5514,6 +5520,7 @@ async function loadTable(table) {
       tr.appendChild(makeClickablePriority(table,r));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.due_date));
+      tr.appendChild(makeDateCell(r.created_at));  // #67 sortable "Added" date
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='calendar') {
       tr.appendChild(makeCalendarDateCell(r, 'start_at'));
@@ -5552,6 +5559,7 @@ async function loadTable(table) {
       tr.appendChild(makeClickablePriority(table,r,'severity'));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.reported_date));
+      tr.appendChild(makeDateCell(r.created_at));  // #67 sortable "Added" date
       tr.appendChild(makeActions(table,r.id,r.person_name,r));
     }
     wireRecordRow(tr, table, r);
@@ -7690,6 +7698,7 @@ const FORMS = {
     {key:'_row',fields:[{key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT}]},
     {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
     {key:'links',label:'Links',type:'links'},
+    {key:'attachments',label:'Attachments',type:'attachments'},  // #66: triage parity with other trackers (inbox_items attachments already supported server-side)
   ],
 };
 
@@ -8921,9 +8930,20 @@ async function saveRecord() {
     toast(res && res.error ? res.error : 'Save failed — please try again');
     return;
   }
-  closeModal(); loadTable(table);
+  // #63: Save no longer closes the drawer — keep it open so an in-progress item
+  // can be updated as you work it (Cancel / × still close). For a brand-new
+  // record we re-open in edit mode so editingId is set: further saves become
+  // PUTs and the attachments / links / comments panels (which need a saved id)
+  // go live — which also clears #66's "save first" step for a new triage item.
+  const wasNew = !editingId;
+  loadTable(table);
   if (table === 'calendar') loadDashboard();
-  toast(itemLabel(table) + (editingId ? ' updated' : ' created'));
+  toast(itemLabel(table) + (wasNew ? ' created' : ' updated') + ' — still open');
+  if (wasNew && res && res.id) {
+    openModal(table, res);   // flip into edit mode in place
+  } else {
+    window.__currentModalData = res;  // keep latest server state for feedback context
+  }
 }
 
 // #34: draft a plain-language summary of the OPEN task via a local model and fill
@@ -8941,8 +8961,9 @@ async function draftSummary(btn) {
   } finally { btn.disabled = false; btn.textContent = prev; }
 }
 
-// #31: Ctrl/Cmd+Enter saves+closes the record drawer, mirroring the blue Save
-// button. Scoped to the record overlay being open so it never fires over the
+// #31/#63: Ctrl/Cmd+Enter saves the record drawer, mirroring the blue Save
+// button (which now KEEPS the drawer open — see saveRecord; use Esc/Close to
+// dismiss). Scoped to the record overlay being open so it never fires over the
 // feedback or assignment modals (each owns its own keys).
 function initRecordModalShortcuts() {
   document.addEventListener('keydown', e => {
