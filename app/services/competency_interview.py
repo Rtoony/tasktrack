@@ -18,8 +18,10 @@ from ..config import COMPETENCY_LEVELS
 
 LITELLM_BASE_URL = os.environ.get("LITELLM_BASE_URL", "http://localhost:4000")
 LITELLM_API_KEY = (
-    os.environ.get("LITELLM_API_KEY")
-    or os.environ.get("LITELLM_MASTER_KEY")
+    # master first: a stale/scoped LITELLM_API_KEY in some envs shadows the working
+    # master key and 401s the gateway (bit the lab). Master is always valid.
+    os.environ.get("LITELLM_MASTER_KEY")
+    or os.environ.get("LITELLM_API_KEY")
     or ""
 )
 INTERVIEW_MODEL = os.environ.get("TASKTRACK_INTERVIEW_MODEL", "gemma4-26b")
