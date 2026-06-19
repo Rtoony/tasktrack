@@ -927,6 +927,10 @@
     .toast { left:0.75rem; right:0.75rem; bottom:calc(4.9rem + env(safe-area-inset-bottom)); text-align:center; }
   }
 
+  /* #51 U3: flash a scorecard rating row when the operator jumps to it from a
+     matrix cell, so they can see where they landed in the 1120px table. */
+  @keyframes scorecardRowFlash { 0%{background:color-mix(in srgb, var(--accent) 32%, var(--surface))} 100%{background:transparent} }
+  tr.scorecard-row-flash > td { animation: scorecardRowFlash 1.6s ease-out; }
 
 
 </style>
@@ -3851,6 +3855,9 @@ async function loadCompetency() {
   renderMatrix();
   renderEmployeeScorecard();
   renderCompetencyDetail();
+  // #51 U6: keep the matrix collapsed if a scorecard is open across this reload
+  // (e.g. a post-save loadCompetency()), since loadCompetency re-shows comp-wrap.
+  syncMatrixVisibility();
 }
 
 function compMatrixLegendHtml() {
@@ -3954,6 +3961,12 @@ function renderMatrix() {
       const taskCell = compTaskScore(emp.id, task.category.id, task.dimension.slug);
       const val = taskCell.score;
       const self = taskCell.marker?.latest_self;
+      // #51 M1: a cell whose visible number comes ONLY from a preliminary AI
+      // draft (no confirmed official baseline / manual override) is a 30-second
+      // guess, not a vetted baseline. Flag it so it isn't mistaken for one.
+      const isPrelimOnly = !!(taskCell.marker?.latest_preliminary
+        && !taskCell.marker?.latest_baseline
+        && !taskCell.marker?.latest_manual);
       const selected = compScorecardEmpId === emp.id;
       const naStyle = 'background:repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 5px, var(--surface) 5px, var(--surface) 10px); color:var(--text-muted);';
       td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
@@ -3961,17 +3974,26 @@ function renderMatrix() {
                         // scored cell — else the digit inherits --text (near-white in dark mode) and
                         // the score is invisible on the pastel. N/A keeps its theme-aware muted text.
                         (val != null ? 'background:' + scoreBandColor(val) + '; color:#1a2330;' : naStyle) +
+                        // #51 M1: a dotted inner ring marks "preliminary only" without
+                        // disturbing the score color. The selected-row outline still wins.
+                        (isPrelimOnly && !selected ? ' box-shadow:inset 0 0 0 2px #b08400; outline:1px dashed #b08400; outline-offset:-3px;' : '') +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
       if (val != null) {
         if (val >= 2) indep += 1;
         if (val >= 3) teach += 1;
-        td.innerHTML = '<div style="font-weight:800;font-family:IBM Plex Mono,monospace">' + scoreLabel(val) + '</div>' +
+        td.innerHTML = '<div style="font-weight:800;font-family:IBM Plex Mono,monospace">' + scoreLabel(val) +
+            (isPrelimOnly ? '<span title="Preliminary AI draft — not a confirmed baseline" style="display:inline-block;margin-left:0.2rem;padding:0 0.22rem;font-size:0.5rem;font-weight:800;font-family:inherit;letter-spacing:0.04em;color:#7a5a00;background:#fff3cf;border:1px dotted #b08400;border-radius:4px;vertical-align:middle">PRELIM</span>' : '') +
+          '</div>' +
           (self ? '<div style="font-size:0.56rem;color:#566372;white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
       } else {
         td.innerHTML = '<div style="font-size:0.66rem">N/A</div>';
       }
-      td.title = emp.display_name + ' · ' + task.dimension.name + ' · click to open scorecard';
-      td.addEventListener('click', () => openEmployeeScorecard(emp.id));
+      td.title = emp.display_name + ' · ' + task.dimension.name +
+        (isPrelimOnly ? ' · PRELIMINARY draft (not a confirmed baseline)' : '') +
+        ' · click to open scorecard';
+      // #51 U3: clicking a cell opens the scorecard AND jumps to this rating's
+      // row instead of making the operator re-find it in the 1120px table.
+      td.addEventListener('click', () => openEmployeeScorecard(emp.id, { catId: task.category.id, dimSlug: task.dimension.slug }));
       tr.appendChild(td);
     });
     [indep, teach].forEach((value, i) => {
@@ -4017,26 +4039,64 @@ function renderBaselinePerson() {
     '<div style="font-size:0.74rem;color:var(--text-muted);margin:0.2rem 0 0.6rem">' + esc(emp.role||'') +
       ' · describe their CAD/GIS abilities in plain words; the AI drafts a preliminary rating you confirm.</div>' +
     '<textarea id="baseline-desc" rows="4" spellcheck="true" style="width:100%;padding:0.5rem;font-family:inherit;font-size:0.85rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text)" placeholder="e.g. Rock-solid in AutoCAD and our standards, still learning Civil 3D, great attitude, hasn&#39;t touched GIS."></textarea>' +
-    '<div style="display:flex;gap:0.5rem;margin:0.55rem 0"><button class="btn btn-primary" type="button" onclick="draftBaseline()">&#10024; Draft ratings</button>' +
+    '<div style="display:flex;gap:0.5rem;margin:0.55rem 0"><button id="baseline-draft-btn" class="btn btn-primary" type="button" onclick="draftBaseline(this)">&#10024; Draft ratings</button>' +
       '<button class="btn btn-ghost" type="button" onclick="nextBaseline()">Skip</button></div>' +
     '<div id="baseline-result"></div>';
 }
-async function draftBaseline() {
+async function draftBaseline(btn) {
   const emp = baselineCohort[baselineIdx];
   const desc = (document.getElementById('baseline-desc').value || '').trim();
   if (!desc) { toast('Describe them first.'); return; }
   const result = document.getElementById('baseline-result');
-  result.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem 0">Drafting… (~30s, local model)</div>';
-  const res = await api('POST', '/api/v1/skills/interview-draft', { employee_id: emp.id, description: desc });
-  if (!res || res.error) { result.innerHTML = ''; toast(res && res.error ? res.error : 'Draft failed'); return; }
-  baselineDraft = res;
-  renderBaselineDraft(res);
+  result.innerHTML = '<div style="color:var(--text-muted);padding:0.5rem 0">Drafting… (the local model can take up to ~2 min)</div>';
+  // #51 I4: disable the Draft button while a draft is in flight — mirrors the
+  // draftSummary() guard — so double-clicks don't queue concurrent ~30s+ gemma
+  // calls on the single 5090. #51 I3: wrap the call so a model timeout / 524 /
+  // network error clears the "Drafting…" spinner and shows a recovery message
+  // instead of leaving a dead spinner forever (api() itself has no try/catch).
+  const drafter = btn || document.getElementById('baseline-draft-btn');
+  const prevLabel = drafter ? drafter.textContent : '';
+  if (drafter) { drafter.disabled = true; drafter.textContent = 'Drafting…'; }
+  baselineDraft = null;
+  try {
+    const res = await api('POST', '/api/v1/skills/interview-draft', { employee_id: emp.id, description: desc });
+    if (!res || res.error) {
+      result.innerHTML = '<div style="color:var(--danger,#d64545);font-size:0.8rem;padding:0.5rem 0">' +
+        esc((res && res.error) || 'Draft failed — try again, or rate manually below.') + '</div>';
+      toast((res && res.error) ? res.error : 'Draft failed');
+      return;
+    }
+    baselineDraft = res;
+    renderBaselineDraft(res);
+  } catch (err) {
+    // The gemma draft can time out (~120s) or 524 — surface it honestly so the
+    // operator can retry or rate by hand instead of staring at a stuck spinner.
+    console.error('interview draft failed', err);
+    result.innerHTML = '<div style="border-top:1px solid var(--border);padding-top:0.55rem;margin-top:0.4rem;font-size:0.82rem;color:var(--danger,#d64545)">' +
+      'The AI draft didn’t come back (the local model may have timed out). ' +
+      '<span style="color:var(--text-muted)">Click <b>Draft ratings</b> to try again, or rate the tasks manually in the scorecard.</span></div>';
+    toast('Draft timed out — try again or rate manually');
+  } finally {
+    if (drafter) { drafter.disabled = false; drafter.textContent = prevLabel || '✨ Draft ratings'; }
+  }
 }
 function renderBaselineDraft(d) {
+  const ratings = (d && d.ratings) || [];
+  const result = document.getElementById('baseline-result');
+  // #51 I2: an empty draft (the model mapped nobody to any category) is an
+  // honest dead-end, NOT a save. Previously this still showed a live "Save
+  // preliminary + next" button that toasted "Saved 0 ratings" — the
+  // hallucinated-success failure mode. Show an empty-state and HIDE Save.
+  if (!ratings.length) {
+    result.innerHTML = '<div style="border-top:1px solid var(--border);padding-top:0.55rem;margin-top:0.4rem;font-size:0.82rem">' +
+      '<div style="font-weight:650;color:var(--text)">AI couldn’t map this to any task.</div>' +
+      '<div style="color:var(--text-muted);margin-top:0.2rem">Add more detail to the description and draft again, or rate the tasks manually in this person’s scorecard. Nothing was saved.</div></div>';
+    return;
+  }
   const opt = (s) => ['','0','1','2','3'].map(v =>
     '<option value="'+v+'"'+((s==null&&v==='')||String(s)===v?' selected':'')+'>'+(v===''?'N/A':v+' · '+esc(quickBaselineLevelLabel(v)))+'</option>').join('');
   let h = '<div style="border-top:1px solid var(--border);padding-top:0.55rem;margin-top:0.4rem">';
-  (d.ratings||[]).forEach(r => {
+  ratings.forEach(r => {
     h += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.4rem">' +
       '<div style="flex:1"><div style="font-size:0.83rem;font-weight:600">'+esc(r.category_name||'')+'</div>' +
       '<div style="font-size:0.7rem;color:var(--text-muted)">'+esc(r.note||'')+'</div></div>' +
@@ -4049,7 +4109,7 @@ function renderBaselineDraft(d) {
          '<option value="steady"'+(d.trajectory==='steady'?' selected':'')+'>Steady</option></select></div>' +
        '<div style="display:flex;gap:0.5rem;margin-top:0.7rem"><button class="btn btn-primary" type="button" onclick="saveBaselineAndNext()">Save preliminary + next →</button></div>';
   h += '</div>';
-  document.getElementById('baseline-result').innerHTML = h;
+  result.innerHTML = h;
 }
 async function saveBaselineAndNext() {
   const emp = baselineCohort[baselineIdx];
@@ -4075,14 +4135,60 @@ function nextBaseline() {
   renderBaselinePerson();
 }
 
-function openEmployeeScorecard(rawEmpId) {
+function openEmployeeScorecard(rawEmpId, focus) {
   const empId = Number(rawEmpId || 0);
+  const switchingEmployee = empId !== compScorecardEmpId;
   compScorecardEmpId = empId || null;
   compSelected = null;
   renderScorecardSelect();
   renderMatrix();
   renderEmployeeScorecard();
   renderCompetencyDetail();
+  // #51 U6: when a scorecard is open, collapse the wide matrix so the laptop
+  // isn't stacking two independent horizontal-scroll tables.
+  syncMatrixVisibility();
+  // #51 U3: if a specific cell was clicked, scroll its row into view + flash it.
+  if (focus && focus.catId != null && focus.dimSlug != null) {
+    focusScorecardRow(focus.catId, focus.dimSlug);
+  } else if (switchingEmployee && compScorecardEmpId) {
+    // Bring the freshly-opened scorecard into view (it renders above the matrix).
+    document.getElementById('comp-scorecard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+// #51 U3: scroll a scorecard rating row into view and flash a highlight so the
+// operator lands on the exact rating they clicked in the matrix.
+function focusScorecardRow(catId, dimSlug) {
+  const host = document.getElementById('comp-scorecard');
+  if (!host) return;
+  const row = host.querySelector('[data-scorecard-row="1"][data-cat-id="' + catId + '"][data-dim-slug="' + cssAttrEscape(String(dimSlug)) + '"]');
+  if (!row) {
+    host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('scorecard-row-flash');
+  setTimeout(() => row.classList.remove('scorecard-row-flash'), 1600);
+  // Focus the score select so the operator can immediately rate it.
+  const sel = row.querySelector('.scorecard-score');
+  if (sel) setTimeout(() => { try { sel.focus({ preventScroll: true }); } catch (e) {} }, 350);
+}
+
+// Minimal CSS attribute-selector escaper (dimension slugs are simple, but be safe).
+function cssAttrEscape(s) {
+  return String(s).replace(/["\\]/g, '\\$&');
+}
+
+// #51 U6: hide the matrix card while a scorecard is open; restore it on close.
+function syncMatrixVisibility() {
+  const wrap = document.getElementById('comp-wrap');
+  if (!wrap) return;
+  const hasEmployees = !!(compState.employees && compState.employees.length);
+  if (compScorecardEmpId) {
+    wrap.style.display = 'none';
+  } else if (hasEmployees) {
+    wrap.style.display = 'block';
+  }
 }
 
 function renderEmployeeScorecard() {
@@ -4128,7 +4234,22 @@ function renderEmployeeScorecard() {
       '</div>' +
     '</div>' +
     '<div style="overflow-x:auto;margin-bottom:0.75rem"><table style="min-width:1120px;width:100%;font-size:0.76rem"><thead><tr><th>Task</th><th>Observed</th><th>Self</th><th>Preliminary</th><th>Baseline</th><th>New score</th><th>Note</th></tr></thead><tbody>' + rows.join('') + '</tbody></table></div>' +
-    '<div class="workspace-actions"><button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', false)">Save preliminary task ratings</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'preliminary_rating\', true)">Save prelim + next employee</button><button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(\'official_baseline\', false)">Mark official baseline</button><button class="btn btn-ghost" type="button" onclick="saveEmployeeScorecard(\'self_assessment\', false)">Record self-assessment</button></div>';
+    // #51 U5: one "Save ratings" + a source-kind selector replaces the 4
+    // near-identical save buttons (mis-tagging prelim vs official baseline was
+    // the costliest error). Official baseline is the heavier commit, so the
+    // selector defaults to Preliminary. The "Save + next employee" fast-flow
+    // accelerator is kept as a dedicated button.
+    '<div class="workspace-actions" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">' +
+      '<label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--text-muted)">Save as' +
+        '<select id="scorecard-source-kind" class="filter-select" title="What kind of rating this save records. Official baseline is the vetted commit.">' +
+          '<option value="preliminary_rating">Preliminary (quick draft)</option>' +
+          '<option value="official_baseline">Official baseline (vetted)</option>' +
+          '<option value="self_assessment">Self-assessment</option>' +
+        '</select>' +
+      '</label>' +
+      '<button class="btn btn-primary" type="button" onclick="saveEmployeeScorecard(null, false)">Save ratings</button>' +
+      '<button class="btn btn-export" type="button" onclick="saveEmployeeScorecard(null, true)" title="Save with the selected source kind, then jump to the next visible employee">Save + next employee →</button>' +
+    '</div>';
 }
 
 // #50: jump from a scorecard straight into a prefilled new capability note for
@@ -4156,8 +4277,16 @@ function scoreOptions(value) {
   return opts.map(([val, label]) => '<option value="' + val + '"' + (String(val) === selected ? ' selected' : '') + '>' + esc(label) + '</option>').join('');
 }
 
+const SCORECARD_SOURCE_KINDS = new Set(['preliminary_rating', 'official_baseline', 'self_assessment']);
 async function saveEmployeeScorecard(sourceKind, advance) {
   if (!compScorecardEmpId) return;
+  // #51 U5: when no explicit kind is passed, read it from the source-kind
+  // selector (the consolidated single-save-button path). Fall back to the safe,
+  // lighter "preliminary_rating" rather than accidentally writing a baseline.
+  if (!SCORECARD_SOURCE_KINDS.has(sourceKind)) {
+    const sel = document.getElementById('scorecard-source-kind');
+    sourceKind = SCORECARD_SOURCE_KINDS.has(sel?.value) ? sel.value : 'preliminary_rating';
+  }
   const rows = Array.from(document.querySelectorAll('#comp-scorecard [data-scorecard-row="1"]'));
   const ratings = [];
   for (const row of rows) {
@@ -4199,6 +4328,8 @@ function advanceScorecardEmployee() {
   renderMatrix();
   renderEmployeeScorecard();
   renderCompetencyDetail();
+  syncMatrixVisibility();
+  document.getElementById('comp-scorecard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderCompetencyDetail() {
@@ -7952,7 +8083,7 @@ const FORMS = {
     // positively. Linking a skill category does NOT change anyone's competency score.
     {key:'coaching_type',label:'Type',type:'select',options:['','Coaching','Near-miss','Recognition','Process / equipment gap']},
     {key:'issue_description',label:'What happened',type:'textarea',required:true,placeholder:'Briefly — what happened and what work exposed it? (Or a win worth noting.)'},
-    {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees',displayKey:'display_name',hint:'Pick one or more employees from the list (no free-typing). Leave blank for a 0-person note (process / equipment).'},
+    {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees/options',displayKey:'display_name',hint:'Pick one or more employees from the list (no free-typing). Leave blank for a 0-person note (process / equipment).'},
     {key:'observed_by',label:'Noted By',type:'employee-name-select',placeholder:'Pick who observed it'},
     {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links to the Competency rubric for context — does NOT change anyone\'s score.'},
     {key:'_row',fields:[{key:'severity',label:'Impact',...INCIDENT_SEVERITY_SELECT},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
@@ -8020,6 +8151,51 @@ async function loadFkOptions(endpoint) {
     FK_OPTION_CACHE[endpoint] = Array.isArray(rows) ? rows : [];
   } catch (e) { FK_OPTION_CACHE[endpoint] = []; }
   return FK_OPTION_CACHE[endpoint];
+}
+
+/* #57/#56: slim employee picker source for the name dropdowns. Hits the
+   login-only /api/v1/employees/options (NOT the admin-only /api/v1/employees,
+   which 403'd for every non-admin and left these dropdowns silently empty).
+   Returns only {id, display_name, title, role}.
+
+   Unlike loadFkOptions this FAILS LOUD: it throws on a non-OK response or a
+   bad payload so the caller can render a visible error state instead of an
+   empty/broken control that looks like "this person has no coworkers". */
+const EMPLOYEE_OPTIONS_ENDPOINT = '/api/v1/employees/options';
+async function loadEmployeeOptions() {
+  const cached = FK_OPTION_CACHE[EMPLOYEE_OPTIONS_ENDPOINT];
+  if (Array.isArray(cached) && cached.length) return cached;
+  const res = await fetch(EMPLOYEE_OPTIONS_ENDPOINT);
+  if (res.status === 401) { window.location = '/login'; throw new Error('unauthenticated'); }
+  if (!res.ok) throw new Error('employee options HTTP ' + res.status);
+  const rows = await res.json();
+  if (!Array.isArray(rows)) throw new Error('employee options: unexpected payload');
+  FK_OPTION_CACHE[EMPLOYEE_OPTIONS_ENDPOINT] = rows;
+  return rows;
+}
+
+/* Shared fail-loud handler for the employee-picker field renderers. Marks the
+   <select> as broken (disabled + red border), drops in a visible inline error
+   row, and toasts — so a failed roster load can never be mistaken for "empty". */
+function renderEmployeePickerError(select, wrap, err) {
+  if (select) {
+    select.disabled = true;
+    select.style.borderColor = 'var(--danger, #d64545)';
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Could not load employees';
+    select.replaceChildren(opt);
+  }
+  if (wrap) {
+    const note = document.createElement('div');
+    note.className = 'fk-hint';
+    note.setAttribute('role', 'alert');
+    note.style.cssText = 'font-size:0.72rem;color:var(--danger, #d64545);margin-top:0.25rem;';
+    note.textContent = 'Could not load the employee list — refresh and try again. Picking is disabled until it loads.';
+    wrap.appendChild(note);
+  }
+  toast('Could not load the employee list');
+  console.error('employee picker load failed', err);
 }
 
 const MANAGED_OPTION_DEFAULTS = {};
@@ -8232,7 +8408,10 @@ function renderField(f,value) {
       ? (document.getElementById('core-greeting')?.dataset.user || '')
       : '';
     let defaultMatched = false;
-    loadFkOptions('/api/v1/employees').then(rows => {
+    // #57/#56: source from the login-only slim options endpoint so non-admins
+    // get real names (the admin-only /api/v1/employees 403'd them into a blank
+    // dropdown). Fail loud if the roster can't load.
+    loadEmployeeOptions().then(rows => {
       rows.forEach(r => {
         const opt=document.createElement('option');
         opt.value=r.display_name || '';
@@ -8246,13 +8425,14 @@ function renderField(f,value) {
         }
         input.appendChild(opt);
       });
-    });
+    }).catch(err => renderEmployeePickerError(input, wrap, err));
   } else if (f.type==='employee-multi-name-select') {
     input=document.createElement('select'); input.id='f-'+f.key;
     input.multiple=true; input.size=6;
     input.style.cssText='min-height:7rem; padding:0.35rem 0.55rem;';
     const selectedNames = String(value || '').split(/[,;]/).map(s => s.trim().toLowerCase()).filter(Boolean);
-    loadFkOptions('/api/v1/employees').then(rows => {
+    // #57/#56: slim options endpoint (login-only) + fail loud — see above.
+    loadEmployeeOptions().then(rows => {
       rows.forEach(r => {
         const opt=document.createElement('option');
         opt.value=r.display_name || '';
@@ -8261,7 +8441,7 @@ function renderField(f,value) {
         if (selectedNames.includes(String(r.display_name || '').trim().toLowerCase())) opt.selected=true;
         input.appendChild(opt);
       });
-    });
+    }).catch(err => renderEmployeePickerError(input, wrap, err));
   } else if (f.type==='endpoint-select') {
     input=document.createElement('select'); input.id='f-'+f.key;
     const empty=document.createElement('option'); empty.value=''; empty.textContent=f.emptyLabel || '— choose —';
@@ -8341,23 +8521,47 @@ function renderField(f,value) {
         selectedIds = trimmed.split(',').map(s => s.trim()).filter(Boolean);
       }
     }
-    loadFkOptions(f.endpoint).then(rows => {
-      rows.forEach(r => {
+    // #57: "Select all / Clear" affordance above the multi-select so picking
+    // "everyone" (e.g. a team-wide recognition note) isn't a ctrl-click chore.
+    const multiControls=document.createElement('div');
+    multiControls.style.cssText='display:flex;gap:0.4rem;margin-bottom:0.35rem;';
+    const mkMultiBtn=(text, fn)=>{
+      const b=document.createElement('button'); b.type='button'; b.className='btn btn-ghost btn-sm';
+      b.textContent=text; b.addEventListener('click', fn); return b;
+    };
+    multiControls.appendChild(mkMultiBtn('Select all', () => {
+      Array.from(input.options).forEach(o => { if (o.value) o.selected = true; });
+    }));
+    multiControls.appendChild(mkMultiBtn('Clear', () => {
+      Array.from(input.options).forEach(o => { o.selected = false; });
+    }));
+    // #57/#56: people pickers source from the login-only slim endpoint and
+    // FAIL LOUD; other fk-multi-selects keep the quiet generic loader.
+    const isEmployeeOptions = f.endpoint === EMPLOYEE_OPTIONS_ENDPOINT;
+    const loader = isEmployeeOptions ? loadEmployeeOptions() : loadFkOptions(f.endpoint);
+    Promise.resolve(loader).then(rows => {
+      (rows || []).forEach(r => {
         const opt=document.createElement('option');
         opt.value=r.id;
         opt.textContent=f.displayKey ? r[f.displayKey] : r.display_name || ('#'+r.id);
         if (selectedIds.includes(String(r.id))) opt.selected=true;
         input.appendChild(opt);
       });
+    }).catch(err => {
+      if (isEmployeeOptions) {
+        multiControls.style.display = 'none';
+        renderEmployeePickerError(input, wrap, err);
+      }
     });
+    wrap.appendChild(multiControls);
+    wrap.appendChild(input);
     if (f.hint) {
       const hint=document.createElement('div'); hint.className='fk-hint';
       hint.style.cssText='font-size:0.7rem;color:var(--text-muted);margin-top:0.2rem;';
       hint.textContent=f.hint;
-      wrap.appendChild(input);
       wrap.appendChild(hint);
-      return wrap;
     }
+    return wrap;
   } else if (f.type==='textarea') {
     input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
   } else if (f.type==='ai-summary') {

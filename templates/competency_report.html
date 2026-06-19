@@ -6,7 +6,7 @@
 <title>Competency Report - {{ brand_name }}</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#8a3ffc; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:6px; }
+  :root { --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37; --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480; --accent:#8a3ffc; --sky:#38bdf8; --sky-dim:#7dd3fc; --ok:#34d399; --warn:#fbbf24; --danger:#f87171; --radius:6px; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:'IBM Plex Sans',-apple-system,sans-serif; background:radial-gradient(circle at 20% 0, rgba(138,63,252,0.16), transparent 34rem), var(--bg); color:var(--text); min-height:100vh; font-size:0.88rem; }
   header { background:rgba(24,33,43,0.94); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:50; backdrop-filter:blur(10px); }
@@ -46,6 +46,20 @@
   .chips { display:flex; gap:0.4rem; flex-wrap:wrap; justify-content:flex-end; }
   .chip { border:1px solid var(--border); background:rgba(17,22,29,0.55); border-radius:999px; padding:0.14rem 0.5rem; color:var(--text-muted); font-size:0.69rem; }
   .chip.warn { color:var(--warn); border-color:rgba(251,191,36,0.45); } .chip.danger { color:var(--danger); border-color:rgba(248,113,113,0.45); } .chip.ok { color:var(--ok); border-color:rgba(52,211,153,0.45); }
+  /* #51 R4: strengths chip (Capable+ / Mentor) — green, positive, sits beside the growth-opportunities chip. */
+  .chip.strength { color:var(--ok); border-color:rgba(52,211,153,0.45); background:rgba(52,211,153,0.10); font-weight:600; }
+  /* #51 R2: growth-ladder legend strip — sky accent (#38bdf8 family), neutral/non-punitive. */
+  .legend { display:flex; flex-wrap:wrap; gap:0.45rem 0.9rem; align-items:center; background:rgba(56,189,248,0.06); border:1px solid rgba(56,189,248,0.28); border-radius:var(--radius); padding:0.5rem 0.7rem; margin-bottom:1rem; font-size:0.74rem; }
+  .legend .legend-title { color:var(--sky-dim); font-weight:600; text-transform:uppercase; letter-spacing:0.05em; font-size:0.62rem; }
+  .legend .lv { display:inline-flex; align-items:baseline; gap:0.3rem; color:var(--text-muted); }
+  .legend .lv b { color:var(--text); font-weight:600; }
+  .legend .lv .lv-num { font-family:'IBM Plex Mono', monospace; color:var(--sky); font-weight:700; }
+  .legend .lv .lv-decision { color:var(--text-dim); }
+  /* #51 R2: the level WORD annotating an average chip. */
+  .chip .lvl-word { color:var(--sky-dim); font-weight:600; }
+  /* #51 R3: per-dimension "N of M tasks" coverage on a cell — progress reads as progress. */
+  .coverage { color:var(--text-dim); font-size:0.7rem; margin-top:0.18rem; }
+  .coverage b { color:var(--sky-dim); font-weight:600; font-family:'IBM Plex Mono', monospace; }
   .score { font-family:'IBM Plex Mono', monospace; font-weight:700; }
   .dim { color:var(--text-muted); font-size:0.72rem; }
   .print-only { display:none; }
@@ -62,6 +76,14 @@
     .summary-grid { grid-template-columns:repeat(6,1fr); gap:0.08in; }
     th,td { border-color:#e5e7eb; }
     .chip { background:#fff; color:#374151; border-color:#d1d5db; }
+    /* #51 R2/R3/R4: keep the new growth elements ink-friendly + non-punitive on paper. */
+    .chip.strength { color:#047857; border-color:#a7f3d0; background:#ecfdf5; }
+    .legend { background:#f0f9ff; border-color:#bae6fd; color:#334155; }
+    .legend .legend-title { color:#0369a1; }
+    .legend .lv b { color:#111827; }
+    .legend .lv .lv-num { color:#0284c7; }
+    .legend .lv .lv-decision, .coverage { color:#6b7280; }
+    .chip .lvl-word, .coverage b { color:#0369a1; }
   }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
@@ -90,6 +112,22 @@
 
   <h1>Competency Report</h1>
   <p class="sub">Admin-only rollout report: preliminary ratings, official baselines, review coverage, and growth opportunities — a strengths-first capability picture, not a ranking.</p>
+
+  {# #51 R2: the growth ladder (0 Learning → 3 Mentor + decision text), wired
+     route -> service -> template. Prefer the explicit route var; fall back to the
+     packet copy. Build a score->label lookup the chips reuse so a bare 0-3 float
+     always carries its level WORD. #}
+  {% set levels = competency_levels or packet.competency_levels or [] %}
+  {% set level_word = {} %}
+  {% for lvl in levels %}{% set _ = level_word.update({lvl.score: lvl.label}) %}{% endfor %}
+  {% if levels %}
+  <div class="legend" aria-label="Competency level key">
+    <span class="legend-title">Growth ladder</span>
+    {% for lvl in levels %}
+    <span class="lv"><span class="lv-num">{{ lvl.score }}</span> <b>{{ lvl.label }}</b> <span class="lv-decision">· {{ lvl.decision }}</span></span>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   <form class="filter-card" method="get" action="/reports/competency" id="competency-filter-form">
     {% if error %}<div style="color:var(--danger);margin-bottom:0.75rem">{{ error }}</div>{% endif %}
@@ -151,9 +189,12 @@
       </div>
       <div class="chips">
         {# #51 R1: green at Capable+ (>=2), not only all-Mentor (>=3) — a 2.8 "Capable / assign freely" person was rendering red. Soft amber only when mostly Learning (<1); never danger-red on a person's average. #}
-        <span class="chip {{ 'ok' if emp.average_score is not none and emp.average_score >= 2 else 'warn' if emp.average_score is not none and emp.average_score < 1 else '' }}">Avg {{ '%.1f'|format(emp.average_score) if emp.average_score is not none else '—' }}</span>
+        {# #51 R2: annotate the avg with its growth-ladder WORD (e.g. "Avg 2.4 · Capable"). Floor the avg to its band [0-3] and look it up in the legend's level_word. #}
+        <span class="chip {{ 'ok' if emp.average_score is not none and emp.average_score >= 2 else 'warn' if emp.average_score is not none and emp.average_score < 1 else '' }}">Avg {{ '%.1f'|format(emp.average_score) if emp.average_score is not none else '—' }}{% if emp.average_score is not none %}{% set _band = [[emp.average_score|int, 0]|max, 3]|min %}{% if level_word.get(_band) %} · <span class="lvl-word">{{ level_word.get(_band) }}</span>{% endif %}{% endif %}</span>
         <span class="chip">Prelim {{ emp.preliminary_count }}/{{ packet.summary.category_count }}</span>
         <span class="chip {{ 'ok' if emp.missing_baseline_count == 0 else 'warn' }}">Baseline {{ emp.baseline_count }}/{{ packet.summary.category_count }}</span>
+        {# #51 R4: strengths beside gaps — green "Capable+ N · Mentor N" chip surfaces the positive counts the backend already computes. Shown whenever the employee has any Capable+ cell. #}
+        {% if emp.independent_count %}<span class="chip strength">Capable+ {{ emp.independent_count }} · Mentor {{ emp.teach_count }}</span>{% endif %}
         {% if emp.low_scores %}<span class="chip">{{ emp.low_scores|length }} growth opportunit{{ 'ies' if emp.low_scores|length != 1 else 'y' }}</span>{% endif %}
       </div>
     </div>
@@ -162,8 +203,11 @@
       <tr>
         <td>{{ cell.category }}</td>
         <td><span class="score">{{ '%.1f'|format(cell.score) if cell.score is not none else '—' }}</span><div class="dim">{{ cell.confidence_band }} / n={{ cell.sample_size }}</div></td>
-        <td>{% if cell.preliminary %}<span class="score">{{ '%.1f'|format(cell.preliminary.score) }}</span><div class="dim">{{ cell.preliminary.created_by_name or 'Unknown' }}{% if cell.preliminary.notes %} / {{ cell.preliminary.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
-        <td>{% if cell.baseline %}<span class="score">{{ '%.1f'|format(cell.baseline.score) }}</span><div class="dim">{{ cell.baseline.created_by_name or 'Unknown' }}{% if cell.baseline.notes %} / {{ cell.baseline.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}</td>
+        {# #51 R3: surface true per-dimension "N of M tasks" coverage so partial
+           progress reads as progress, not a flat gap (e.g. 4/11 tasks rated). The
+           honest counts already ride on the cell (CSV/JSON) — wire them on-screen. #}
+        <td>{% if cell.preliminary %}<span class="score">{{ '%.1f'|format(cell.preliminary.score) }}</span><div class="dim">{{ cell.preliminary.created_by_name or 'Unknown' }}{% if cell.preliminary.notes %} / {{ cell.preliminary.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}{% if cell.total_dimensions %}<div class="coverage"><b>{{ cell.preliminary_dimensions }} / {{ cell.total_dimensions }}</b> task{{ '' if cell.total_dimensions == 1 else 's' }}</div>{% endif %}</td>
+        <td>{% if cell.baseline %}<span class="score">{{ '%.1f'|format(cell.baseline.score) }}</span><div class="dim">{{ cell.baseline.created_by_name or 'Unknown' }}{% if cell.baseline.notes %} / {{ cell.baseline.notes }}{% endif %}</div>{% else %}<span class="dim">missing</span>{% endif %}{% if cell.total_dimensions %}<div class="coverage"><b>{{ cell.baselined_dimensions }} / {{ cell.total_dimensions }}</b> task{{ '' if cell.total_dimensions == 1 else 's' }}</div>{% endif %}</td>
         {# #51 T1: a low score is an early-growth signal, not an error — never danger-red. The CELL status (_cell_status) emits missing_*/low_score/complete: missing_* process gaps stay amber (chase the review); a low_score growth area reads neutral. Display maps 'low score' -> 'growth area' (internal status keys unchanged). #}
         <td><span class="chip {{ 'ok' if cell.status == 'complete' else 'warn' if 'missing' in cell.status else '' }}">{{ cell.status|replace(',', ', ')|replace('_', ' ')|replace('low score', 'growth area') }}</span></td>
       </tr>
@@ -218,5 +262,6 @@ async function deleteCompetencyPreset() {
   window.location = '/reports/competency';
 }
 </script>
+{% include "partials/feedback_widget.html" %}
 </body>
 </html>

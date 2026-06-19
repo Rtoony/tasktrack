@@ -82,8 +82,18 @@
   ul.dist .v { color:var(--text); font-variant-numeric:tabular-nums; font-weight:500; }
   .toggle-link { color:var(--accent); text-decoration:none; font-size:0.78rem; margin-left:0.9rem; }
   .toggle-link:hover { text-decoration:underline; }
+
+  /* W6: action row (Print / View JSON), matching the sibling reports' .btn pattern */
+  .report-actions { display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1.25rem; }
+  .btn { display:inline-flex; align-items:center; justify-content:center; background:var(--accent); color:#08111f; border:none; border-radius:var(--radius); padding:0.42rem 0.72rem; font-weight:600; font-size:0.78rem; text-decoration:none; cursor:pointer; font-family:inherit; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.secondary { background:var(--surface-2); color:var(--text-muted); border:1px solid var(--border); }
+  .btn.secondary:hover { color:var(--accent); border-color:var(--accent); }
+
+  .skill-change .who { color:var(--text); font-weight:600; }
+  .skill-change .cat { color:var(--text-muted); }
   @media print {
-    header,.day-form,.toggle-link { display:none !important; }
+    header,.day-form,.toggle-link,.report-actions { display:none !important; }
   }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
@@ -144,6 +154,14 @@
       <a href="/weekly?days=30{% if show_breakdown %}&amp;breakdown=1{% endif %}" style="color:var(--accent);">30 days</a>.
     {% endif %}
   </p>
+
+  {# W6: action row — every sibling report has Print + an export link; Weekly had
+     none. No CSV button: there's no /weekly CSV endpoint, so we don't link a
+     missing route. JSON honours the current window (and breakdown, if shown). #}
+  <div class="report-actions">
+    <button class="btn" type="button" onclick="window.print()">Print</button>
+    <a class="btn secondary" href="/api/v1/weekly?days={{ snapshot.days }}{% if show_breakdown %}&amp;breakdown=1{% endif %}">View JSON</a>
+  </div>
 
   <section class="totals">
     <div class="stat created">
@@ -268,8 +286,15 @@
     </div>
     <ul class="items">
       {% for c in snapshot.skill_score_changes %}
-      <li>
-        <span>Score row #{{ c.score_row_id }} &middot; {{ c.field }}: <strong>{{ c.old or '—' }}</strong> &rarr; <strong>{{ c.new }}</strong></span>
+      <li class="skill-change">
+        {# W7: read "Jane Doe · Grading: 2 → 3" via the batch-resolved names;
+           fall back to the raw row id only when a name couldn't be resolved
+           (e.g. a since-deleted score). #}
+        <span>
+          {% if c.employee_name %}<span class="who">{{ c.employee_name }}</span>{% else %}<span class="who">Score row #{{ c.score_row_id }}</span>{% endif %}
+          &middot; <span class="cat">{{ c.category_name or c.field }}</span>:
+          <strong>{{ c.old or '—' }}</strong> &rarr; <strong>{{ c.new }}</strong>
+        </span>
         <span class="when">{{ (c.when or '')[:16] }}</span>
       </li>
       {% endfor %}
@@ -279,10 +304,10 @@
 
   <p style="color:var(--text-dim); font-size:0.75rem; margin-top:1.5rem;">
     Pull live JSON at <a href="/api/v1/weekly?days={{ snapshot.days }}" style="color:var(--accent);text-decoration:none">/api/v1/weekly?days={{ snapshot.days }}</a>.
-    Completion timestamps approximate (uses updated_at on tables without a completed_at column).
   </p>
 </main>
   </div>
 </div>
+{% include "partials/feedback_widget.html" %}
 </body>
 </html>

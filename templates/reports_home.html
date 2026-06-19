@@ -74,6 +74,12 @@
   .event-title { font-weight:700; }
   .event-meta { color:var(--text-muted); font-size:0.76rem; margin-top:0.12rem; }
   .empty { color:var(--text-light); font-style:italic; padding:0.25rem 0; }
+  /* H3: "Recently opened" project chips (localStorage memory above the picker) */
+  .recent-row { display:flex; flex-wrap:wrap; align-items:center; gap:0.4rem; margin:0 0 0.6rem; }
+  .recent-row[hidden] { display:none; }
+  .recent-label { color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.66rem; font-weight:700; }
+  .recent-chip { display:inline-flex; align-items:center; gap:0.3rem; border:1px solid var(--border); background:var(--surface-soft); color:var(--text); border-radius:999px; padding:0.2rem 0.6rem; font-size:0.76rem; font-weight:600; font-family:'IBM Plex Mono',monospace; cursor:pointer; }
+  .recent-chip:hover { border-color:var(--accent); color:var(--accent); background:var(--surface); }
   @media (max-width:1200px) { .metric-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .grid { grid-template-columns:1fr; } }
   @media (max-width:900px) { .header-inner { padding:0.7rem 1rem; min-height:auto; align-items:flex-start; flex-direction:column; } .nav { justify-content:flex-start; } .console-frame { grid-template-columns:1fr; padding:1rem; } .sidebar { position:relative; top:auto; } .side-nav { grid-template-columns:repeat(2,minmax(0,1fr)); } .lookup-row,.event,.quick-row { grid-template-columns:1fr; } }
   @media (max-width:640px) { .metric-grid,.side-nav { grid-template-columns:1fr; } .hero { display:block; } .hero-actions { justify-content:flex-start; margin-top:0.8rem; } }
@@ -195,6 +201,12 @@
         <section class="card" id="project-one">
           <h2>Project Status One-Pager</h2>
           <p>Open a focused project report with linked tasks, calendar items, overlay context, map links, and recent activity.</p>
+          {# H3: client-side "recently opened" memory so a project you opened minutes
+             ago is one click away, instead of re-typing its number every visit.
+             Populated from localStorage by JS below; hidden until there's history. #}
+          <div class="recent-row" id="recent-projects" hidden>
+            <span class="recent-label">Recently opened</span>
+          </div>
           <div class="lookup-row">
             <div>
               <label for="project-picker">Find Project</label>
@@ -370,9 +382,46 @@ function selectedProjectNumber() {
   const raw = document.getElementById('project-picker').value || '';
   return raw.split('·')[0].trim().split(/\s+/)[0].trim();
 }
-function openProjectReport() {
-  const number = selectedProjectNumber();
+
+// H3: localStorage-backed "recently opened" project numbers (cap 6, MRU first).
+const RECENT_PROJECTS_KEY = 'reportCenter.recentProjects';
+const RECENT_PROJECTS_CAP = 6;
+function loadRecentProjects() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_PROJECTS_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(n => typeof n === 'string' && n) : [];
+  } catch (err) {
+    return [];
+  }
+}
+function rememberProject(number) {
   if (!number) return;
+  let list = loadRecentProjects().filter(n => n !== number);
+  list.unshift(number);
+  list = list.slice(0, RECENT_PROJECTS_CAP);
+  try { localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(list)); } catch (err) { /* ignore quota/private-mode */ }
+}
+function renderRecentProjects() {
+  const row = document.getElementById('recent-projects');
+  if (!row) return;
+  const list = loadRecentProjects();
+  // Drop any stale chips, keep the label.
+  row.querySelectorAll('.recent-chip').forEach(chip => chip.remove());
+  if (!list.length) { row.hidden = true; return; }
+  list.forEach(number => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'recent-chip';
+    chip.textContent = number;
+    chip.addEventListener('click', () => openProjectReport(number));
+    row.appendChild(chip);
+  });
+  row.hidden = false;
+}
+function openProjectReport(numberOverride) {
+  const number = numberOverride || selectedProjectNumber();
+  if (!number) return;
+  rememberProject(number);
   window.location = `/reports/project?project_number=${encodeURIComponent(number)}`;
 }
 function eventTypeLabel(value) {
@@ -407,8 +456,10 @@ document.addEventListener('DOMContentLoaded', () => {
   picker.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); openProjectReport(); }
   });
+  renderRecentProjects();
   loadUpcomingMeetingPackets();
 });
 </script>
+{% include "partials/feedback_widget.html" %}
 </body>
 </html>

@@ -127,6 +127,41 @@ def list_employees():
     return jsonify([to_dict(r) for r in rows])
 
 
+@bp.route("/api/v1/employees/options", methods=["GET"])
+@login_required
+def employee_options():
+    """Slim employee picker source — open to every logged-in user.
+
+    The competency/personnel name dropdowns in the SPA need real
+    employee names without exposing the HR-grade fields that the
+    admin-only `/api/v1/employees` list carries (email, notes,
+    photo_*, timestamps). This returns ONLY the four fields a picker
+    needs: id, display_name, title, role — for active employees,
+    ordered by name.
+
+    Deliberately NOT admin-gated: any logged-in user records ratings
+    and coaching notes, so they need to pick from the roster. It stays
+    a strict whitelist (never `to_dict`) so adding a sensitive column
+    to the Employee model can't silently leak it here.
+    """
+    sess = get_session()
+    stmt = (
+        select(Employee)
+        .where(Employee.active == 1)
+        .order_by(Employee.display_name.asc())
+    )
+    rows = sess.scalars(stmt).all()
+    return jsonify([
+        {
+            "id": r.id,
+            "display_name": r.display_name,
+            "title": r.title,
+            "role": r.role,
+        }
+        for r in rows
+    ])
+
+
 @bp.route("/api/v1/employees", methods=["POST"])
 @admin_required
 def create_employee():

@@ -74,6 +74,15 @@ def test_competency_report_per_dimension_coverage(admin_client, temp_app):
     assert cell["baselined_dimensions"] == 2
     assert cell["preliminary_dimensions"] == 0
 
+    # #51 R3: the honest "N of M tasks" coverage must now reach the ON-SCREEN
+    # report (it already rode CSV/JSON), so 2-of-M baselined reads as progress,
+    # not a flat gap.
+    page = admin_client.get("/reports/competency").get_data(as_text=True)
+    assert "2 / {}</b> task".format(len(dims)) in page, \
+        "per-dimension baseline coverage 'N / M tasks' missing from the HTML report"
+    assert "0 / {}</b> task".format(len(dims)) in page, \
+        "per-dimension preliminary coverage 'N / M tasks' missing from the HTML report"
+
 
 def test_competency_report_json_html_csv(admin_client, temp_app):
     _seed_competency_report(admin_client, temp_app)
@@ -92,12 +101,30 @@ def test_competency_report_json_html_csv(admin_client, temp_app):
     assert rated["baseline_count"] == 1
     assert rated["low_scores"][0]["score"] == 1.0
 
+    # #51 R4: the backend now surfaces the POSITIVE counts beside the gaps.
+    # Report Rated has a 3 (Mentor) in Report Setup -> independent + teach = 1 each.
+    assert rated["independent_count"] == 1
+    assert rated["teach_count"] == 1
+    # #51 R2: the growth ladder (0 Learning -> 3 Mentor + decision text) rides on
+    # the packet so the report can show level WORDS, not bare 0-3 floats.
+    labels = {lvl["label"] for lvl in body["competency_levels"]}
+    assert {"Learning", "Developing", "Capable", "Mentor"} <= labels
+
     html = admin_client.get("/reports/competency")
     assert html.status_code == 200
     page = html.get_data(as_text=True)
     assert "Competency Report" in page
     assert "Report Rated" in page
     assert "/api/v1/reports/competency.csv" in page
+    # #51 R2: the legend strip + decision text render the growth ladder as a key.
+    assert "Growth ladder" in page
+    assert "Assign freely" in page
+    # #51 R4: the green strengths chip ("Capable+ N · Mentor N") sits beside gaps,
+    # using the positive counts the backend computes. Never danger-red.
+    assert "Capable+ 1" in page
+    assert "Mentor 1" in page
+    assert 'class="chip strength"' in page
+    assert 'class="chip danger"' not in page
 
     csv_resp = admin_client.get("/api/v1/reports/competency.csv")
     assert csv_resp.status_code == 200

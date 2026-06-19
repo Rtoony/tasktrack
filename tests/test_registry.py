@@ -24,6 +24,50 @@ def test_regular_user_forbidden(auth_client):
 # ── Employees ─────────────────────────────────────────────────────────────
 
 
+def test_employee_options_open_to_non_admin_and_slim(auth_client, temp_app):
+    """The slim picker endpoint is login-only (NOT admin) and exposes
+    only id/display_name/title/role — never the HR/sensitive fields."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Employee(
+            display_name="Picker Active",
+            title="Senior Drafter",
+            role="drafter",
+            email="picker@example.com",
+            notes="private HR note",
+            photo_path="/photos/picker.jpg",
+            active=1,
+        ))
+        sess.add(Employee(display_name="Picker Disabled", active=0))
+        sess.commit()
+
+    r = auth_client.get("/api/v1/employees/options")
+    assert r.status_code == 200
+    rows = r.get_json()
+    assert isinstance(rows, list)
+
+    by_name = {row["display_name"]: row for row in rows}
+    # Active employee is present; soft-deleted one is filtered out.
+    assert "Picker Active" in by_name
+    assert "Picker Disabled" not in by_name
+
+    picked = by_name["Picker Active"]
+    # Only the four whitelisted keys are returned.
+    assert set(picked.keys()) == {"id", "display_name", "title", "role"}
+    assert picked["title"] == "Senior Drafter"
+    assert picked["role"] == "drafter"
+    # Sensitive fields never leak — not just absent as keys, absent anywhere.
+    blob = str(rows)
+    assert "picker@example.com" not in blob
+    assert "private HR note" not in blob
+    assert "/photos/picker.jpg" not in blob
+
+
+def test_employee_options_blocks_anonymous(client):
+    """Still requires a session — anonymous gets 401."""
+    assert client.get("/api/v1/employees/options").status_code == 401
+
+
 def test_create_employee(admin_client, temp_app):
     r = admin_client.post("/api/v1/employees", json={
         "display_name": "Jane Engineer",

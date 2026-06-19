@@ -10,6 +10,7 @@ from flask import Blueprint, Response, jsonify, render_template, request, sessio
 from sqlalchemy import func, or_, select
 
 from ..auth import admin_required, login_required
+from ..config import COMPETENCY_LEVELS
 from ..db import get_session
 from ..models import (
     CalendarEvent,
@@ -1139,6 +1140,9 @@ def competency_report_page():
         "competency_report.html",
         packet=packet,
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        # #51 R2: the growth ladder (0 Learning → 3 Mentor + decision text) so the
+        # template can render level LABELS + a legend, not bare 0-3 floats.
+        competency_levels=COMPETENCY_LEVELS,
         error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),

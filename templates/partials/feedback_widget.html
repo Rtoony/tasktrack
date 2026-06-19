@@ -1,0 +1,103 @@
+{# #53: self-contained "report feedback from anywhere" widget. Drop-in via
+   {% include "partials/feedback_widget.html" %} before </body> on any standalone
+   page. Posts to the existing /api/v1/feedback_items (no backend change); reads the
+   global csrf_token. Scoped .tt-fbk-* styles + vanilla JS, theme-var-aware with
+   safe fallbacks so it looks right on dark report pages and degrades on plain ones. #}
+<style>
+  .tt-fbk-fab { position:fixed; right:1.1rem; bottom:1.1rem; z-index:9000; display:inline-flex; align-items:center; gap:0.4rem;
+    background:var(--accent,#38bdf8); color:#0b1220; border:none; border-radius:999px; padding:0.55rem 0.95rem; font:600 0.82rem 'IBM Plex Sans',-apple-system,sans-serif;
+    cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,0.35); }
+  .tt-fbk-fab:hover { filter:brightness(1.07); }
+  .tt-fbk-overlay { position:fixed; inset:0; z-index:9001; display:none; align-items:flex-end; justify-content:flex-end; background:rgba(0,0,0,0.45); }
+  .tt-fbk-overlay.tt-open { display:flex; }
+  .tt-fbk-card { width:min(360px, calc(100vw - 1.5rem)); margin:0 1.1rem 1.1rem; background:var(--surface,#18212b); color:var(--text,#ecf2f8);
+    border:1px solid var(--border,#2a3441); border-radius:12px; box-shadow:0 18px 48px rgba(0,0,0,0.5); padding:1rem 1.05rem; font:0.85rem 'IBM Plex Sans',-apple-system,sans-serif; }
+  .tt-fbk-card h3 { font-size:0.98rem; font-weight:700; margin:0 0 0.1rem; }
+  .tt-fbk-sub { font-size:0.74rem; color:var(--text-muted,#9ca7b4); margin-bottom:0.7rem; }
+  .tt-fbk-card label { display:block; font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted,#9ca7b4); margin:0.55rem 0 0.2rem; }
+  .tt-fbk-card input, .tt-fbk-card textarea, .tt-fbk-card select { width:100%; background:var(--bg,#11161d); color:var(--text,#ecf2f8);
+    border:1px solid var(--border,#2a3441); border-radius:7px; padding:0.45rem 0.55rem; font:inherit; }
+  .tt-fbk-card textarea { min-height:74px; resize:vertical; }
+  .tt-fbk-card .tt-fbk-invalid { border-color:var(--danger,#f87171); outline:1px solid var(--danger,#f87171); }
+  .tt-fbk-row { display:flex; gap:0.5rem; margin-top:0.85rem; }
+  .tt-fbk-btn { flex:1; border:1px solid transparent; border-radius:7px; padding:0.5rem; font:600 0.8rem 'IBM Plex Sans',sans-serif; cursor:pointer; }
+  .tt-fbk-btn.tt-primary { background:var(--accent,#38bdf8); color:#0b1220; }
+  .tt-fbk-btn.tt-ghost { background:transparent; color:var(--text-muted,#9ca7b4); border-color:var(--border,#2a3441); }
+  @media print { .tt-fbk-fab, .tt-fbk-overlay { display:none !important; } }
+</style>
+
+<button type="button" class="tt-fbk-fab" id="tt-fbk-open" title="Report feedback about this page">&#128172; Feedback</button>
+<div class="tt-fbk-overlay" id="tt-fbk-overlay" role="dialog" aria-modal="true" aria-label="Report feedback">
+  <div class="tt-fbk-card">
+    <h3>Report feedback</h3>
+    <div class="tt-fbk-sub">About this page. Lands in your feedback inbox.</div>
+    <label for="tt-fbk-type">Type</label>
+    <select id="tt-fbk-type">
+      <option value="Idea">Idea</option>
+      <option value="Bug">Bug</option>
+      <option value="Feature">Feature</option>
+      <option value="Improvement">Improvement</option>
+    </select>
+    <label for="tt-fbk-title">Title</label>
+    <input id="tt-fbk-title" type="text" placeholder="One line — what is this about?" maxlength="200">
+    <label for="tt-fbk-body">Details</label>
+    <textarea id="tt-fbk-body" placeholder="What happened / what you'd want instead (optional)"></textarea>
+    <div class="tt-fbk-row">
+      <button type="button" class="tt-fbk-btn tt-ghost" id="tt-fbk-cancel">Cancel</button>
+      <button type="button" class="tt-fbk-btn tt-primary" id="tt-fbk-send">Send</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  if (window.__ttFbkInit) return;        // guard against a double-include
+  window.__ttFbkInit = true;
+  var CSRF = "{{ csrf_token }}";
+  var overlay = document.getElementById('tt-fbk-overlay');
+  var openBtn = document.getElementById('tt-fbk-open');
+  var titleEl = document.getElementById('tt-fbk-title');
+  var bodyEl = document.getElementById('tt-fbk-body');
+  var typeEl = document.getElementById('tt-fbk-type');
+  var sendBtn = document.getElementById('tt-fbk-send');
+  function open() { overlay.classList.add('tt-open'); setTimeout(function () { titleEl.focus(); }, 30); }
+  function close() { overlay.classList.remove('tt-open'); titleEl.classList.remove('tt-fbk-invalid'); }
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:4.2rem;transform:translateX(-50%);z-index:9002;background:#0b0f15;color:#fff;border:1px solid #2a3441;border-radius:8px;padding:0.55rem 0.9rem;font:0.82rem sans-serif;box-shadow:0 8px 24px rgba(0,0,0,0.5)';
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2600);
+  }
+  openBtn.addEventListener('click', open);
+  document.getElementById('tt-fbk-cancel').addEventListener('click', close);
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  titleEl.addEventListener('input', function () { titleEl.classList.remove('tt-fbk-invalid'); });
+  sendBtn.addEventListener('click', async function () {
+    var title = (titleEl.value || '').trim();
+    if (!title) { titleEl.classList.add('tt-fbk-invalid'); titleEl.focus(); return; }
+    sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+    try {
+      var res = await fetch('/api/v1/feedback_items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF },
+        body: JSON.stringify({
+          title: title.slice(0, 200),
+          body: (bodyEl.value || '').trim(),
+          feedback_type: typeEl.value,
+          page_url: window.location.pathname + window.location.search,
+          source: 'page-widget',
+        }),
+      });
+      if (res.status === 401) { toast('Please sign in to send feedback.'); return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || data.error) { toast(data.error || 'Could not send — try again.'); return; }
+      titleEl.value = ''; bodyEl.value = '';
+      close(); toast('Thanks — feedback captured.');
+    } catch (e) {
+      toast('Could not send — check your connection.');
+    } finally {
+      sendBtn.disabled = false; sendBtn.textContent = 'Send';
+    }
+  });
+})();
+</script>

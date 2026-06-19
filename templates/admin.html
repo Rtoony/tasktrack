@@ -139,7 +139,7 @@
   .info-code { font-family:'IBM Plex Mono', monospace; font-size:1rem; font-weight:700; }
   .action-cell { text-align:right; white-space:nowrap; }
   .hidden { display:none !important; }
-  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:#0b0f15; color:#fff; padding:0.65rem 1.1rem; border-radius:var(--radius); font-size:0.82rem; opacity:0; transition:opacity 0.2s; z-index:300; box-shadow:var(--shadow-md); border:1px solid var(--border); }
+  .toast { position:fixed; bottom:1.5rem; right:1.5rem; background:#0b0f15; color:#fff; padding:0.65rem 1.1rem; border-radius:var(--radius); font-size:0.82rem; opacity:0; transition:opacity 0.2s; z-index:9100; box-shadow:var(--shadow-md); border:1px solid var(--border); }
   .toast.show { opacity:1; }
   @media (max-width:1200px) {
     .metric-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
@@ -1180,5 +1180,6 @@ if (newEmailInput) newEmailInput.addEventListener('keydown', e => { if (e.key ==
 loadManagedOptions();
 loadSyncStatusBadge();
 </script>
+{% include "partials/feedback_widget.html" %}
 </body>
 </html>

@@ -62,6 +62,9 @@ textarea { min-height:96px; resize:vertical; }
 .form-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:0.7rem; margin-bottom:0.7rem; }
 .field { margin-bottom:0.75rem; }
 .field label { display:block; color:var(--muted); font-size:0.68rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:700; margin-bottom:0.25rem; }
+.req-mark { color:var(--danger); font-weight:700; margin-left:0.15rem; }
+.field-invalid label { color:var(--danger); }
+.field-invalid .input, .field-invalid input, .field-invalid textarea, .field-invalid select { border-color:var(--danger); outline:1px solid var(--danger); }
 .context-box { background:#161616; color:#c6c6c6; font-family:'IBM Plex Mono',monospace; font-size:0.68rem; line-height:1.45; padding:0.7rem; overflow:auto; max-height:160px; white-space:pre-wrap; }
 .attachments { display:flex; flex-direction:column; gap:0.35rem; margin-top:0.35rem; }
 .attachment { display:flex; justify-content:space-between; gap:0.5rem; align-items:center; border:1px solid var(--border); background:var(--surface-2); padding:0.45rem 0.55rem; font-size:0.78rem; }
@@ -138,8 +141,8 @@ details.context-raw summary { cursor:pointer; color:var(--muted); font-size:0.72
       <div class="panel-head"><div><div class="panel-title" id="detail-title">Select feedback</div><div class="panel-sub" id="detail-subtitle">Edit status, notes, and screenshots.</div></div></div>
       <form class="detail" id="feedback-form">
         <input type="hidden" id="feedback-id">
-        <div class="field"><label>Title</label><input class="input" id="feedback-title" required></div>
-        <div class="field"><label>Details</label><textarea id="feedback-body" spellcheck="true" placeholder="Please describe the issue or idea. Include steps to reproduce if it's a bug."></textarea></div>
+        <div class="field"><label>Title <span class="req-mark" aria-hidden="true">*</span></label><input class="input" id="feedback-title" required aria-required="true"></div>
+        <div class="field"><label>Details <span class="req-mark" aria-hidden="true">*</span></label><textarea id="feedback-body" required aria-required="true" spellcheck="true" placeholder="Please describe the issue or idea. Include steps to reproduce if it's a bug."></textarea></div>
         <div class="form-grid">
           <div class="field"><label>Type</label><select id="feedback-type"><option>Bug</option><option>Copy</option><option>UX</option><option>Data</option><option>Workflow</option><option>Idea</option></select></div>
           <div class="field"><label>Priority</label><select id="feedback-priority"><option>High</option><option selected>Medium</option><option>Low</option></select></div>
@@ -362,10 +365,33 @@ async function uploadIfPresent(id) {
   input.value = '';
   updateStagedFileHint();
 }
+// #45: required-field cues. Mirror the main SPA pattern (red *, inline
+// .field-invalid highlight, focus-first-invalid) instead of a title-only toast.
+const REQUIRED_FIELDS = ['feedback-title', 'feedback-body'];
+function clearFeedbackInvalid() {
+  document.querySelectorAll('#feedback-form .field-invalid')
+    .forEach(el => el.classList.remove('field-invalid'));
+}
+function validateRequired() {
+  clearFeedbackInvalid();
+  let first = null;
+  REQUIRED_FIELDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el || el.value.trim()) return;
+    const wrap = el.closest('.field');
+    if (wrap) wrap.classList.add('field-invalid');
+    if (!first) first = el;
+  });
+  if (first) {
+    if (typeof first.focus === 'function') first.focus();
+    toast('Title and Details are required');
+  }
+  return !first;
+}
 async function saveFeedback(event) {
   event.preventDefault();
+  if (!validateRequired()) return;
   const payload = formPayload();
-  if (!payload.title) { toast('Title is required'); return; }
   try {
     let row;
     if (selectedId) row = await api('PUT', `/api/v1/feedback_items/${selectedId}`, payload);
@@ -489,6 +515,12 @@ async function loadFeedback(selectId) {
   } catch (err) { document.getElementById('feedback-list').innerHTML = `<div class="empty">${esc(err.message)}</div>`; }
 }
 document.getElementById('feedback-form').addEventListener('submit', saveFeedback);
+REQUIRED_FIELDS.forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('input', () => {
+    if (el.value.trim()) el.closest('.field')?.classList.remove('field-invalid');
+  });
+});
 document.getElementById('feedback-file').addEventListener('change', updateStagedFileHint);
 document.getElementById('feedback-search').addEventListener('input', renderList);
 document.getElementById('feedback-status-filter').addEventListener('change', renderList);
