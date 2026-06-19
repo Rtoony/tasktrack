@@ -16,6 +16,7 @@ from ..models import (
     PersonnelIssue,
     ReportPreset,
 )
+from ..config import COMPETENCY_LEVELS
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
@@ -1139,6 +1140,9 @@ def competency_report_page():
         "competency_report.html",
         packet=packet,
         presets=[_preset_to_dict(row, include_filters=False) for row in presets],
+        # #51 R2: the growth ladder (0 Learning → 3 Mentor + decision text) so the
+        # template can render level LABELS + a legend, not bare 0-3 floats.
+        competency_levels=COMPETENCY_LEVELS,
         error=error,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
