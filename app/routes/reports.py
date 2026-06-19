@@ -13,12 +13,9 @@ from ..auth import admin_required, login_required
 from ..db import get_session
 from ..models import (
     CalendarEvent,
-    InboxItem,
     PersonnelIssue,
-    Project,
     ReportPreset,
 )
-from ..services.tickets import done_statuses_for_table
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
@@ -39,6 +36,7 @@ from ..services.project_reports import (
     portfolio_project_report,
     project_status_report,
 )
+from ..services.tickets import done_statuses_for_table
 from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
 bp = Blueprint("reports", __name__)
@@ -713,14 +711,14 @@ def _hub_action_counts(sess, is_admin: bool) -> dict:
     """
     now = datetime.now()
 
-    # Intake to review — InboxItem rows whose status is not a "reviewed" terminal
-    # state. Matches intake_reports._row_payload: needs_review for inbox_items is
-    # (status not in {"Done", "Archived"}).
-    intake_to_review = sess.scalar(
-        select(func.count())
-        .select_from(InboxItem)
-        .where(InboxItem.status.notin_(("Done", "Archived")))
-    ) or 0
+    # Intake to review — drive this from the SAME report the tile deep-links to
+    # (/intake/review uses intake_source_report: the web-form/paper-form/remarkable-ocr
+    # sources over a 30-day window). A raw all-time InboxItem count diverged both ways
+    # (it includes the 'manual' source and >30-day items, and ignores the other 4
+    # intake tables), so the tile number wouldn't match the page it opens.
+    intake_to_review = int(
+        (intake_source_report(sess, needs_review=1).get("summary") or {}).get("needs_review_count") or 0
+    )
 
     # Upcoming meetings — visible, non-archived, open calendar events whose start
     # falls in the next 14 days. Mirrors meeting_packet_batch_report's window and

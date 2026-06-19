@@ -201,3 +201,33 @@ def test_attention_total_is_independent_of_scan_cap_constant(temp_app):
         totals = portfolio_attention_totals(sess, {"client": "Acme"}, now=datetime.now())
         assert totals["scanned_total"] == 60
         assert totals["at_risk"] == 1
+
+
+def test_attention_count_agrees_with_is_overdue_value_on_malformed_dues(temp_app):
+    """Review must-fix #1: the at-risk overdue test must agree with is_overdue_value
+    (the single source of truth) EXACTLY, including on partial/malformed due strings.
+    The earlier pure-SQL GLOB diverged — it counted '2026-06'/'2026' as overdue
+    (fromisoformat rejects them) and missed basic-format '20260617' (fromisoformat
+    accepts it) — so the portfolio headline could disagree with a project's own
+    drill-in. This pins D2 to is_overdue_value across exactly those cases."""
+    from datetime import date
+
+    from app.services.tickets import is_overdue_value
+
+    past_basic = (date.today() - timedelta(days=10)).strftime("%Y%m%d")    # 'YYYYMMDD'
+    past_iso = (date.today() - timedelta(days=5)).isoformat()              # well-formed past
+    future_iso = (date.today() + timedelta(days=5)).isoformat()           # not overdue
+    dues = ["2026-06", "2026", "", past_basic, past_iso, future_iso, "not-a-date"]
+
+    with temp_app.app_context():
+        sess = get_session()
+        for i, due in enumerate(dues):
+            p = Project(project_number=f"7{i:03d}.00", name=f"Mal {i}", active=1)
+            sess.add(p)
+            sess.flush()
+            sess.add(WorkTask(project_id=p.id, title=f"t{i}",
+                              status="In Progress", due_date=due))
+        sess.commit()
+        expected = sum(1 for due in dues if is_overdue_value(due))
+        got = portfolio_attention_totals(sess, {})["at_risk"]
+    assert got == expected, f"D2 at_risk={got} != is_overdue_value-expected={expected} for {dues}"

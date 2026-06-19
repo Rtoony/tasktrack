@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import func, literal, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -514,78 +514,51 @@ _AT_RISK_OVERDUE_TABLES: tuple[tuple, ...] = (
 )
 
 
-def _overdue_exists_clause(model, due_col_name: str, now: datetime):
-    """EXISTS clause: this project has ≥1 OPEN, OVERDUE, non-archived row in
-    `model`, linked by FK *or* human project_number.
-
-    The overdue test mirrors is_overdue_value() exactly, in SQL, so the
-    aggregate count agrees with the per-project reports built by
-    project_status_report():
-      - blank / non-date values are not overdue;
-      - a date-only 'YYYY-MM-DD' is overdue iff its date < today;
-      - a datetime 'YYYY-MM-DDThh:mm[:ss]' is overdue iff it is < now.
-    ISO strings compare lexicographically in date/datetime order, and the
-    leading 4-digit-year GLOB guard rejects the same garbage fromisoformat()
-    would raise on. `now` is captured once by the caller so a single report
-    is internally consistent.
-    """
-    now_iso = now.isoformat(timespec="seconds")
-    today_iso = now.date().isoformat()
-    due_col = getattr(model, due_col_name)
-    due_value = func.trim(due_col)
-    open_statuses_done = tuple(done_statuses_for_table(model.__tablename__))
-
-    conditions = [
-        or_(
-            model.project_id == Project.id,
-            model.project_number == Project.project_number,
-        ),
-        due_col.is_not(None),
-        due_value != "",
-        func.substr(due_value, 1, 4).op("GLOB")("[0-9][0-9][0-9][0-9]"),
-        model.status.notin_(open_statuses_done),
-        or_(
-            func.substr(due_value, 1, 10) < today_iso,
-            (func.instr(due_value, "T") > 0) & (due_value < now_iso),
-        ),
-    ]
-    if "archived_at" in {c.name for c in model.__table__.columns}:  # #38: hide archived
-        conditions.append(model.archived_at.is_(None))
-
-    return select(literal(1)).where(*conditions).exists()
-
-
 def portfolio_attention_totals(sess: Session, filters: dict, *,
                                now: datetime | None = None) -> dict:
     """True at-risk count over the FULL active/filter scope, plus the total.
 
-    Computed with a handful of correlated EXISTS subqueries (one per linked
-    tracker) wrapped in two COUNTs — cost is independent of project count, so
-    it is safe to run over the whole ~6.9k active set instead of capping at
-    the scan ceiling. Scope matches _portfolio_project_stmt() (same active /
-    client / component / project_numbers / q / status filters) so the
-    denominator and numerator describe the same population the portfolio
-    query selects from. A project is at_risk iff ANY linked tracker has an
-    open, overdue, non-archived row — the same rule _project_management_brief
-    applies to a single project's report.
+    A project is at_risk iff ANY linked tracker has an OPEN, OVERDUE,
+    non-archived row — the exact rule _project_management_brief applies to one
+    project's report. Overdue is decided by is_overdue_value() (the SINGLE
+    source of truth), so this aggregate always agrees with the per-project
+    reports; an earlier pure-SQL date test diverged from fromisoformat() on
+    partial/malformed strings ('2026-06', '20260617', ...) and could
+    inflate/deflate the headline vs a project's own drill-in. Candidate rows
+    are bounded in SQL (open, non-archived, due present) and the date test runs
+    in Python — cost is O(open dated linked rows), independent of the ~6.9k
+    project count (never per-project report builds). Scope matches
+    _portfolio_project_stmt() so numerator and denominator describe the same
+    population the portfolio query selects from.
     """
-    now = now or datetime.now()
-    any_overdue = or_(*[
-        _overdue_exists_clause(model, due_col, now)
-        for model, due_col in _AT_RISK_OVERDUE_TABLES
-    ])
+    scope_rows = sess.execute(
+        _portfolio_project_stmt(filters)
+        .with_only_columns(Project.id, Project.project_number)
+        .order_by(None)
+    ).all()
+    in_scope_ids = {row[0] for row in scope_rows}
+    in_scope_numbers = {row[1] for row in scope_rows if row[1]}
+    number_to_id = {row[1]: row[0] for row in scope_rows if row[1]}
+    total = len(scope_rows)
 
-    scope = _portfolio_project_stmt(filters).with_only_columns(
-        Project.id, Project.project_number
-    ).order_by(None)
-
-    total = sess.scalar(
-        select(func.count()).select_from(scope.subquery())
-    ) or 0
-    at_risk = sess.scalar(
-        select(func.count()).select_from(scope.where(any_overdue).subquery())
-    ) or 0
-    return {"at_risk": int(at_risk), "scanned_total": int(total)}
+    at_risk_ids: set[int] = set()
+    for model, due_col_name in _AT_RISK_OVERDUE_TABLES:
+        done = tuple(done_statuses_for_table(model.__tablename__))
+        due_col = getattr(model, due_col_name)
+        conditions = [model.status.notin_(done), due_col.is_not(None), func.trim(due_col) != ""]
+        if "archived_at" in {c.name for c in model.__table__.columns}:  # #38
+            conditions.append(model.archived_at.is_(None))
+        rows = sess.execute(
+            select(model.project_id, model.project_number, due_col).where(*conditions)
+        ).all()
+        for project_id, project_number, due_value in rows:
+            if not is_overdue_value(due_value):
+                continue
+            if project_id is not None and project_id in in_scope_ids:
+                at_risk_ids.add(project_id)
+            elif project_number and project_number in in_scope_numbers:
+                at_risk_ids.add(number_to_id[project_number])
+    return {"at_risk": len(at_risk_ids), "scanned_total": int(total)}
 
 
 def _portfolio_summary(reports: list[dict], *,
