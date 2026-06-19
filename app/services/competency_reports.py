@@ -8,11 +8,17 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..config import COMPETENCY_LEVELS
 from ..models import Employee, EmployeeSkillScore, EmployeeSkillSubscore, SkillCategory, User
 from .csv_safe import csv_safe
 from .competency import confidence_band, dimensions_for_category
 
 LOW_SCORE_THRESHOLD = 2.0
+# #51 R4: a "Capable+" cell (assign freely) starts at score 2; a "Mentor" cell
+# (can train others) at score 3. These mirror the growth-ladder decision text in
+# COMPETENCY_LEVELS so the report's positive counts agree with the displayed key.
+INDEPENDENT_THRESHOLD = 2.0
+TEACH_THRESHOLD = 3.0
 CSV_FIELDS = [
     "employee",
     "title",
@@ -163,6 +169,10 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
         prelim_count = 0
         baseline_count = 0
         low_scores = []
+        # #51 R4: surface strengths beside gaps — count Capable+ (assign freely)
+        # and Mentor (can train others) cells, one additive counter per band.
+        independent_count = 0
+        teach_count = 0
         missing_scores = 0
         missing_prelim = 0
         missing_baseline = 0
@@ -186,6 +196,10 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
                 score_count += 1
                 if visible_score < LOW_SCORE_THRESHOLD:
                     low_scores.append({"category": cat.name, "score": visible_score})
+                if visible_score >= INDEPENDENT_THRESHOLD:
+                    independent_count += 1
+                if visible_score >= TEACH_THRESHOLD:
+                    teach_count += 1
             else:
                 missing_scores += 1
             if prelim is not None:
@@ -258,6 +272,9 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
             "baseline_count": baseline_count,
             "missing_baseline_count": missing_baseline,
             "low_scores": low_scores,
+            # #51 R4: positive per-employee counts (Capable+ / Mentor).
+            "independent_count": independent_count,
+            "teach_count": teach_count,
             "status": emp_status,
             "cells": cells,
         }
@@ -303,9 +320,9 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
                 if float(cell["score"]) < LOW_SCORE_THRESHOLD:
                     low_score_cells += 1
                     summary["low_score_count"] += 1
-                if float(cell["score"]) >= 2.0:
+                if float(cell["score"]) >= INDEPENDENT_THRESHOLD:
                     summary["independent_count"] += 1
-                if float(cell["score"]) >= 3.0:
+                if float(cell["score"]) >= TEACH_THRESHOLD:
                     summary["teach_count"] += 1
             if cell["preliminary"] is not None:
                 preliminary_cells += 1
@@ -321,6 +338,9 @@ def competency_report(sess: Session, *, filters: dict | None = None) -> dict:
 
     return {
         "generated_at": datetime.utcnow().isoformat(sep=" "),
+        # #51 R2: ship the growth-ladder key (0 Learning → 3 Mentor + decision
+        # text) so the report can show level WORDS, not bare 0-3 floats.
+        "competency_levels": list(COMPETENCY_LEVELS),
         "filters": {
             "include_untracked": include_untracked,
             "role": role,
