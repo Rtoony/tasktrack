@@ -14,9 +14,31 @@ from flask import Blueprint, jsonify, render_template, request, session
 
 from ..auth import login_required
 from ..db import get_session
+from ..routes.reports import _active_report_section, _visible_report_sections
 from ..services.weekly import weekly_snapshot
 
 bp = Blueprint("weekly", __name__)
+
+
+def _weekly_report_nav() -> dict:
+    """Mirror reports.report_nav_context() for the weekly page.
+
+    /weekly lives in this blueprint, so the reports blueprint's
+    context-processor never reaches it. We import the canonical helpers and
+    build the same nav payload here so Week in Review renders inside the
+    shared report shell with the correct active section highlighted.
+    """
+    active = _active_report_section()
+    sections = _visible_report_sections()
+    active_meta = next(
+        (section for section in sections if section["key"] == active),
+        sections[0],
+    )
+    return {
+        "report_sections": sections,
+        "active_report_section": active,
+        "active_report_meta": active_meta,
+    }
 
 
 def _days_arg() -> int:
@@ -65,4 +87,5 @@ def weekly_page():
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
         is_admin=_is_admin(),
+        **_weekly_report_nav(),
     )
