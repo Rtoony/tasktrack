@@ -188,8 +188,7 @@ def incident_report(sess: Session, *, filters: dict | None = None,
         .order_by(PersonnelIssue.reported_date.desc(), PersonnelIssue.id.desc())
     ).all()
 
-    incidents: list[dict] = []
-    matched = 0
+    matched_rows: list[dict] = []
     for row in rows:
         payload = _incident_payload(row, today=today)
         reported = _parse_dt(payload.get("reported_date"))
@@ -209,28 +208,34 @@ def incident_report(sess: Session, *, filters: dict | None = None,
             continue
         if follow_up_due and not payload["follow_up_due"]:
             continue
-        matched += 1
-        if len(incidents) < limit:
-            incidents.append(payload)
+        matched_rows.append(payload)
 
+    # D1 (mirror intake audit #4): compute EVERY summary aggregate over the FULL
+    # matched set, THEN slice for display. The old code appended only up to `limit`
+    # and summed/counted over that capped list, so open / high-severity / follow-up /
+    # time-loss-minutes all silently undercounted past the limit (e.g. "Time Loss:
+    # 240" when the real total was 900). Risk must never read low.
+    matched = len(matched_rows)
     severity_counts: dict[str, int] = {}
     status_counts: dict[str, int] = {}
     project_counts: dict[str, int] = {}
-    for row in incidents:
+    for row in matched_rows:
         severity_counts[_severity(row) or "Unspecified"] = severity_counts.get(_severity(row) or "Unspecified", 0) + 1
         status_counts[_status(row) or "Unspecified"] = status_counts.get(_status(row) or "Unspecified", 0) + 1
         project = _clean_text(row.get("project_number")) or "Unlinked"
         project_counts[project] = project_counts.get(project, 0) + 1
 
+    incidents = matched_rows[:limit]  # display slice (action_queue + table render below)
+
     summary = {
         "total": len(incidents),
         "matched_count": matched,
         "truncated": matched > len(incidents),
-        "open_count": len([row for row in incidents if not row["is_resolved"]]),
-        "resolved_count": len([row for row in incidents if row["is_resolved"]]),
-        "high_severity_count": len([row for row in incidents if row["is_high_severity"]]),
-        "follow_up_due_count": len([row for row in incidents if row["follow_up_due"]]),
-        "estimated_time_loss_minutes": sum(int(row.get("estimated_time_loss_minutes") or 0) for row in incidents),
+        "open_count": len([row for row in matched_rows if not row["is_resolved"]]),
+        "resolved_count": len([row for row in matched_rows if row["is_resolved"]]),
+        "high_severity_count": len([row for row in matched_rows if row["is_high_severity"]]),
+        "follow_up_due_count": len([row for row in matched_rows if row["follow_up_due"]]),
+        "estimated_time_loss_minutes": sum(int(row.get("estimated_time_loss_minutes") or 0) for row in matched_rows),
         "by_severity": severity_counts,
         "by_status": status_counts,
         "top_projects": sorted(
