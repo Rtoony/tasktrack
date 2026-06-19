@@ -1512,7 +1512,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Competency</h2>
-        <div class="section-subtitle">CAD/GIS competency coverage on a 0-3 growth scale. N/A means the task is not in that person's role; 0 is a training target (Learning), 2 is Capable, and 3 is a Mentor.</div>
+        <div class="section-subtitle">CAD/GIS competency coverage on a 0-3 growth scale. N/A means the task is not in that person's role; 0 is a growth opportunity (Learning), 2 is Capable, and 3 is a Mentor.</div>
       </div>
       <input id="comp-filter" type="text" placeholder="Filter by name…" class="filter-select" style="min-width:180px">
       <select id="comp-role-filter" class="filter-select" onchange="renderMatrix()">
@@ -1704,7 +1704,7 @@
     <div class="filter-bar">
       <div class="section-heading">
         <h2 class="section-title">Capabilities</h2>
-        <div class="section-subtitle">Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.</div>
+        <div class="section-subtitle">Log coaching notes, recognition wins, and growth observations over time so each person's development is visible and supported.</div>
       </div>
       <label class="archived-toggle" title="Show archived items (kept for the record)"><input type="checkbox" id="filter-personnel-archived" onchange="loadTable('personnel')"> Archived</label>
       <label class="archived-toggle" title="Show only follow-up (starred) tasks"><input type="checkbox" id="filter-personnel-followup" onchange="loadTable('personnel')"> ★ Follow-ups</label>
@@ -1719,12 +1719,20 @@
         <option value="">All Impact Levels</option>
         <option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option>
       </select>
+      <select class="filter-select" id="filter-personnel-coaching" onchange="loadTable('personnel')" title="Filter by entry type (incl. Recognition wins)">
+        <option value="">All Types</option>
+        <option value="Coaching">Coaching</option>
+        <option value="Near-miss">Near-miss</option>
+        <option value="Recognition">Recognition (wins)</option>
+        <option value="Process / equipment gap">Process / equipment gap</option>
+      </select>
       <a class="btn btn-sm btn-export" href="/api/v1/personnel_issues/export.csv">CSV</a>
       <button class="btn btn-primary" onclick="openModal('personnel')">+ Add Capability Note</button>
     </div>
     <div class="table-wrap">
       <table><thead><tr>
         <th data-col="person_name" data-table="personnel">Staff Member <span class="sort-arrow">&#9650;</span></th>
+        <th data-col="coaching_type" data-table="personnel">Type <span class="sort-arrow">&#9650;</span></th>
         <th data-col="cad_skill_area" data-table="personnel">CAD Skill Area <span class="sort-arrow">&#9650;</span></th>
         <th data-col="severity" data-table="personnel">Impact <span class="sort-arrow">&#9650;</span></th>
         <th data-col="status" data-table="personnel">Status <span class="sort-arrow">&#9650;</span></th>
@@ -1734,7 +1742,7 @@
       </tr></thead><tbody id="tbody-personnel"></tbody></table>
       <div class="empty-state" id="empty-personnel" style="display:none">
         <div class="empty-title">No capability notes yet</div>
-        <p class="empty-copy">Use this section to document recurring skill gaps, contextual incidents, and recommended follow-up so each person’s CAD development is easier to understand over time. Click <strong>+ Add Capability Note</strong> to start.</p>
+        <p class="empty-copy">Use this section to capture coaching, recognition wins, and growth observations so each person’s CAD development is easy to see and support over time. Click <strong>+ Add Capability Note</strong> to start.</p>
       </div>
     </div>
   </section>
@@ -3661,11 +3669,15 @@ let compSelected = null;
 let compScorecardEmpId = null;
 
 function scoreBandColor(s) {
+  // #51 T2: the growth ladder, not a pass/fail heatmap. 0 and 1 used to be the
+  // app's --danger-light/--warn-light tokens (red/amber) — "Learning" cells read
+  // as "failing." Recolored onto a calm cool->green->blue growth ramp so the color
+  // matches the words (early growth, not error).
   if (s == null || isNaN(s)) return '';
-  if (s >= 3) return '#d0e2ff';
-  if (s >= 2) return '#defbe6';
-  if (s >= 1) return '#fcf4d6';
-  return '#fff1f1';
+  if (s >= 3) return '#cfe5ff';  // Mentor — blue
+  if (s >= 2) return '#d6f5e0';  // Capable — green
+  if (s >= 1) return '#e4f1ec';  // Developing — soft mint
+  return '#eef1f6';              // Learning (training target) — soft cool neutral
 }
 function scoreLabel(s) {
   const n = Number(s);
@@ -3793,6 +3805,24 @@ async function loadCompetency() {
   renderCompetencyDetail();
 }
 
+function compMatrixLegendHtml() {
+  // #51 U1: swatch legend so a cell color is never an unlabeled signal (an unlabeled
+  // cool/green cell could otherwise read as "error"). Colors come straight from
+  // scoreBandColor() so they can never drift from the grid; labels from the canonical
+  // levels (compState.levels), with a hardcoded growth-ladder fallback.
+  const labelFor = sc => {
+    const lv = (compState.levels || []).find(l => Number(l.score) === sc);
+    return lv && lv.label ? lv.label : ['Learning','Developing','Capable','Mentor'][sc];
+  };
+  const swatches = [0,1,2,3].map(sc =>
+    '<span style="display:inline-flex;align-items:center;gap:0.32rem;font-size:0.69rem;color:var(--text-muted)">' +
+    '<span style="width:13px;height:13px;border-radius:3px;border:1px solid var(--border);background:' + scoreBandColor(sc) + '"></span>' +
+    esc(sc + ' · ' + labelFor(sc)) + '</span>').join('');
+  return '<div style="grid-column:1/-1;display:flex;flex-wrap:wrap;gap:0.9rem;align-items:center;padding:0.5rem 0.65rem;border:1px dashed var(--border);border-radius:10px;background:var(--surface)">' +
+    '<span style="font-size:0.64rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);font-weight:700">Growth scale</span>' +
+    swatches +
+    '<span style="font-size:0.66rem;color:var(--text-muted)">N/A = not in this role</span></div>';
+}
 function renderCompetencySummary() {
   const host = document.getElementById('comp-summary');
   if (!host) return;
@@ -3819,9 +3849,9 @@ function renderCompetencySummary() {
     ['CAD/GIS tasks', tasks.length],
     ['Rated cells', rated + ' / ' + total],
     ['Capable+ coverage', pct + '%'],
-    ['Training targets', training],
+    ['Growth opportunities', training],
     ['Mentors', teach],
-  ].map(([label, value]) => '<div style="border:1px solid var(--border);border-radius:12px;padding:0.65rem;background:var(--surface)"><div style="font-size:0.67rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">' + esc(label) + '</div><div style="font-size:1.25rem;font-weight:750;margin-top:0.2rem">' + esc(String(value)) + '</div></div>').join('');
+  ].map(([label, value]) => '<div style="border:1px solid var(--border);border-radius:12px;padding:0.65rem;background:var(--surface)"><div style="font-size:0.67rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted)">' + esc(label) + '</div><div style="font-size:1.25rem;font-weight:750;margin-top:0.2rem">' + esc(String(value)) + '</div></div>').join('') + compMatrixLegendHtml();
 }
 
 function renderMatrix() {
@@ -3879,13 +3909,16 @@ function renderMatrix() {
       const selected = compScorecardEmpId === emp.id;
       const naStyle = 'background:repeating-linear-gradient(135deg, var(--surface-muted), var(--surface-muted) 5px, var(--surface) 5px, var(--surface) 10px); color:var(--text-muted);';
       td.style.cssText = 'text-align:center; padding:0.25rem; border-bottom:1px solid var(--border); cursor:pointer; ' +
-                        (val != null ? 'background:' + scoreBandColor(val) + ';' : naStyle) +
+                        // #51: scoreBandColor returns light pastels, so pin a dark text color on a
+                        // scored cell — else the digit inherits --text (near-white in dark mode) and
+                        // the score is invisible on the pastel. N/A keeps its theme-aware muted text.
+                        (val != null ? 'background:' + scoreBandColor(val) + '; color:#1a2330;' : naStyle) +
                         (selected ? ' outline:2px solid var(--accent); outline-offset:-2px;' : '');
       if (val != null) {
         if (val >= 2) indep += 1;
         if (val >= 3) teach += 1;
         td.innerHTML = '<div style="font-weight:800;font-family:IBM Plex Mono,monospace">' + scoreLabel(val) + '</div>' +
-          (self ? '<div style="font-size:0.56rem;color:var(--text-muted);white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
+          (self ? '<div style="font-size:0.56rem;color:#566372;white-space:nowrap">self ' + scoreLabel(self.score) + '</div>' : '');
       } else {
         td.innerHTML = '<div style="font-size:0.66rem">N/A</div>';
       }
@@ -3972,8 +4005,16 @@ function renderBaselineDraft(d) {
 }
 async function saveBaselineAndNext() {
   const emp = baselineCohort[baselineIdx];
-  const ratings = [...document.querySelectorAll('#baseline-result select[data-cat]')].map(sel =>
-    ({ category_id: Number(sel.dataset.cat), score: sel.value === '' ? null : Number(sel.value) }));
+  // #51 I1: carry the AI's per-category positive note through to save. It was being
+  // dropped here, so every confirmed rating landed with an empty note and the
+  // strengths-first context #51 generates evaporated. Source the note from the
+  // in-memory draft by category_id (the backend interview-save already persists it).
+  const noteByCat = {};
+  ((baselineDraft && baselineDraft.ratings) || []).forEach(r => { noteByCat[Number(r.category_id)] = r.note || ''; });
+  const ratings = [...document.querySelectorAll('#baseline-result select[data-cat]')].map(sel => {
+    const cid = Number(sel.dataset.cat);
+    return { category_id: cid, score: sel.value === '' ? null : Number(sel.value), note: noteByCat[cid] || '' };
+  });
   const trajectory = document.getElementById('baseline-traj') ? document.getElementById('baseline-traj').value : '';
   const res = await api('POST', '/api/v1/skills/interview-save', { employee_id: emp.id, ratings, trajectory });
   if (!res || res.error) { toast(res && res.error ? res.error : 'Save failed'); return; }
@@ -4031,7 +4072,7 @@ function renderEmployeeScorecard() {
       '<div style="display:flex;align-items:center;gap:0.85rem;min-width:min(100%,420px)">' + employeeAvatarHtml(emp, 88) +
         '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
-        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (training target); 2 = Capable; 3 = Mentor.</div></div>' +
+        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (growth opportunity); 2 = Capable; 3 = Mentor.</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
         '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
@@ -5402,6 +5443,11 @@ async function loadTable(table) {
     const categoryFilter = document.getElementById('filter-work-category')?.value || '';
     if (categoryFilter) filtered = filtered.filter(r => r.category === categoryFilter);
   }
+  if (table === 'personnel') {
+    // #51 C1: filter the coaching log by entry type (e.g. just Recognition wins).
+    const ct = document.getElementById('filter-personnel-coaching')?.value || '';
+    if (ct) filtered = filtered.filter(r => (r.coaching_type || '') === ct);
+  }
   if (sourceFilter && table === 'triage') {
     filtered = filtered.filter(r => String(r.source || '').toLowerCase().includes(sourceFilter.toLowerCase()));
   }
@@ -5554,9 +5600,13 @@ async function loadTable(table) {
       tr.appendChild(makeCell(formatTimeAgo(r.created_at),'cell-supporting'));
       tr.appendChild(makeActions(table,r.id,r.title,r));
     } else if (table==='personnel') {
+      // #51 C1: surface coaching_type, and never paint a Recognition WIN with the
+      // red "Impact" severity chip (a win has no severity).
+      const isWin = /recognition/i.test(r.coaching_type || '');
       tr.appendChild(makeCell(formatPersonName(r.person_name),'cell-title'));
+      tr.appendChild(makeCoachingTypeCell(r));
       tr.appendChild(makeCell(r.cad_skill_area,'cell-supporting'));
-      tr.appendChild(makeClickablePriority(table,r,'severity'));
+      tr.appendChild(isWin ? makeCell('—','cell-supporting') : makeClickablePriority(table,r,'severity'));
       tr.appendChild(makeClickableStatus(table,r));
       tr.appendChild(makeDateCell(r.reported_date));
       tr.appendChild(makeDateCell(r.created_at));  // #67 sortable "Added" date
@@ -6088,6 +6138,24 @@ function makeKanbanCard(r) {
 }
 
 function makeCell(text,cls) { const td=document.createElement('td'); if(cls)td.className=cls; td.textContent=text||''; return td; }
+// #51 C1: coaching_type badge for the Capabilities log. A Recognition WIN reads
+// green (it's a positive lever, not an incident); other types read neutral.
+function makeCoachingTypeCell(r) {
+  const td = document.createElement('td');
+  td.className = 'cell-supporting';
+  const t = String(r.coaching_type || '').trim();
+  if (!t) { td.innerHTML = '<span style="color:var(--text-light)">—</span>'; return td; }
+  const isWin = /recognition/i.test(t);
+  const span = document.createElement('span');
+  span.textContent = t;
+  span.style.cssText = 'display:inline-block;padding:0.1rem 0.5rem;border-radius:999px;font-size:0.69rem;font-weight:700;' +
+    (isWin
+      // theme-aware green (the app's --success tokens) so the win badge is legible in BOTH light and dark.
+      ? 'background:color-mix(in srgb, var(--success-light) 40%, var(--surface));color:var(--success);border:1px solid var(--success);'
+      : 'background:rgba(96,165,250,0.10);color:var(--text-muted);border:1px solid var(--border);');
+  td.appendChild(span);
+  return td;
+}
 
 function makeProjectNumberCell(projectNumber, projectId) {
   const td = document.createElement('td');

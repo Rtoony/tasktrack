@@ -448,6 +448,53 @@ def test_multidim_official_baseline_rolls_up_not_collapse(admin_client, temp_app
         assert 0.0 < rollup.score < 3.0
 
 
+def test_preliminary_draft_never_overrides_official_baseline(admin_client, temp_app):
+    # #51 B1 (HIGH): upsert_score writes dimension_slug='manual' for a
+    # preliminary_rating exactly like an explicit manual_override, so a 30-second
+    # Quick-Baseline AI draft was hijacking the category override and stomping a
+    # careful multi-dimension official baseline with its (lower) raw score. A prelim
+    # must NEVER override a demonstrated baseline.
+    from app.services.competency import dimensions_for_category
+
+    with temp_app.app_context():
+        sess = get_session()
+        emp = Employee(display_name="Baseline Wins", role="engineer", competency_tracked=1)
+        cat = SkillCategory(slug="autocad-core", name="AutoCAD Core")
+        sess.add(emp)
+        sess.add(cat)
+        sess.commit()
+        emp_id, cat_id = emp.id, cat.id
+        dims = dimensions_for_category(cat)
+    assert len(dims) >= 2
+
+    # 1) A careful official baseline across real dimensions -> blends to 3.0.
+    r = admin_client.post("/api/v1/skills/task-ratings/bulk", json={
+        "employee_id": emp_id,
+        "source_kind": "official_baseline",
+        "ratings": [
+            {"category_id": cat_id, "dimension_slug": dims[0].slug, "score": 3},
+            {"category_id": cat_id, "dimension_slug": dims[1].slug, "score": 3},
+        ],
+    })
+    assert r.status_code in (200, 201), r.get_json()
+
+    # 2) A LATER 30-second AI draft rates the whole category 0 (preliminary_rating,
+    #    which upsert_score stores as dimension_slug='manual').
+    r = admin_client.post("/api/v1/skills/scores", json={
+        "employee_id": emp_id, "category_id": cat_id,
+        "score": 0, "source_kind": "preliminary_rating",
+    })
+    assert r.status_code in (200, 201), r.get_json()
+
+    # 3) The cached rollup must still reflect the demonstrated baseline, NOT the draft.
+    with temp_app.app_context():
+        rollup = get_session().scalar(
+            select(EmployeeSkillScore).where(EmployeeSkillScore.employee_id == emp_id)
+        )
+        assert rollup is not None
+        assert rollup.score >= 2.0, f"preliminary draft stomped the official baseline: {rollup.score}"
+
+
 def test_matrix_detail_shape(admin_client, temp_app):
     emp_id, cat_id = _seed_pair(temp_app)
     admin_client.post("/api/v1/skills/subscores", json={

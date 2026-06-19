@@ -360,7 +360,7 @@ ADMIN_WORKFLOW_VIEWS = {
     },
     "personnel": {
         "title": "Capabilities",
-        "subtitle": "Record observed CAD capability gaps over time so coaching and training needs are visible and traceable.",
+        "subtitle": "Log coaching notes, recognition wins, and growth observations over time so each person's development is visible and supported.",
     },
     "triage": {
         "title": "Triage",
@@ -572,7 +572,7 @@ BRIDGE_MAP = {
     },
     "work_tasks": {
         "personnel_issues": {
-            "label": "Log a capability gap from this task",
+            "label": "Add a capability note from this task",
             "carry": {
                 "description":    "issue_description",
                 "cad_skill_area": "cad_skill_area",
@@ -587,7 +587,7 @@ BRIDGE_MAP = {
     },
     "project_work_tasks": {
         "personnel_issues": {
-            "label": "Log a capability gap from this task",
+            "label": "Add a capability note from this task",
             "carry": {
                 "task_description": "issue_description",
                 "engineer":         "person_name",
@@ -602,7 +602,7 @@ BRIDGE_MAP = {
     },
     "training_tasks": {
         "personnel_issues": {
-            "label": "Log a capability gap from this training",
+            "label": "Add a capability note from this training",
             "carry": {
                 "trainees":         "person_name",
                 "skill_area":       "cad_skill_area",

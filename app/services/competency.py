@@ -212,7 +212,15 @@ def aggregate_category(sess: Session, employee_id: int, category_id: int) -> dic
     # weighted mean (dim_summaries). The old `or source_kind in (...)` clause caught
     # them too, so max() collapsed a whole multi-dimension category down to one
     # arbitrary dimension's raw score. A real category slug must never override.
-    override_rows = [r for r in observed_rows if r.dimension_slug == "manual"]
+    # #51 B1 (HIGH): also require source_kind=='manual_override'. upsert_score writes
+    # dimension_slug='manual' for a preliminary_rating too, so a 30-second AI draft was
+    # overriding a careful multi-dimension official baseline with its (often lower) raw
+    # score. A prelim must NOT override — it still surfaces as the manual_latest
+    # fallback above when there's no other signal.
+    override_rows = [
+        r for r in observed_rows
+        if r.dimension_slug == "manual" and r.source_kind == "manual_override"
+    ]
     if override_rows:
         latest_override = max(override_rows, key=lambda r: (_parse_dt(r.observed_at) or now, r.id or 0))
         category_score = float(latest_override.score)
