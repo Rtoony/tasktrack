@@ -8,12 +8,11 @@ touching the queries.
 
 Heuristics (documented because reasonable people will second-guess them):
 - "Created this week"   → row.created_at > since
-- "Completed this week" → row.status in done_statuses(table)
-                          AND row.updated_at > since
-                          (or row.completed_at if the table has it).
-                          Approximate — any UPDATE bumps updated_at;
-                          status-transition history lives in activity_log
-                          if you ever need exact dates.
+- "Completed this week" → a logged status_change INTO a done status within the
+                          window (from activity_log; the row must still exist and
+                          still be done). EXACT — W2 replaced the old updated_at
+                          heuristic, which any later edit bumped, so re-touching a
+                          long-done item used to re-list it as completed this week.
 - "Active now"          → row.status NOT in done_statuses(table)
 - "Overdue now"         → active AND past the table's due field.
 
@@ -217,6 +216,64 @@ def _breakdowns_for_rows(rows: list, table: str, done: set, now: datetime,
     return out
 
 
+def _as_dt(value):
+    """Coerce an activity_log timestamp (datetime or ISO string) to a datetime."""
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace(" ", "T"))
+    except (ValueError, TypeError):
+        return None
+
+
+def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
+                         Model, *, user_id: int | None = None,
+                         include_sensitive: bool = False) -> list[dict]:
+    """W2: records that TRANSITIONED into a done status within (since, now], read
+    from the polymorphic activity_log (action='status_change', new_value in `done`).
+
+    Exact, unlike the old updated_at fallback: re-touching a long-completed item
+    (e.g. adding a note) bumps updated_at and used to re-list it as "completed this
+    week," inflating the green headline on the 3 core trackers that have no real
+    completed_at column. One entry per record (latest in-window transition), kept
+    only if the row still exists, is still done (not later reopened), is visible,
+    and isn't archived."""
+    if not done:
+        return []
+    logs = sess.scalars(
+        select(ActivityLog).where(
+            ActivityLog.table_name == table,
+            ActivityLog.action == "status_change",
+        )
+    ).all()
+    latest: dict[int, datetime] = {}
+    for log in logs:
+        ts = _as_dt(log.created_at)
+        if ts is None or ts <= since:
+            continue
+        if (log.new_value or "") not in done:
+            continue
+        prev = latest.get(log.record_id)
+        if prev is None or ts > prev:
+            latest[log.record_id] = ts
+    items = []
+    for rid, when in latest.items():
+        row = sess.get(Model, rid)
+        if row is None or getattr(row, "archived_at", None) is not None:
+            continue
+        if not record_visible_to_user(table, row, user_id):
+            continue
+        if hasattr(row, "status") and row.status not in done:
+            continue  # reopened after the in-window completion — not "completed"
+        items.append({
+            "id": rid,
+            "title": _title_for(row, table, include_sensitive=include_sensitive),
+            "completed_at": when.isoformat(sep=" "),
+        })
+    items.sort(key=lambda d: d["completed_at"], reverse=True)
+    return items
+
+
 def _bucket_for_table(sess: Session, table: str, since: datetime,
                       user_id: int | None = None,
                       include_sensitive: bool = False,
@@ -256,20 +313,18 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
                 "created_at": (ts.isoformat(sep=" ")
                                if isinstance(ts, datetime) else str(ts or "")),
             })
-        # Completed bucket
-        if in_done and _row_was_updated_since(r, since):
-            ts = (getattr(r, "completed_at", None)
-                  or getattr(r, "updated_at", None))
-            items_completed.append({
-                "id": r.id,
-                "title": _title_for(r, table, include_sensitive=include_sensitive),
-                "completed_at": (ts.isoformat(sep=" ")
-                                 if isinstance(ts, datetime) else str(ts or "")),
-            })
+        # (Completed is derived from activity_log after the loop — see W2 below.)
 
-    # Most recent first within each bucket.
+    # Most recent first.
     items_created.sort(key=lambda d: d.get("created_at") or "", reverse=True)
-    items_completed.sort(key=lambda d: d.get("completed_at") or "", reverse=True)
+    # W2: "completed this window" is derived from the activity_log status-change
+    # history (an exact record of when each item became done), NOT from updated_at,
+    # which any later edit bumps — re-touching a months-old done item used to
+    # re-list it as "completed this week" and inflate the headline.
+    items_completed = _completed_in_window(
+        sess, table, since, done, Model,
+        user_id=user_id, include_sensitive=include_sensitive,
+    )
 
     bucket = {
         "table": table,

@@ -64,19 +64,46 @@ def test_created_count_matches_seed(temp_app):
 
 
 def test_completed_count(temp_app):
-    """An UPDATE that sets status to Complete bumps updated_at; the
-    aggregator's heuristic should pick this up."""
+    """W2: 'completed this window' is derived from the activity_log status-change
+    history. A row that transitioned to a done status in-window (with a logged
+    status_change, as every API write produces) is counted."""
     with temp_app.app_context():
         sess = get_session()
         row = WorkTask(title="Old task", status="In Progress")
         sess.add(row)
-        sess.commit()
-        # Mark it complete inside the window.
+        sess.flush()
         row.status = "Complete"
-        row.updated_at = datetime.now(tz=UTC).replace(tzinfo=None)
+        sess.add(ActivityLog(
+            table_name="work_tasks", record_id=row.id, action="status_change",
+            field_name="status", old_value="In Progress", new_value="Complete",
+        ))
         sess.commit()
         snap = weekly_snapshot(sess, days=7)
     assert snap["buckets"]["work_tasks"]["completed"] == 1
+
+
+def test_completed_excludes_old_done_item_edited_in_window(temp_app):
+    """W2 regression: a long-completed item merely EDITED inside the window (which
+    bumps updated_at) must NOT re-list as 'completed this week'. The old updated_at
+    heuristic re-counted it and inflated the headline; the activity_log derivation
+    doesn't, because the done-transition was logged before the window."""
+    with temp_app.app_context():
+        sess = get_session()
+        row = WorkTask(title="Long done", status="Complete")
+        sess.add(row)
+        sess.flush()
+        # Completion happened 60 days ago — outside the 7-day window.
+        sess.add(ActivityLog(
+            table_name="work_tasks", record_id=row.id, action="status_change",
+            field_name="status", old_value="In Progress", new_value="Complete",
+            created_at=datetime.now(tz=UTC).replace(tzinfo=None) - timedelta(days=60),
+        ))
+        sess.commit()
+        # A later in-window edit bumps updated_at (the old false-positive trigger).
+        row.updated_at = datetime.now(tz=UTC).replace(tzinfo=None)
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7)
+    assert snap["buckets"]["work_tasks"]["completed"] == 0
 
 
 def test_active_excludes_done(temp_app):
