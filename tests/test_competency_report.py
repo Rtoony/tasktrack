@@ -107,6 +107,25 @@ def test_competency_report_json_html_csv(admin_client, temp_app):
     assert "needs training" in csv_text
 
 
+def test_competency_report_cell_status_chip_colors(admin_client, temp_app):
+    # #51 review Bug-1 regression guard. The per-cell status chip must key off the
+    # actual _cell_status vocabulary ('missing_*' / 'low_score' / 'complete'), NOT
+    # 'needs_*' (that's the EMPLOYEE-level status — a different field). A wrong
+    # substring made every coverage-gap cell render neutral instead of amber,
+    # silently dropping the "chase this missing review" signal. No existing test
+    # asserted chip class, so it shipped green. This one discriminates.
+    import re
+    _seed_competency_report(admin_client, temp_app)
+    page = admin_client.get("/reports/competency").get_data(as_text=True)
+    # A coverage-gap cell (Report Missing has no scores) must wear the amber 'warn'
+    # chip — the bug rendered it neutral.
+    assert re.search(r'<span class="chip warn">[^<]*missing[^<]*</span>', page), \
+        "missing_* cell status lost its amber 'warn' chip (the 'needs' vs 'missing' bug)"
+    # #51 R1/T1: never danger-red on a competency surface (avg chip or cell status).
+    assert 'class="chip danger"' not in page
+    assert 'summary-value danger' not in page
+
+
 def test_competency_report_filters(admin_client, temp_app):
     _seed_competency_report(admin_client, temp_app)
 
