@@ -10,13 +10,13 @@ from flask import Blueprint, Response, jsonify, render_template, request, sessio
 from sqlalchemy import func, or_, select
 
 from ..auth import admin_required, login_required
+from ..config import COMPETENCY_LEVELS
 from ..db import get_session
 from ..models import (
     CalendarEvent,
     PersonnelIssue,
     ReportPreset,
 )
-from ..config import COMPETENCY_LEVELS
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
