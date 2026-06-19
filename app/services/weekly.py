@@ -27,7 +27,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import ALLOWED_TABLES
-from ..models import ActivityLog
+from ..models import (
+    ActivityLog,
+    Employee,
+    EmployeeSkillScore,
+    SkillCategory,
+)
 from .tickets import (
     TABLE_MODELS,
     done_statuses_for_table,
@@ -229,6 +234,30 @@ def _record_url(table: str, rid) -> str:
     return f"/?tab={slug}&record={rid}" if slug and rid is not None else ""
 
 
+# W5: calendar event types whose `start_at` is itself the deadline. A
+# `deadline`/`task_due` event whose start has passed is genuinely overdue —
+# but `overdue_field_for_table` only knows due_at/follow_up_date/due_date
+# (none of which CalendarEvent has), so without this set those events would
+# read as benign "active" forever. Plain meetings/prep/reminders are NOT in
+# this set: a meeting that already happened isn't "overdue," it's just past.
+CALENDAR_OVERDUE_EVENT_TYPES = {"deadline", "task_due"}
+
+
+def _row_is_overdue(table: str, row, due_field: str | None) -> bool:
+    """Whether an active row is past its deadline.
+
+    For most tables this is the table's standard due field. CalendarEvent has
+    no due field — for `deadline`/`task_due` events its `start_at` IS the
+    deadline, so compare that via the same is_overdue_value used everywhere
+    else. Keeps Weekly's "overdue now" in step with the live agenda. Scoped to
+    those two event types only so past meetings/prep don't go red (W5)."""
+    if table == "calendar_events":
+        if getattr(row, "event_type", None) in CALENDAR_OVERDUE_EVENT_TYPES:
+            return is_overdue_value(getattr(row, "start_at", None))
+        return False
+    return bool(due_field) and is_overdue_value(getattr(row, due_field, None))
+
+
 def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
                          Model, *, user_id: int | None = None,
                          include_sensitive: bool = False) -> list[dict]:
@@ -314,7 +343,9 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
         in_done = r.status in done if hasattr(r, "status") else False
         if not in_done:
             active += 1
-            if due_field and is_overdue_value(getattr(r, due_field, None)):
+            # W5: calendar deadline/task_due events use start_at as their
+            # deadline; every other table uses its standard due field.
+            if _row_is_overdue(table, r, due_field):
                 overdue_now += 1
         # Created bucket — pull the appropriate timestamp attr
         # (created_at on most tables; reported_date on personnel_issues).
@@ -360,6 +391,41 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
     return bucket
 
 
+def _resolve_score_row_names(sess: Session, score_ids: set[int]) -> dict[int, dict]:
+    """W7: batch-resolve EmployeeSkillScore.id -> {employee, category} display
+    names so the admin block reads "Jane Doe · Grading: 2 → 3" instead of the
+    unidentifiable "Score row #418". Three small indexed queries total (the
+    score rows, then their employees and categories), not one per change. Rows
+    that can't be resolved (e.g. a since-deleted score) simply get no names and
+    fall back to the raw id in the template."""
+    if not score_ids:
+        return {}
+    scores = sess.scalars(
+        select(EmployeeSkillScore).where(EmployeeSkillScore.id.in_(score_ids))
+    ).all()
+    employee_ids = {s.employee_id for s in scores}
+    category_ids = {s.category_id for s in scores}
+    emp_names = {
+        e.id: e.display_name
+        for e in sess.scalars(
+            select(Employee).where(Employee.id.in_(employee_ids))
+        ).all()
+    } if employee_ids else {}
+    cat_names = {
+        c.id: c.name
+        for c in sess.scalars(
+            select(SkillCategory).where(SkillCategory.id.in_(category_ids))
+        ).all()
+    } if category_ids else {}
+    return {
+        s.id: {
+            "employee": emp_names.get(s.employee_id),
+            "category": cat_names.get(s.category_id),
+        }
+        for s in scores
+    }
+
+
 def _skill_score_changes(sess: Session, since: datetime) -> list[dict]:
     """Pulled from the polymorphic activity_log keyed by
     `employee_skill_scores`. Joins back to Employee + SkillCategory for
@@ -369,7 +435,7 @@ def _skill_score_changes(sess: Session, since: datetime) -> list[dict]:
             ActivityLog.table_name == "employee_skill_scores",
         )
     ).all()
-    out = []
+    in_window = []
     for row in rows:
         ts = row.created_at
         if isinstance(ts, datetime):
@@ -383,12 +449,23 @@ def _skill_score_changes(sess: Session, since: datetime) -> list[dict]:
                     continue
             except (ValueError, TypeError):
                 continue
-        # record_id on the activity_log is the EmployeeSkillScore.id,
-        # which doesn't directly tell us employee/category — but the
-        # field_name + old/new captures the score change. Score row
-        # lookup adds a query; keep it simple and just show raw change.
+        in_window.append((row, ts))
+
+    # W7: record_id on the activity_log is the EmployeeSkillScore.id. Batch-
+    # resolve the in-window ids to employee + category names up front (a handful
+    # of indexed queries) so each change line is identifiable and drillable,
+    # rather than an opaque "Score row #418".
+    names_by_score = _resolve_score_row_names(
+        sess, {row.record_id for row, _ in in_window}
+    )
+
+    out = []
+    for row, ts in in_window:
+        names = names_by_score.get(row.record_id, {})
         out.append({
             "score_row_id": row.record_id,
+            "employee_name": names.get("employee"),
+            "category_name": names.get("category"),
             "action": row.action,
             "field": row.field_name,
             "old": row.old_value,

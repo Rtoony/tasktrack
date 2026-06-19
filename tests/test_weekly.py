@@ -258,6 +258,59 @@ def test_weekly_calendar_past_meetings_are_not_overdue(temp_app):
     assert cal["overdue_now"] == 0
 
 
+def test_weekly_calendar_past_deadline_is_overdue(temp_app):
+    """W5: a `deadline` calendar event whose start_at has passed must count as
+    overdue_now — its start_at IS the deadline, even though CalendarEvent has no
+    due_date/due_at field. (overdue_field_for_table returns None for calendar.)"""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(CalendarEvent(
+            title="Permit submittal due",
+            event_type="deadline",
+            start_at=(datetime.now(tz=UTC) - timedelta(days=2)).replace(tzinfo=None).isoformat(timespec="minutes"),
+            status="scheduled",
+            created_by_user_id=1,
+        ))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, user_id=1)
+    cal = snap["buckets"]["calendar_events"]
+    assert cal["active_now"] == 1
+    assert cal["overdue_now"] == 1
+    assert snap["totals"]["overdue_now"] >= 1
+
+
+def test_weekly_calendar_task_due_past_is_overdue_but_meeting_is_not(temp_app):
+    """W5 scoping: a past `task_due` event is overdue, but a past `meeting`
+    (same window) is not — only deadline/task_due event types are deadlines."""
+    past = (datetime.now(tz=UTC) - timedelta(days=1)).replace(tzinfo=None).isoformat(timespec="minutes")
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(CalendarEvent(title="Deliverable due", event_type="task_due",
+                               start_at=past, status="scheduled", created_by_user_id=1))
+        sess.add(CalendarEvent(title="Past standup", event_type="meeting",
+                               start_at=past, status="scheduled", created_by_user_id=1))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, user_id=1)
+    cal = snap["buckets"]["calendar_events"]
+    assert cal["active_now"] == 2
+    assert cal["overdue_now"] == 1  # only the task_due event
+
+
+def test_weekly_calendar_done_deadline_not_overdue(temp_app):
+    """A past deadline that's already marked done/cancelled is not active, so
+    not overdue — overdue is an active-only headline."""
+    past = (datetime.now(tz=UTC) - timedelta(days=3)).replace(tzinfo=None).isoformat(timespec="minutes")
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(CalendarEvent(title="Closed deadline", event_type="deadline",
+                               start_at=past, status="done", created_by_user_id=1))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7, user_id=1)
+    cal = snap["buckets"]["calendar_events"]
+    assert cal["active_now"] == 0
+    assert cal["overdue_now"] == 0
+
+
 def test_weekly_hides_private_calendar_events_from_other_users(temp_app):
     with temp_app.app_context():
         sess = get_session()
@@ -313,6 +366,49 @@ def test_skill_score_changes_only_when_include_admin(temp_app):
     assert "skill_score_changes" not in non_admin
     assert "skill_score_changes" in admin
     assert len(admin["skill_score_changes"]) >= 1
+
+
+def test_skill_score_changes_resolve_employee_and_category_names(temp_app):
+    """W7: each change carries the resolved Employee.display_name +
+    SkillCategory.name so the admin block reads "Jane Doe · Grading: 2 → 3"
+    instead of the opaque "Score row #418"."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(Employee(display_name="Jane Doe"))
+        sess.add(SkillCategory(slug="grading", name="Grading"))
+        sess.commit()
+        score = EmployeeSkillScore(employee_id=1, category_id=1, score=3.0)
+        sess.add(score)
+        sess.flush()
+        sess.add(ActivityLog(
+            table_name="employee_skill_scores", record_id=score.id,
+            action="score_set", field_name="score", old_value="2", new_value="3",
+        ))
+        sess.commit()
+        admin = weekly_snapshot(sess, days=7, include_admin=True)
+    change = admin["skill_score_changes"][0]
+    assert change["employee_name"] == "Jane Doe"
+    assert change["category_name"] == "Grading"
+    assert change["old"] == "2"
+    assert change["new"] == "3"
+
+
+def test_skill_score_changes_fallback_when_score_row_deleted(temp_app):
+    """W7 robustness: if the underlying score row is gone (so names can't be
+    resolved), the change still renders — names are None, not an error, and the
+    template falls back to the raw row id."""
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(ActivityLog(
+            table_name="employee_skill_scores", record_id=99999,
+            action="score_set", field_name="score", old_value="1", new_value="4",
+        ))
+        sess.commit()
+        admin = weekly_snapshot(sess, days=7, include_admin=True)
+    change = admin["skill_score_changes"][0]
+    assert change["score_row_id"] == 99999
+    assert change["employee_name"] is None
+    assert change["category_name"] is None
 
 
 # ── Route layer ──────────────────────────────────────────────────────────
