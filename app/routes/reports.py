@@ -16,16 +16,9 @@ from ..models import (
     InboxItem,
     PersonnelIssue,
     Project,
-    ProjectWorkTask,
     ReportPreset,
-    TrainingTask,
-    WorkTask,
 )
-from ..services.tickets import (
-    done_statuses_for_table,
-    is_overdue_value,
-    overdue_field_for_table,
-)
+from ..services.tickets import done_statuses_for_table
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
@@ -42,6 +35,7 @@ from ..services.project_reports import (
     MAX_PORTFOLIO_LIMIT,
     meeting_packet_batch_report,
     meeting_packet_report,
+    portfolio_attention_totals,
     portfolio_project_report,
     project_status_report,
 )
@@ -709,19 +703,6 @@ def _parse_event_start(raw) -> datetime | None:
         return None
 
 
-# Overdue-bearing linked tables for the cheap hub at-risk count. Calendar
-# events are intentionally excluded — _overdue_item() in project_reports never
-# treats a calendar event as an overdue linked item, so neither do we. Each
-# entry is (model, due_field). The due field matches overdue_field_for_table()'s
-# precedence for that table's columns.
-_AT_RISK_TABLES = (
-    (ProjectWorkTask, "due_at"),
-    (WorkTask, "due_date"),
-    (TrainingTask, "due_date"),
-    (PersonnelIssue, "follow_up_date"),
-)
-
-
 def _hub_action_counts(sess, is_admin: bool) -> dict:
     """Cheap, direct counts for the 4 hub "what needs me today" tiles.
 
@@ -781,54 +762,15 @@ def _hub_action_counts(sess, is_admin: bool) -> dict:
             )
         ) or 0
 
-    # At-risk projects — ACTIVE projects with >=1 OVERDUE linked item. A project
-    # is at_risk per _project_management_brief iff it has an overdue linked item;
-    # an overdue linked item (per _overdue_item) is an OPEN, non-archived row in an
-    # overdue-bearing linked table whose due field is_overdue_value()==True.
-    #
-    # Cheap approach: pull only (project_id, project_number, status, due, archived)
-    # for candidate rows, resolve overdue in Python (is_overdue_value parses ISO
-    # text the same way), and collect the distinct ACTIVE projects touched. No
-    # per-project report, no workspace payload, no activity log. A linked row maps
-    # to a project by FK id OR human project_number, matching linked_rows().
-    active_ids = set(sess.scalars(select(Project.id).where(Project.active == 1)).all())
-    active_numbers = {
-        num for num in sess.scalars(
-            select(Project.project_number).where(Project.active == 1)
-        ).all() if num
-    }
-    # number -> id, so a row linked only by number still maps to one project.
-    number_to_id = dict(sess.execute(
-        select(Project.project_number, Project.id).where(Project.active == 1)
-    ).all())
-
-    at_risk_project_ids: set[int] = set()
-    for model, due_field in _AT_RISK_TABLES:
-        table = model.__tablename__
-        done = done_statuses_for_table(table)
-        rows = sess.execute(
-            select(
-                model.project_id,
-                model.project_number,
-                model.status,
-                getattr(model, due_field),
-            ).where(model.archived_at.is_(None))
-        ).all()
-        for project_id, project_number, status, due_value in rows:
-            if (status or "") in done:
-                continue
-            if not is_overdue_value(due_value):
-                continue
-            resolved_id = None
-            if project_id is not None and project_id in active_ids:
-                resolved_id = project_id
-            elif project_number and project_number in active_numbers:
-                resolved_id = number_to_id.get(project_number)
-            if resolved_id is not None:
-                at_risk_project_ids.add(resolved_id)
+    # At-risk projects — reuse the canonical full-set computation
+    # (portfolio_attention_totals) so the hub tile is GUARANTEED identical to the
+    # Portfolio page's at-risk count, not a second implementation that could drift.
+    # It's a handful of EXISTS aggregates (cost independent of project count); empty
+    # filters = the whole active set.
+    at_risk_projects = portfolio_attention_totals(sess, {})["at_risk"]
 
     return {
-        "at_risk_projects": len(at_risk_project_ids),
+        "at_risk_projects": int(at_risk_projects),
         "intake_to_review": int(intake_to_review),
         "upcoming_meetings": int(upcoming_meetings),
         "open_incidents": open_incidents,
