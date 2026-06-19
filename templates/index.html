@@ -1541,6 +1541,14 @@
     </div>
     <div id="map-host" style="height:calc(100vh - 220px); min-height:420px; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; position:relative;">
       <div id="map" style="height:100%; width:100%;"></div>
+      <!-- #54: on-map legend so the pins are self-explanatory (no hunting the filter dropdown).
+           Built from PIN_COLOR/STATUS_COLOR in JS — one source of truth. Collapsible, dark-consistent. -->
+      <div id="map-legend" aria-label="Map legend" style="position:absolute;left:10px;bottom:10px;z-index:1000;background:var(--surface,#18212b);color:var(--text,#ecf2f8);border:1px solid var(--border,#2a3441);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,0.35);font:0.72rem 'IBM Plex Sans',sans-serif;max-width:208px;overflow:hidden">
+        <button type="button" id="map-legend-toggle" aria-expanded="true" title="Show or hide the legend" style="display:flex;align-items:center;gap:0.4rem;width:100%;background:transparent;color:var(--text,#ecf2f8);border:none;padding:0.38rem 0.6rem;font:600 0.72rem 'IBM Plex Sans',sans-serif;cursor:pointer">
+          <span aria-hidden="true" style="font-size:0.62rem;color:var(--accent,#38bdf8)">&#9679;</span><span style="flex:1;text-align:left">Legend</span><span id="map-legend-caret" aria-hidden="true">&#9662;</span>
+        </button>
+        <div id="map-legend-body" style="padding:0 0.6rem 0.55rem"></div>
+      </div>
     </div>
   </section>
 
@@ -4447,6 +4455,69 @@ const PIN_COLOR = {
   pink:   '#ec4899',
 };
 
+// #54 legend: pin_color -> human label (mirrors the artifact filter dropdown).
+// Drives the on-map legend so it can never drift from PIN_COLOR.
+const PIN_LEGEND = [
+  ['yellow', 'Project form'],
+  ['green',  'Topo on file'],
+  ['red',    'Archived PDF'],
+  ['blue',   'Archived + survey'],
+  ['pink',   'Stray legacy'],
+];
+let mapLegendReady = false;
+
+function renderMapLegend() {
+  const body = document.getElementById('map-legend-body');
+  if (!body) return;
+  const muted = 'var(--text-muted,#9ca7b4)';
+  const head = (t) => '<div style="font-weight:600;color:var(--text,#ecf2f8);margin-top:0.5rem">' + t + '</div>';
+  const row = (swatch, label) => '<div style="display:flex;align-items:center;gap:0.45rem;margin-top:0.26rem">' +
+    swatch + '<span style="color:' + muted + '">' + label + '</span></div>';
+  const dot = (c) => '<span style="display:inline-block;width:0.7rem;height:0.7rem;border-radius:50%;flex:none;background:' + c + ';box-shadow:0 0 0 1px rgba(0,0,0,0.25)"></span>';
+  const ring = (c) => '<span style="display:inline-block;width:0.7rem;height:0.7rem;border-radius:50%;flex:none;background:transparent;border:2px solid ' + c + '"></span>';
+  let html = head('Pin color (artifact)').replace('margin-top:0.5rem', 'margin-top:0.15rem');
+  PIN_LEGEND.forEach(([k, label]) => { html += row(dot(PIN_COLOR[k]), label); });
+  html += head('Status (outline)');
+  html += row(ring(STATUS_COLOR.active), 'Active');
+  html += row(ring(STATUS_COLOR.dormant), 'Dormant');
+  html += '<div id="map-legend-areas" style="display:none">' +
+    row('<span style="display:inline-block;width:0.7rem;height:0.7rem;border-radius:2px;flex:none;background:' + STATUS_COLOR.active + ';opacity:0.4"></span>', 'Project area (3+ sites)') +
+    '</div>';
+  html += row('<span style="display:inline-flex;align-items:center;justify-content:center;width:1.15rem;height:1.15rem;border-radius:50%;flex:none;background:#3b82f6;color:#fff;font-size:0.6rem;font-weight:700">9</span>', 'Cluster — zoom to expand');
+  body.innerHTML = html;
+  syncMapLegendAreas();
+}
+
+// The "project area" row only makes sense when hulls are drawn; mirror the toggle.
+function syncMapLegendAreas() {
+  const a = document.getElementById('map-legend-areas');
+  if (a) a.style.display = mapShowAreasValue() ? 'block' : 'none';
+}
+
+function initMapLegend() {
+  if (mapLegendReady) return;
+  const btn = document.getElementById('map-legend-toggle');
+  const body = document.getElementById('map-legend-body');
+  const caret = document.getElementById('map-legend-caret');
+  if (!btn || !body) return;
+  renderMapLegend();
+  const KEY = 'tt_map_legend_collapsed';
+  const setState = (collapsed) => {
+    body.style.display = collapsed ? 'none' : 'block';
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    if (caret) caret.textContent = collapsed ? '▸' : '▾';
+  };
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  setState(collapsed);
+  btn.addEventListener('click', () => {
+    collapsed = !collapsed;
+    setState(collapsed);
+    try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) {}
+  });
+  mapLegendReady = true;
+}
+
 function mapStatusFilterValue()    { return document.getElementById('map-show-dormant')?.checked ? '' : 'active'; }
 function mapComponentFilterValue() { return document.getElementById('map-component-filter')?.value || ''; }
 function mapPinColorFilterValue()  { return document.getElementById('map-pin-color-filter')?.value || ''; }
@@ -4471,6 +4542,7 @@ function openProjectReportForNumber(projectNumber) {
 }
 
 function updateMapCountDisplay() {
+  syncMapLegendAreas();  // #54: keep the legend's area row in sync with the toggle
   const countEl = document.getElementById('map-count');
   if (!countEl) return;
   if (!mapLastPinCount) { countEl.textContent = ''; return; }
@@ -4770,7 +4842,7 @@ function clearMapProjectFocus() {
 
 function initOrRefreshMap() {
   normalizeMapProjectNumberInput();
-  if (mapInstance) { setTimeout(() => mapInstance.invalidateSize(), 50); reloadMap(true); return; }
+  if (mapInstance) { initMapLegend(); setTimeout(() => mapInstance.invalidateSize(), 50); reloadMap(true); return; }
   if (!window.L) return; // Leaflet failed to load; map-empty will show
   // Finer zoom granularity for dense project areas (e.g. SF Bay has
   // ~4,700 pins). Default delta=1, snap=1, wheel=60. Half-step delta on
@@ -4787,6 +4859,7 @@ function initOrRefreshMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
   }).addTo(mapInstance);
   populateMapComponentFilter();
+  initMapLegend();  // #54: on-map color key, built once from PIN_COLOR/STATUS_COLOR
   reloadMap(true);
 }
 
@@ -9086,7 +9159,29 @@ async function loadAttachments(table, recordId) {
         if (r.status === 401) { window.location='/login'; return; }
         loadAttachments(table, recordId);
       });
-      li.appendChild(link); li.appendChild(meta); li.appendChild(del);
+      li.appendChild(link); li.appendChild(meta);
+      // #55: send a screenshot/PDF straight to the reMarkable tablet. Only
+      // offered for types the device can render (image/pdf); the rest have no
+      // faithful on-tablet form. Neutral accent styling — it's not a delete.
+      if (a.preview_kind === 'image' || a.preview_kind === 'pdf') {
+        const rm = document.createElement('button');
+        rm.type='button'; rm.className='att-del'; rm.textContent='↗ reMarkable';
+        rm.title='Send this file to your reMarkable tablet';
+        rm.style.cssText='color:var(--accent);border-color:var(--border)';
+        rm.addEventListener('click', async () => {
+          rm.disabled = true; const orig = rm.textContent; rm.textContent = 'Sending…';
+          try {
+            const r = await fetch('/api/v1/attachments/' + a.id + '/remarkable', {method:'POST', headers:{'X-CSRF-Token': CSRF_TOKEN}});
+            if (r.status === 401) { window.location='/login'; return; }
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok) toast(body.error || ('reMarkable send failed (' + r.status + ').'));
+            else toast('Sent to reMarkable › ' + (body.folder || 'tablet'));
+          } catch (e) { toast('reMarkable send failed — check your connection.'); }
+          finally { rm.disabled = false; rm.textContent = orig; }
+        });
+        li.appendChild(rm);
+      }
+      li.appendChild(del);
       list.appendChild(li);
     });
     panel.appendChild(list);
