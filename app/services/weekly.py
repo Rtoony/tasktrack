@@ -210,6 +210,25 @@ def _as_dt(value):
         return None
 
 
+# W3: map each weekly tracker table to its SPA tab slug so a weekly row can deep-link
+# straight to the record. The SPA's ?record= parser (templates/index.html) opens the
+# drawer for /?tab=<slug>&record=<id>.
+WEEKLY_TABLE_TO_TAB = {
+    "work_tasks": "work",
+    "project_work_tasks": "project",
+    "training_tasks": "training",
+    "personnel_issues": "personnel",
+    "personal_items": "personal",
+    "inbox_items": "triage",
+    "calendar_events": "calendar",
+}
+
+
+def _record_url(table: str, rid) -> str:
+    slug = WEEKLY_TABLE_TO_TAB.get(table)
+    return f"/?tab={slug}&record={rid}" if slug and rid is not None else ""
+
+
 def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
                          Model, *, user_id: int | None = None,
                          include_sensitive: bool = False) -> list[dict]:
@@ -264,6 +283,7 @@ def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
             "id": rid,
             "title": _title_for(row, table, include_sensitive=include_sensitive),
             "completed_at": when.isoformat(sep=" "),
+            "url": _record_url(table, rid),  # W3 drill-in
         })
     items.sort(key=lambda d: d["completed_at"], reverse=True)
     return items
@@ -307,6 +327,7 @@ def _bucket_for_table(sess: Session, table: str, since: datetime,
                 "status": getattr(r, "status", None),
                 "created_at": (ts.isoformat(sep=" ")
                                if isinstance(ts, datetime) else str(ts or "")),
+                "url": _record_url(table, r.id),  # W3 drill-in
             })
         # (Completed is derived from activity_log after the loop — see W2 below.)
 

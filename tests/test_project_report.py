@@ -1014,3 +1014,83 @@ def test_reports_home_quick_actions_use_managed_options(auth_client):
     assert "Custom Daily Link" in html
     assert "/reports/custom-daily" in html
     assert "Open Incidents" not in html
+
+
+def test_reports_home_renders_live_action_tiles(auth_client):
+    """H1: the hub shows 4 live "what needs me today" deep-link tiles (no
+    vanity preset counts), with the incidents tile gated to admins."""
+    # Non-admin (session seeded as user id=1 by the fixture): 3 tiles, no
+    # incidents deep-link, no vanity metric grid.
+    html = auth_client.get("/reports").get_data(as_text=True)
+    assert "/reports/projects?attention_level=at_risk" in html
+    assert "/intake/review?needs_review=1" in html
+    assert "/reports/meetings?days=14" in html
+    assert "At-risk projects" in html
+    assert "Intake to review" in html
+    assert "Upcoming meetings" in html
+    # The vanity preset-count metric grid is gone (replaced by live action tiles).
+    assert 'class="metric-grid"' not in html
+    assert 'class="metric-card"' not in html
+    assert "review/export paths" not in html
+    assert 'class="action-grid"' in html
+    # Incidents tile is admin-only.
+    assert "/reports/incidents?open_only=1" not in html
+    assert "Open incidents" not in html
+
+    # Same client, switch to an admin session -> the 4th tile appears.
+    with auth_client.session_transaction() as s:
+        s["user_id"] = 2
+        s["user_name"] = "Admin User"
+        s["user_role"] = "admin"
+    admin_html = auth_client.get("/reports").get_data(as_text=True)
+    assert "/reports/incidents?open_only=1" in admin_html
+    assert "Open incidents" in admin_html
+
+
+def test_reports_home_at_risk_tile_counts_overdue_project(auth_client, temp_app):
+    """H1: the at-risk tile count reflects ACTIVE projects with an overdue,
+    open, non-archived linked item (the report's at_risk definition)."""
+    past = (datetime.now() - timedelta(days=4)).isoformat(timespec="seconds")
+    future = (datetime.now() + timedelta(days=20)).isoformat(timespec="seconds")
+    with temp_app.app_context():
+        sess = get_session()
+        at_risk = Project(project_number="9001.00", name="Overdue proj", active=1)
+        clean = Project(project_number="9002.00", name="Future proj", active=1)
+        sess.add_all([at_risk, clean])
+        sess.flush()
+        # Overdue, open project task -> at_risk.
+        sess.add(ProjectWorkTask(
+            project_id=at_risk.id, project_number=at_risk.project_number,
+            title="overdue", status="Not Started", due_at=past,
+        ))
+        # Future due -> not at risk.
+        sess.add(ProjectWorkTask(
+            project_id=clean.id, project_number=clean.project_number,
+            title="future", status="Not Started", due_at=future,
+        ))
+        sess.commit()
+
+    html = auth_client.get("/reports").get_data(as_text=True)
+    # Exactly one active project is at risk; the danger value renders as "1".
+    assert '<div class="action-value danger">1</div>' in html
+
+
+def test_weekly_joined_report_family_shell(auth_client):
+    """W1: /weekly now renders inside the shared report shell — the sidebar
+    partial (report-side-nav) is present and links the canonical sections, with
+    Week in Review marked active."""
+    from app.routes.reports import REPORT_SECTIONS
+
+    html = auth_client.get("/weekly").get_data(as_text=True)
+    assert "report-shell.css" in html
+    # Shared sidebar partial markup (not the old detached chrome).
+    assert "report-side-nav" in html
+    # A canonical REPORT_SECTIONS title proves the shared nav is rendered.
+    titles = {s["title"] for s in REPORT_SECTIONS}
+    assert "Week in Review" in titles
+    assert any(title in html for title in titles)
+    # The weekly section is the active one in the shell nav.
+    assert 'href="/weekly" class="active"' in html
+    # Existing weekly content is preserved.
+    assert "Week in Review" in html
+    assert "Created" in html and "Overdue now" in html

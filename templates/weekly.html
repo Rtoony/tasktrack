@@ -9,7 +9,7 @@
   :root {
     --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37;
     --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480;
-    --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+    --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
     --radius:6px;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -54,6 +54,8 @@
   ul.items li:last-child { border-bottom:none; }
   ul.items .when { color:var(--text-dim); font-size:0.72rem; font-family:'IBM Plex Mono', monospace; white-space:nowrap; }
   .empty { color:var(--text-dim); font-size:0.78rem; font-style:italic; padding:0.4rem 0; }
+  .weekly-row-link { color:inherit; text-decoration:none; }
+  .weekly-row-link:hover { color:var(--accent); text-decoration:underline; }
 
   /* Incidents block */
   .incident-row { display:grid; grid-template-columns:auto 1fr auto auto; gap:0.7rem; padding:0.45rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; align-items:baseline; }
@@ -67,7 +69,7 @@
   .desc { color:var(--text-muted); }
 
   .admin-only { border-left:3px solid var(--accent); }
-  .admin-badge { display:inline-block; padding:0.05rem 0.4rem; border-radius:3px; background:rgba(96,165,250,0.15); color:var(--accent); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
+  .admin-badge { display:inline-block; padding:0.05rem 0.4rem; border-radius:3px; background:rgba(56,189,248,0.15); color:var(--accent); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
 
   /* Status / assignee / age rollup grid (?breakdown=1) */
   .rollup { margin-top:0.9rem; padding-top:0.8rem; border-top:1px solid var(--border); display:grid; grid-template-columns:repeat(3, 1fr); gap:0.9rem; }
@@ -80,7 +82,11 @@
   ul.dist .v { color:var(--text); font-variant-numeric:tabular-nums; font-weight:500; }
   .toggle-link { color:var(--accent); text-decoration:none; font-size:0.78rem; margin-left:0.9rem; }
   .toggle-link:hover { text-decoration:underline; }
+  @media print {
+    header,.day-form,.toggle-link { display:none !important; }
+  }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -88,13 +94,18 @@
     <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Week in Review</span></div>
     <nav class="nav">
       <a href="/">Dashboard</a>
-      <a href="/reports">Reports</a>
+      <a href="/reports">Report Center</a>
+      <a href="/reports/today">Today Brief</a>
+      <a href="/reports/projects">Portfolio</a>
       {% if is_admin %}<a href="/admin">Admin</a>{% endif %}
       <a href="/logout">Sign out</a>
     </nav>
   </div>
 </header>
 
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <h1>Week in Review</h1>
   <div class="range">
@@ -171,7 +182,7 @@
         <ul class="items">
           {% for item in b.items_created %}
           <li>
-            <span>{{ item.title }}</span>
+            <span>{% if item.url %}<a class="weekly-row-link" href="{{ item.url }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</span>
             <span class="when">{{ (item.created_at or '')[:10] }}</span>
           </li>
           {% endfor %}
@@ -186,7 +197,7 @@
         <ul class="items">
           {% for item in b.items_completed %}
           <li>
-            <span>{{ item.title }}</span>
+            <span>{% if item.url %}<a class="weekly-row-link" href="{{ item.url }}">{{ item.title }}</a>{% else %}{{ item.title }}{% endif %}</span>
             <span class="when">{{ (item.completed_at or '')[:10] }}</span>
           </li>
           {% endfor %}
@@ -271,5 +282,7 @@
     Completion timestamps approximate (uses updated_at on tables without a completed_at column).
   </p>
 </main>
+  </div>
+</div>
 </body>
 </html>

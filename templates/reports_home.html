@@ -10,7 +10,7 @@
     --bg:#11161d; --surface:#18212b; --surface-soft:#1f2a37;
     --border:#2a3441; --border-light:#222c38;
     --text:#ecf2f8; --text-muted:#9ca7b4; --text-light:#6b7480;
-    --accent:#60a5fa; --accent-hover:#3b82f6; --accent-light:rgba(96,165,250,0.14);
+    --accent:#38bdf8; --accent-hover:#0ea5e9; --accent-light:rgba(56,189,248,0.14);
     --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
     --shadow-sm:0 1px 2px rgba(0,0,0,0.4); --shadow-md:0 12px 30px rgba(0,0,0,0.5);
     --radius:10px; --radius-lg:16px;
@@ -33,7 +33,7 @@
   .side-nav { padding:0.5rem; display:grid; gap:0.25rem; }
   .side-nav a { display:block; padding:0.72rem 0.85rem; border-radius:9px; text-decoration:none; color:var(--text-muted); border:1px solid transparent; }
   .side-nav a:hover { color:var(--text); background:var(--surface-soft); }
-  .side-nav a.primary { color:var(--accent); background:var(--accent-light); border-color:rgba(96,165,250,0.4); }
+  .side-nav a.primary { color:var(--accent); background:var(--accent-light); border-color:rgba(56,189,248,0.4); }
   .nav-title { display:block; font-size:0.88rem; font-weight:650; }
   .nav-copy { display:block; margin-top:0.12rem; font-size:0.72rem; line-height:1.3; }
   .sidebar-foot { padding:0.85rem 1rem 1rem; border-top:1px solid var(--border-light); font-size:0.74rem; color:var(--text-muted); }
@@ -57,9 +57,9 @@
   .btn:hover { background:var(--accent-hover); }
   .btn.secondary { background:var(--surface-soft); color:var(--text-muted); border-color:var(--border); }
   .btn.secondary:hover { color:var(--accent); border-color:var(--accent); background:var(--surface); }
-  .btn.ghost { background:transparent; color:var(--accent); border-color:rgba(96,165,250,0.4); }
+  .btn.ghost { background:transparent; color:var(--accent); border-color:rgba(56,189,248,0.4); }
   input { width:100%; padding:0.48rem 0.6rem; background:var(--surface-soft); border:1px solid var(--border); color:var(--text); border-radius:var(--radius); font:inherit; }
-  input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(96,165,250,0.25); }
+  input:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px rgba(56,189,248,0.25); }
   label { display:block; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; font-size:0.66rem; font-weight:700; margin:0 0 0.25rem; }
   .lookup-row { display:grid; grid-template-columns:1fr auto; gap:0.55rem; align-items:end; }
   .quick-row { display:grid; grid-template-columns:1fr auto; gap:0.65rem; align-items:center; border-top:1px solid var(--border-light); padding:0.65rem 0 0; margin-top:0.65rem; }
@@ -77,7 +77,18 @@
   @media (max-width:1200px) { .metric-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .grid { grid-template-columns:1fr; } }
   @media (max-width:900px) { .header-inner { padding:0.7rem 1rem; min-height:auto; align-items:flex-start; flex-direction:column; } .nav { justify-content:flex-start; } .console-frame { grid-template-columns:1fr; padding:1rem; } .sidebar { position:relative; top:auto; } .side-nav { grid-template-columns:repeat(2,minmax(0,1fr)); } .lookup-row,.event,.quick-row { grid-template-columns:1fr; } }
   @media (max-width:640px) { .metric-grid,.side-nav { grid-template-columns:1fr; } .hero { display:block; } .hero-actions { justify-content:flex-start; margin-top:0.8rem; } }
+  /* H1: live "what needs me today" action tiles (replaces vanity preset counts). */
+  .action-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0.8rem; margin-bottom:1rem; }
+  .action-tile { display:block; text-decoration:none; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:0.9rem; box-shadow:var(--shadow-sm); transition:border-color 0.12s, background 0.12s; }
+  .action-tile:hover { border-color:var(--accent); background:var(--surface-soft); }
+  .action-label { color:var(--text-muted); font-size:0.7rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; }
+  .action-value { font-size:1.7rem; font-weight:750; letter-spacing:-0.04em; margin-top:0.2rem; line-height:1; }
+  .action-value.danger { color:var(--danger); }
+  .action-copy { color:var(--text-muted); font-size:0.74rem; margin-top:0.25rem; }
+  @media (max-width:1200px) { .action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+  @media (max-width:640px) { .action-grid { grid-template-columns:1fr; } }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header class="header">
@@ -95,23 +106,11 @@
 </header>
 
 <div class="console-frame">
-  <aside class="sidebar" aria-label="Report sections">
-    <div class="sidebar-head">
-      <div class="sidebar-title">Report Console</div>
-      <div class="sidebar-subtitle">Fast paths, packets, presets, and exports.</div>
-    </div>
-    <nav class="side-nav">
-      <a class="primary" href="#launchpad"><span class="nav-title">Overview</span><span class="nav-copy">Quick actions and daily paths.</span></a>
-      <a href="#management"><span class="nav-title">Management</span><span class="nav-copy">Print-ready combined packet.</span></a>
-      <a href="#project-one"><span class="nav-title">Single Project</span><span class="nav-copy">Focused one-pager lookup.</span></a>
-      <a href="#portfolio"><span class="nav-title">Portfolio</span><span class="nav-copy">Saved portfolio packets.</span></a>
-      <a href="#intake"><span class="nav-title">Intake</span><span class="nav-copy">Source review and CSV.</span></a>
-      <a href="#weekly"><span class="nav-title">Weekly</span><span class="nav-copy">Review windows and JSON.</span></a>
-      <a href="#meetings"><span class="nav-title">Meetings</span><span class="nav-copy">Upcoming packet batch.</span></a>
-      {% if user_role == 'admin' %}<a href="#admin-reports"><span class="nav-title">Admin Reports</span><span class="nav-copy">Incidents and competency.</span></a>{% endif %}
-    </nav>
-    <div class="sidebar-foot">Individual report pages keep their print-first layouts; this console is the navigation and preset hub.</div>
-  </aside>
+  {# H2: render the shared sidebar from REPORT_SECTIONS (injected by the reports
+     blueprint context-processor) so the hub nav can no longer drift from the
+     canonical section list — every report page, including Triage Outcomes and
+     Week in Review, is always present and linked. #}
+  {% include "partials/report_sidebar.html" %}
 
   <main class="main">
     <div class="hero">
@@ -127,14 +126,32 @@
       </div>
     </div>
 
-    <section class="metric-grid" aria-label="Report preset counts">
-      <div class="metric-card"><div class="metric-label">Portfolio</div><div class="metric-value">{{ presets|length }}</div><div class="metric-copy">saved presets</div></div>
-      <div class="metric-card"><div class="metric-label">Management</div><div class="metric-value">{{ management_presets|length }}</div><div class="metric-copy">saved presets</div></div>
-      <div class="metric-card"><div class="metric-label">Meetings</div><div class="metric-value">{{ meeting_presets|length }}</div><div class="metric-copy">saved presets</div></div>
-      {% if user_role == 'admin' %}<div class="metric-card"><div class="metric-label">Incidents</div><div class="metric-value">{{ incident_presets|length }}</div><div class="metric-copy">admin presets</div></div>{% endif %}
-      {% if user_role == 'admin' %}<div class="metric-card"><div class="metric-label">Competency</div><div class="metric-value">{{ competency_presets|length }}</div><div class="metric-copy">admin presets</div></div>{% endif %}
-      {% if user_role != 'admin' %}<div class="metric-card"><div class="metric-label">Intake</div><div class="metric-value">4</div><div class="metric-copy">review/export paths</div></div>{% endif %}
-      {% if user_role != 'admin' %}<div class="metric-card"><div class="metric-label">Weekly</div><div class="metric-value">3</div><div class="metric-copy">review windows</div></div>{% endif %}
+    {# H1: live "what needs me today" signal tiles. Each deep-links to the report
+       view filtered to that exact queue. Counts come from _hub_action_counts()
+       (cheap direct queries — no portfolio/today-brief packet build). #}
+    <section class="action-grid" aria-label="What needs attention today">
+      <a class="action-tile" href="/reports/projects?attention_level=at_risk">
+        <div class="action-label">At-risk projects</div>
+        <div class="action-value{% if action_counts.at_risk_projects %} danger{% endif %}">{{ action_counts.at_risk_projects }}</div>
+        <div class="action-copy">Active projects with an overdue linked item.</div>
+      </a>
+      <a class="action-tile" href="/intake/review?needs_review=1">
+        <div class="action-label">Intake to review</div>
+        <div class="action-value{% if action_counts.intake_to_review %} danger{% endif %}">{{ action_counts.intake_to_review }}</div>
+        <div class="action-copy">Inbox captures awaiting assignment.</div>
+      </a>
+      <a class="action-tile" href="/reports/meetings?days=14">
+        <div class="action-label">Upcoming meetings</div>
+        <div class="action-value">{{ action_counts.upcoming_meetings }}</div>
+        <div class="action-copy">Calendar events in the next 14 days.</div>
+      </a>
+      {% if user_role == 'admin' %}
+      <a class="action-tile" href="/reports/incidents?open_only=1">
+        <div class="action-label">Open incidents</div>
+        <div class="action-value{% if action_counts.open_incidents %} danger{% endif %}">{{ action_counts.open_incidents }}</div>
+        <div class="action-copy">Unresolved capability/incident reports.</div>
+      </a>
+      {% endif %}
     </section>
 
     <section class="card" id="launchpad">

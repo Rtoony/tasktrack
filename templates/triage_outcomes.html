@@ -38,19 +38,30 @@
   .empty { color:var(--text-dim); font-style:italic; }
   .hi { color:var(--good); }
   .lo { color:var(--warn); }
+  @media print {
+    header,form.filters,.btn { display:none !important; }
+    body { background:#fff; color:#111827; }
+    .card,.stat { background:#fff; border-color:#d1d5db; box-shadow:none; }
+    .stat-value { color:#111827; }
+  }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
   <div class="head-inner">
     <div class="brand">{{ brand_name }}<span>/triage-outcomes</span></div>
     <nav class="nav">
-      <a href="/reports">Reports</a>
+      <a href="/">Dashboard</a>
+      <a href="/reports">Report Center</a>
       <a href="/reports/intake">Intake</a>
-      <a href="/">App</a>
+      <a href="/logout">Sign out</a>
     </nav>
   </div>
 </header>
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <h1>Triage Outcomes</h1>
   <p class="sub">How well each suggestion source (deterministic
@@ -65,6 +76,7 @@
       <div><label>Limit</label><input type="number" name="limit" min="1" max="5000" value="{{ packet.filters.limit }}"></div>
       <button class="btn" type="submit">Apply</button>
       <a class="btn secondary" href="/api/v1/reports/triage-outcomes.csv?days={{ packet.filters.days }}&limit={{ packet.filters.limit }}">Download CSV</a>
+      <button class="btn secondary" type="button" onclick="window.print()">Print</button>
     </form>
     <p class="meta" style="color:var(--text-dim);font-size:0.74rem;margin-top:0.6rem;">
       Generated {{ packet.generated_at }} · {{ packet.summary.considered }} assigned items considered
@@ -131,5 +143,7 @@
     {% else %}<p class="empty">No data yet.</p>{% endif %}
   </div>
 </main>
+  </div>
+</div>
 </body>
 </html>

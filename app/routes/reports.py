@@ -4,14 +4,18 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Blueprint, Response, jsonify, render_template, request, session
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import ReportPreset
+from ..models import (
+    CalendarEvent,
+    PersonnelIssue,
+    ReportPreset,
+)
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
@@ -28,9 +32,11 @@ from ..services.project_reports import (
     MAX_PORTFOLIO_LIMIT,
     meeting_packet_batch_report,
     meeting_packet_report,
+    portfolio_attention_totals,
     portfolio_project_report,
     project_status_report,
 )
+from ..services.tickets import done_statuses_for_table
 from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
 bp = Blueprint("reports", __name__)
@@ -49,6 +55,12 @@ REPORT_SECTIONS = [
         "title": "Today Brief",
         "subtitle": "Daily operator packet.",
         "href": "/reports/today",
+    },
+    {
+        "key": "weekly",
+        "title": "Week in Review",
+        "subtitle": "Recent activity, overdue, and rollups.",
+        "href": "/weekly",
     },
     {
         "key": "management",
@@ -129,6 +141,8 @@ def _active_report_section() -> str:
         return "management"
     if path == "/reports/today":
         return "today"
+    if path == "/weekly":
+        return "weekly"
     if path == "/reports/intake":
         return "intake"
     if path == "/reports/triage-outcomes":
@@ -676,6 +690,91 @@ def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict,
     }, None
 
 
+def _parse_event_start(raw) -> datetime | None:
+    """Parse a calendar start_at ISO string. Mirrors project_reports._parse_dt
+    so the hub's meeting window matches the meetings report exactly."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw).replace(" ", "T"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _hub_action_counts(sess, is_admin: bool) -> dict:
+    """Cheap, direct counts for the 4 hub "what needs me today" tiles.
+
+    Deliberately avoids _today_brief_packet / the portfolio builder (which
+    re-run the full per-project report twice plus meetings and intake). Each
+    count is a narrow query that mirrors the definition the matching report
+    surface uses, so the tile number matches the page it deep-links to.
+    """
+    now = datetime.now()
+
+    # Intake to review — drive this from the SAME report the tile deep-links to
+    # (/intake/review uses intake_source_report: the web-form/paper-form/remarkable-ocr
+    # sources over a 30-day window). A raw all-time InboxItem count diverged both ways
+    # (it includes the 'manual' source and >30-day items, and ignores the other 4
+    # intake tables), so the tile number wouldn't match the page it opens.
+    intake_to_review = int(
+        (intake_source_report(sess, needs_review=1).get("summary") or {}).get("needs_review_count") or 0
+    )
+
+    # Upcoming meetings — visible, non-archived, open calendar events whose start
+    # falls in the next 14 days. Mirrors meeting_packet_batch_report's window and
+    # done-status / archived / private filters (hub is not user-scoped, so private
+    # events are excluded just like the default report view).
+    done_cal = tuple(done_statuses_for_table("calendar_events"))
+    window_end = now + timedelta(days=14)
+    upcoming_meetings = 0
+    cal_rows = sess.scalars(
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.archived_at.is_(None),
+            CalendarEvent.status.notin_(done_cal),
+            CalendarEvent.visibility != "private",
+        )
+    ).all()
+    for row in cal_rows:
+        start = _parse_event_start(row.start_at)
+        if start is None:
+            continue
+        if row.all_day:
+            if now.date() <= start.date() <= window_end.date():
+                upcoming_meetings += 1
+        elif now <= start <= window_end:
+            upcoming_meetings += 1
+
+    # Open incidents — admin only. PersonnelIssue rows that are not resolved
+    # (status not in done-statuses) and not archived. Mirrors incident_report's
+    # open_only definition.
+    open_incidents = None
+    if is_admin:
+        done_pi = tuple(done_statuses_for_table("personnel_issues"))
+        open_incidents = sess.scalar(
+            select(func.count())
+            .select_from(PersonnelIssue)
+            .where(
+                PersonnelIssue.archived_at.is_(None),
+                PersonnelIssue.status.notin_(done_pi),
+            )
+        ) or 0
+
+    # At-risk projects — reuse the canonical full-set computation
+    # (portfolio_attention_totals) so the hub tile is GUARANTEED identical to the
+    # Portfolio page's at-risk count, not a second implementation that could drift.
+    # It's a handful of EXISTS aggregates (cost independent of project count); empty
+    # filters = the whole active set.
+    at_risk_projects = portfolio_attention_totals(sess, {})["at_risk"]
+
+    return {
+        "at_risk_projects": int(at_risk_projects),
+        "intake_to_review": int(intake_to_review),
+        "upcoming_meetings": int(upcoming_meetings),
+        "open_incidents": open_incidents,
+    }
+
+
 @bp.route("/reports", methods=["GET"])
 @login_required
 def reports_home():
@@ -700,6 +799,7 @@ def reports_home():
             "incidents", user_id=session.get("user_id"), is_admin=True,
         )).all()
     quick_actions = _managed_links(sess, REPORT_QUICK_ACTION_SET_KEY, is_admin=is_admin)
+    action_counts = _hub_action_counts(sess, is_admin)
     sess.commit()
     return render_template(
         "reports_home.html",
@@ -709,6 +809,7 @@ def reports_home():
         incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
         competency_presets=[_preset_to_dict(row, include_filters=False) for row in competency_presets],
         quick_actions=quick_actions,
+        action_counts=action_counts,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )
