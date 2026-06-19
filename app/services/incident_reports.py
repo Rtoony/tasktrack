@@ -104,6 +104,9 @@ def _incident_payload(row: PersonnelIssue, *, today: date) -> dict:
     payload["is_resolved"] = _is_resolved(payload)
     payload["is_high_severity"] = _is_high(payload)
     payload["follow_up_due"] = _is_follow_up_due(payload, today)
+    # B2: created_at/reported_date are SQLite CURRENT_TIMESTAMP = UTC; window in UTC.
+    # `today` is utcnow().date() and reported.date() is the UTC-stored date, so both
+    # sides are UTC — fixes the evening off-by-one (was 0, now 1). Keep max(0,...) guard.
     payload["days_open"] = max(0, (today - reported.date()).days) if reported and not payload["is_resolved"] else 0
     payload["reported_at"] = payload.get("reported_date") or ""
     payload["project_report_url"] = (
@@ -169,7 +172,8 @@ def incident_report(sess: Session, *, filters: dict | None = None,
                     now: datetime | None = None) -> dict:
     """Build an admin-only incident report from personnel_issues."""
     filters = dict(filters or {})
-    now = now or datetime.now()
+    # B2: created_at/reported_date are SQLite CURRENT_TIMESTAMP = UTC; window in UTC.
+    now = now or datetime.utcnow()
     today = now.date()
     limit = _clean_limit(filters.get("limit"))
     q = _clean_text(filters.get("q"))
@@ -256,6 +260,7 @@ def incident_report(sess: Session, *, filters: dict | None = None,
         "limit": limit,
     }
     return {
+        # B2: display label derived from the UTC `now` for a single-tz payload (see incident window).
         "generated_at": now.isoformat(timespec="seconds"),
         "filters": safe_filters,
         "summary": summary,
@@ -270,9 +275,11 @@ def incident_detail_report(sess: Session, *, incident_id: int,
     row = sess.get(PersonnelIssue, incident_id)
     if row is None:
         return None
-    now = now or datetime.now()
+    # B2: created_at/reported_date are SQLite CURRENT_TIMESTAMP = UTC; window in UTC.
+    now = now or datetime.utcnow()
     incident = _incident_payload(row, today=now.date())
     return {
+        # B2: display label derived from the UTC `now` for a single-tz payload (see incident window).
         "generated_at": now.isoformat(timespec="seconds"),
         "incident": incident,
         "project_report_url": incident.get("project_report_url") or "",

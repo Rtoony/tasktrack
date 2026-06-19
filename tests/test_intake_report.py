@@ -1,6 +1,9 @@
 """Intake source report tests."""
+from datetime import datetime, timedelta
+
 from app.db import get_session
 from app.models import WorkTask
+from app.services.intake_reports import intake_source_report
 
 PROJECT_WORK_OCR = """FORM_ID: TT-PROJECT-WORK-REQUEST
 TARGET_TABLE: project_work_tasks
@@ -22,6 +25,40 @@ def _create_ocr_item(client):
     return r.get_json()["created"]
 
 
+
+
+def test_intake_window_edge_uses_utc_not_local(temp_app):
+    # B2 regression: created_at is stored by SQLite CURRENT_TIMESTAMP in UTC, so the
+    # trailing `days` window MUST be measured from datetime.utcnow(), not the local
+    # datetime.now(). On a PDT (UTC-7) server those differ by ~7h, so a row sitting a
+    # few minutes inside the UTC edge could be wrongly dropped (or a stale row kept)
+    # when the window is built off local now(). Anchor the seeded created_at values to
+    # the same UTC frame the code uses and assert the boundary holds within minutes.
+    days = 7
+    now_utc = datetime.utcnow()
+    inside = now_utc - timedelta(days=days) + timedelta(minutes=5)   # just inside
+    outside = now_utc - timedelta(days=days) - timedelta(minutes=5)  # just outside
+
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(WorkTask(
+            title="Inside UTC window", source="paper-form", status="Not Started",
+            priority="Medium", needs_review=0, created_at=inside,
+        ))
+        sess.add(WorkTask(
+            title="Outside UTC window", source="paper-form", status="Not Started",
+            priority="Medium", needs_review=0, created_at=outside,
+        ))
+        sess.commit()
+
+        packet = intake_source_report(sess, sources=["paper-form"], days=days, limit=100)
+        titles = {row["title"] for row in packet["rows"]}
+        assert "Inside UTC window" in titles
+        assert "Outside UTC window" not in titles
+        # generated_at is a UTC ISO label (single-tz payload, matches the UTC window).
+        # It parses and is within a minute of utcnow() — i.e. NOT the ~7h-skewed local.
+        gen = datetime.fromisoformat(packet["generated_at"])
+        assert abs((gen - datetime.utcnow()).total_seconds()) < 120
 
 
 def test_intake_source_report_defaults_include_web_forms(auth_client):
