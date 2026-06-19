@@ -165,7 +165,7 @@
     <div class="summary-card"><div class="summary-label">Open</div><div class="summary-value">{{ packet.summary.open_count }}</div></div>
     <div class="summary-card"><div class="summary-label">High Severity</div><div class="summary-value{% if packet.summary.high_severity_count %} danger{% endif %}">{{ packet.summary.high_severity_count }}</div></div>
     <div class="summary-card"><div class="summary-label">Follow-Up Due</div><div class="summary-value{% if packet.summary.follow_up_due_count %} danger{% endif %}">{{ packet.summary.follow_up_due_count }}</div></div>
-    <div class="summary-card"><div class="summary-label">Time Loss</div><div class="summary-value">{{ packet.summary.estimated_time_loss_minutes }}</div></div>
+    <div class="summary-card"><div class="summary-label">Time Loss (min)</div><div class="summary-value">{{ packet.summary.estimated_time_loss_minutes }}</div></div>
   </section>
 
 

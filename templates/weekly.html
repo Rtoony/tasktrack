@@ -113,6 +113,27 @@
     {% endif %}
   </div>
 
+  {# W4: a one-line interpretive summary so a fresh install / calm week reads as
+     "quiet", not broken — instead of 4 zero cards over 7 "nothing... nothing" buckets. #}
+  {% set _lists = snapshot.buckets|length %}
+  {% set _t = snapshot.totals %}
+  <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1.15rem;">
+    {# Only call it "nothing tracked" when EVERY headline is zero — a stale backlog
+       (0 created/completed but N overdue) must not read as a quiet week. #}
+    {% if _t.created or _t.completed or _t.active_now or _t.overdue_now %}
+      <strong style="color:var(--text);">This week:</strong>
+      {{ _t.created }} created, {{ _t.completed }} completed &middot;
+      {{ _t.active_now }} active now,
+      <span style="color:{{ 'var(--danger)' if _t.overdue_now else 'inherit' }};">{{ _t.overdue_now }} overdue now</span>
+      across {{ _lists }} list{{ '' if _lists == 1 else 's' }}.
+    {% else %}
+      <strong style="color:var(--text);">Nothing tracked yet &mdash;</strong> no items created, completed, active, or overdue in the last
+      {{ snapshot.days }} days. Widen to
+      <a href="/weekly?days=14{% if show_breakdown %}&amp;breakdown=1{% endif %}" style="color:var(--accent);">14 days</a> &middot;
+      <a href="/weekly?days=30{% if show_breakdown %}&amp;breakdown=1{% endif %}" style="color:var(--accent);">30 days</a>.
+    {% endif %}
+  </p>
+
   <section class="totals">
     <div class="stat created">
       <div class="stat-label">Created</div>

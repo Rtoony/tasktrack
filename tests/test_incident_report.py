@@ -96,6 +96,37 @@ def test_incident_report_admin_json_html_csv(admin_client, temp_app):
     assert "Resolved plotting issue" not in text
 
 
+def test_incident_summary_counts_full_set_not_display_cap(admin_client, temp_app):
+    # D1 regression: summary aggregates (open / high-severity / follow-up / time-loss)
+    # must count the FULL matched set, not the display-capped list. The old code sliced
+    # to `limit` first, so past the cap "Time Loss: 20" could really be 40 — understated
+    # risk on an admin surface. No test exercised the over-limit path, so it shipped.
+    yesterday = datetime.now() - timedelta(days=1)
+    with temp_app.app_context():
+        sess = get_session()
+        for i in range(4):
+            sess.add(PersonnelIssue(
+                person_name=f"Emp {i}",
+                issue_description=f"Incident {i}",
+                severity="High",
+                status="Observed",
+                reported_date=yesterday,
+                estimated_time_loss_minutes=10,
+            ))
+        sess.commit()
+
+    body = admin_client.get("/api/v1/reports/incidents?open_only=1&limit=2").get_json()
+    # Display is capped at 2...
+    assert body["summary"]["total"] == 2
+    assert len(body["incidents"]) == 2
+    assert body["summary"]["truncated"] is True
+    # ...but the risk aggregates must count all 4 (the bug returned 2 / 20).
+    assert body["summary"]["matched_count"] == 4
+    assert body["summary"]["open_count"] == 4
+    assert body["summary"]["high_severity_count"] == 4
+    assert body["summary"]["estimated_time_loss_minutes"] == 40
+
+
 def test_incident_report_filters(admin_client, temp_app):
     with temp_app.app_context():
         _seed_incidents(get_session())

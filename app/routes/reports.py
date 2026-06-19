@@ -617,10 +617,15 @@ def _management_context(sess):
 def _management_action_summary(*, at_risk: dict, meetings: dict, intake: dict, incidents: dict | None) -> list[dict]:
     """Return the packet's top management talking points from visible data."""
     items: list[dict] = []
-    action_projects = (at_risk.get("summary") or {}).get("action_projects") or []
+    at_risk_summary = at_risk.get("summary") or {}
+    action_projects = at_risk_summary.get("action_projects") or []
     if action_projects:
         first = action_projects[0]
-        title = f"{len(action_projects)} at-risk project{'s' if len(action_projects) != 1 else ''}"
+        # B1: action_projects is display-capped at [:8]; the true at-risk count lives
+        # alongside it as attention_project_count. The headline must report the real
+        # number — it was silently reading "8" whenever >=8 projects were at risk.
+        at_risk_count = int(at_risk_summary.get("attention_project_count") or len(action_projects))
+        title = f"{at_risk_count} at-risk project{'s' if at_risk_count != 1 else ''}"
         detail = first.get("primary_action") or first.get("headline") or "Review project action queue."
         if first.get("project_number"):
             detail = f"{first.get('project_number')}: {detail}"

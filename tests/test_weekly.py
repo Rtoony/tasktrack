@@ -64,19 +64,88 @@ def test_created_count_matches_seed(temp_app):
 
 
 def test_completed_count(temp_app):
-    """An UPDATE that sets status to Complete bumps updated_at; the
-    aggregator's heuristic should pick this up."""
+    """W2: 'completed this window' is derived from the activity_log status-change
+    history. A row that transitioned to a done status in-window (with a logged
+    status_change, as every API write produces) is counted."""
     with temp_app.app_context():
         sess = get_session()
         row = WorkTask(title="Old task", status="In Progress")
         sess.add(row)
-        sess.commit()
-        # Mark it complete inside the window.
+        sess.flush()
         row.status = "Complete"
-        row.updated_at = datetime.now(tz=UTC).replace(tzinfo=None)
+        sess.add(ActivityLog(
+            table_name="work_tasks", record_id=row.id, action="status_change",
+            field_name="status", old_value="In Progress", new_value="Complete",
+        ))
         sess.commit()
         snap = weekly_snapshot(sess, days=7)
     assert snap["buckets"]["work_tasks"]["completed"] == 1
+
+
+def test_completed_excludes_old_done_item_edited_in_window(temp_app):
+    """W2 regression: a long-completed item merely EDITED inside the window (which
+    bumps updated_at) must NOT re-list as 'completed this week'. The old updated_at
+    heuristic re-counted it and inflated the headline; the activity_log derivation
+    doesn't, because the done-transition was logged before the window."""
+    with temp_app.app_context():
+        sess = get_session()
+        row = WorkTask(title="Long done", status="Complete")
+        sess.add(row)
+        sess.flush()
+        # Completion happened 60 days ago — outside the 7-day window.
+        sess.add(ActivityLog(
+            table_name="work_tasks", record_id=row.id, action="status_change",
+            field_name="status", old_value="In Progress", new_value="Complete",
+            created_at=datetime.now(tz=UTC).replace(tzinfo=None) - timedelta(days=60),
+        ))
+        sess.commit()
+        # A later in-window edit bumps updated_at (the old false-positive trigger).
+        row.updated_at = datetime.now(tz=UTC).replace(tzinfo=None)
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7)
+    assert snap["buckets"]["work_tasks"]["completed"] == 0
+
+
+def test_completed_counts_inbox_auto_file_and_promote(temp_app):
+    """W2 must-fix (review): inbox auto-file and promote archive an item ("Archived"
+    is a done status for inbox_items) but log action='auto_filed'/'promoted', NOT
+    'status_change'. Those in-window completions must still count, else the headline
+    silently under-reports inbox work (the opposite-direction undercount)."""
+    from app.models import InboxItem
+    with temp_app.app_context():
+        sess = get_session()
+        filed = InboxItem(title="auto-filed item", status="Archived")
+        promoted = InboxItem(title="promoted item", status="Archived")
+        sess.add_all([filed, promoted])
+        sess.flush()
+        sess.add(ActivityLog(table_name="inbox_items", record_id=filed.id,
+                             action="auto_filed", field_name="", new_value="-> work_tasks #5"))
+        sess.add(ActivityLog(table_name="inbox_items", record_id=promoted.id,
+                             action="promoted", field_name="", new_value="-> project_work_tasks #6"))
+        sess.commit()
+        snap = weekly_snapshot(sess, days=7)
+    assert snap["buckets"]["inbox_items"]["completed"] == 2
+
+
+def test_weekly_summary_not_quiet_with_overdue_backlog(auth_client, temp_app):
+    """W4 must-fix (review): a stale backlog (0 created/completed this window, but
+    overdue work) must NOT render the quiet-week message — it would contradict the
+    red Overdue-now card directly below. The summary keys on active/overdue too."""
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    long_ago = datetime.now(tz=UTC).replace(tzinfo=None) - timedelta(days=60)
+    with temp_app.app_context():
+        sess = get_session()
+        t = WorkTask(title="old overdue", status="In Progress", due_date=yesterday)
+        sess.add(t)
+        sess.flush()
+        t.created_at = long_ago  # created OUTSIDE the 7-day window -> created_this_window = 0
+        sess.commit()
+        # Sanity: this row is an active overdue item with no in-window create/complete.
+        snap = weekly_snapshot(get_session(), days=7)
+        assert snap["totals"]["overdue_now"] >= 1
+        assert snap["totals"]["created"] == 0 and snap["totals"]["completed"] == 0
+    page = auth_client.get("/weekly?days=7").get_data(as_text=True)
+    assert "Nothing tracked yet" not in page
 
 
 def test_active_excludes_done(temp_app):
