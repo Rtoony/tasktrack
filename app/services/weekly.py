@@ -79,22 +79,6 @@ BUCKET_LABELS = {
 ITEM_LIMIT = 50
 
 
-def _row_was_updated_since(row, since: datetime) -> bool:
-    """True if the row's `updated_at` (or `completed_at` if present) is
-    newer than `since`. Handles strings and datetimes."""
-    for attr in ("completed_at", "updated_at"):
-        val = getattr(row, attr, None)
-        if not val:
-            continue
-        if isinstance(val, datetime):
-            return val > since
-        try:
-            return datetime.fromisoformat(str(val).replace(" ", "T")) > since
-        except (ValueError, TypeError):
-            continue
-    return False
-
-
 def _row_created_since(row, since: datetime) -> bool:
     """True if the row's creation timestamp is newer than `since`.
     personnel_issues uses `reported_date` instead of `created_at` — try
@@ -240,10 +224,17 @@ def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
     and isn't archived."""
     if not done:
         return []
+    # Inbox auto-file (inbox.py auto_filed) and promote (promoted) archive the item
+    # — "Archived" is a done status for inbox_items — but log those action names, NOT
+    # "status_change". Count them as done-transitions too, else in-window inbox
+    # completions silently vanish from the headline (an opposite-direction undercount
+    # the old updated_at path didn't have). The "row still done" guard below confirms
+    # the archive stuck.
+    DONE_TRANSITION_ACTIONS = ("auto_filed", "promoted")
     logs = sess.scalars(
         select(ActivityLog).where(
             ActivityLog.table_name == table,
-            ActivityLog.action == "status_change",
+            ActivityLog.action.in_(("status_change", *DONE_TRANSITION_ACTIONS)),
         )
     ).all()
     latest: dict[int, datetime] = {}
@@ -251,7 +242,11 @@ def _completed_in_window(sess: Session, table: str, since: datetime, done: set,
         ts = _as_dt(log.created_at)
         if ts is None or ts <= since:
             continue
-        if (log.new_value or "") not in done:
+        action = log.action or ""
+        if action == "status_change":
+            if (log.new_value or "") not in done:
+                continue  # an edit to a non-done status, or a non-status field
+        elif action not in DONE_TRANSITION_ACTIONS:
             continue
         prev = latest.get(log.record_id)
         if prev is None or ts > prev:
