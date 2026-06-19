@@ -113,6 +113,22 @@
     {% endif %}
   </div>
 
+  {# W4: a one-line interpretive summary so a fresh install / calm week reads as
+     "quiet", not broken — instead of 4 zero cards over 7 "nothing... nothing" buckets. #}
+  {% set _lists = snapshot.buckets|length %}
+  <p style="color:var(--text-muted); font-size:0.85rem; margin:0 0 1.15rem;">
+    {% if snapshot.totals.created or snapshot.totals.completed %}
+      <strong style="color:var(--text);">This week:</strong>
+      {{ snapshot.totals.created }} created, {{ snapshot.totals.completed }} completed,
+      {{ snapshot.totals.overdue_now }} overdue now across {{ _lists }} list{{ '' if _lists == 1 else 's' }}.
+    {% else %}
+      <strong style="color:var(--text);">Quiet week &mdash;</strong> nothing created or completed in the last
+      {{ snapshot.days }} days. Widen to
+      <a href="/weekly?days=14" style="color:var(--accent);">14 days</a> &middot;
+      <a href="/weekly?days=30" style="color:var(--accent);">30 days</a>.
+    {% endif %}
+  </p>
+
   <section class="totals">
     <div class="stat created">
       <div class="stat-label">Created</div>
