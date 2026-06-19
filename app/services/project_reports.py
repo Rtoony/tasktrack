@@ -3,10 +3,18 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, literal, or_, select
 from sqlalchemy.orm import Session
 
-from ..models import CalendarEvent, Project, to_dict
+from ..models import (
+    CalendarEvent,
+    PersonnelIssue,
+    Project,
+    ProjectWorkTask,
+    TrainingTask,
+    WorkTask,
+    to_dict,
+)
 from .project_workspace import project_workspace_payload, recent_activity_for_linked_records
 from .tickets import (
     done_statuses_for_table,
@@ -492,7 +500,96 @@ def _portfolio_project_stmt(filters: dict):
     return stmt.order_by(Project.project_number.asc())
 
 
-def _portfolio_summary(reports: list[dict]) -> dict:
+# Linked trackers that can make a project "at_risk", paired with the due
+# column overdue_field_for_table() resolves for each (priority: due_at →
+# follow_up_date → due_date over that model's columns). calendar_events is
+# deliberately absent — _overdue_item() never treats a calendar event as an
+# overdue linked item, so it cannot flip a project to at_risk. This list and
+# the due columns must stay in lockstep with _overdue_item()/the model schema.
+_AT_RISK_OVERDUE_TABLES: tuple[tuple, ...] = (
+    (WorkTask, "due_date"),
+    (ProjectWorkTask, "due_at"),
+    (TrainingTask, "due_date"),
+    (PersonnelIssue, "follow_up_date"),
+)
+
+
+def _overdue_exists_clause(model, due_col_name: str, now: datetime):
+    """EXISTS clause: this project has ≥1 OPEN, OVERDUE, non-archived row in
+    `model`, linked by FK *or* human project_number.
+
+    The overdue test mirrors is_overdue_value() exactly, in SQL, so the
+    aggregate count agrees with the per-project reports built by
+    project_status_report():
+      - blank / non-date values are not overdue;
+      - a date-only 'YYYY-MM-DD' is overdue iff its date < today;
+      - a datetime 'YYYY-MM-DDThh:mm[:ss]' is overdue iff it is < now.
+    ISO strings compare lexicographically in date/datetime order, and the
+    leading 4-digit-year GLOB guard rejects the same garbage fromisoformat()
+    would raise on. `now` is captured once by the caller so a single report
+    is internally consistent.
+    """
+    now_iso = now.isoformat(timespec="seconds")
+    today_iso = now.date().isoformat()
+    due_col = getattr(model, due_col_name)
+    due_value = func.trim(due_col)
+    open_statuses_done = tuple(done_statuses_for_table(model.__tablename__))
+
+    conditions = [
+        or_(
+            model.project_id == Project.id,
+            model.project_number == Project.project_number,
+        ),
+        due_col.is_not(None),
+        due_value != "",
+        func.substr(due_value, 1, 4).op("GLOB")("[0-9][0-9][0-9][0-9]"),
+        model.status.notin_(open_statuses_done),
+        or_(
+            func.substr(due_value, 1, 10) < today_iso,
+            (func.instr(due_value, "T") > 0) & (due_value < now_iso),
+        ),
+    ]
+    if "archived_at" in {c.name for c in model.__table__.columns}:  # #38: hide archived
+        conditions.append(model.archived_at.is_(None))
+
+    return select(literal(1)).where(*conditions).exists()
+
+
+def portfolio_attention_totals(sess: Session, filters: dict, *,
+                               now: datetime | None = None) -> dict:
+    """True at-risk count over the FULL active/filter scope, plus the total.
+
+    Computed with a handful of correlated EXISTS subqueries (one per linked
+    tracker) wrapped in two COUNTs — cost is independent of project count, so
+    it is safe to run over the whole ~6.9k active set instead of capping at
+    the scan ceiling. Scope matches _portfolio_project_stmt() (same active /
+    client / component / project_numbers / q / status filters) so the
+    denominator and numerator describe the same population the portfolio
+    query selects from. A project is at_risk iff ANY linked tracker has an
+    open, overdue, non-archived row — the same rule _project_management_brief
+    applies to a single project's report.
+    """
+    now = now or datetime.now()
+    any_overdue = or_(*[
+        _overdue_exists_clause(model, due_col, now)
+        for model, due_col in _AT_RISK_OVERDUE_TABLES
+    ])
+
+    scope = _portfolio_project_stmt(filters).with_only_columns(
+        Project.id, Project.project_number
+    ).order_by(None)
+
+    total = sess.scalar(
+        select(func.count()).select_from(scope.subquery())
+    ) or 0
+    at_risk = sess.scalar(
+        select(func.count()).select_from(scope.where(any_overdue).subquery())
+    ) or 0
+    return {"at_risk": int(at_risk), "scanned_total": int(total)}
+
+
+def _portfolio_summary(reports: list[dict], *,
+                       attention_override: dict | None = None) -> dict:
     counts = {key: 0 for key in REPORT_TABLES}
     open_counts = {key: 0 for key in REPORT_TABLES}
     site_count = 0
@@ -524,10 +621,24 @@ def _portfolio_summary(reports: list[dict]) -> dict:
             "open_count": _project_open_total(report),
             "next_due": action.get("due") or "",
         })
-    attention_project_count = len([
+    # Page-scoped at-risk tally (over the fully-built, displayed reports).
+    page_attention_project_count = len([
         report for report in reports
         if (report.get("management_brief") or {}).get("attention_level") == "at_risk"
     ])
+    # D2 fix: when the caller supplies a full-set aggregate, the authoritative
+    # at-risk headline count comes from the entire active/filter scope, not the
+    # ≤50 projects we could afford to build full reports for. Fall back to the
+    # page count when no override is given (e.g. an explicit project_numbers
+    # packet where the displayed set *is* the whole scope).
+    if attention_override is not None:
+        attention_project_count = int(attention_override.get("at_risk") or 0)
+        attention_scanned_total = int(
+            attention_override.get("scanned_total") or len(reports)
+        )
+    else:
+        attention_project_count = page_attention_project_count
+        attention_scanned_total = len(reports)
     rank = {"at_risk": 0, "scheduled": 1, "active": 2, "quiet": 3}
     action_projects.sort(key=lambda row: (
         rank.get(row.get("attention_level"), 9),
@@ -541,7 +652,17 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         headline = "No projects matched the current portfolio filters."
         recommendation = "Broaden the filters or select specific project numbers before printing a management packet."
     elif attention_project_count:
-        headline = f"{_plural(attention_project_count, 'at-risk project')} with {_plural(overdue_count, 'overdue linked item')}."
+        # When the authoritative (full-set) at-risk count exceeds the projects
+        # actually built on this page, the page's overdue-item tally no longer
+        # describes the whole at-risk set — say "across N active projects"
+        # instead of pinning the count to the displayed overdue items.
+        if attention_override is not None and attention_project_count != page_attention_project_count:
+            headline = (
+                f"{_plural(attention_project_count, 'at-risk project')} "
+                f"across {_plural(attention_scanned_total, 'active project')} in scope."
+            )
+        else:
+            headline = f"{_plural(attention_project_count, 'at-risk project')} with {_plural(overdue_count, 'overdue linked item')}."
         recommendation = "Start with the management action queue; confirm owner, next date, and unblock path for each at-risk project."
     elif upcoming_count:
         headline = f"{_plural(len(reports), 'project')} in scope with {_plural(upcoming_count, 'upcoming project event')}."
@@ -562,6 +683,10 @@ def _portfolio_summary(reports: list[dict]) -> dict:
         "overdue_count": overdue_count,
         "upcoming_event_count": upcoming_count,
         "attention_project_count": attention_project_count,
+        # D2: total active projects considered when computing the at-risk count
+        # — the honest denominator for "N of M". Equals project_count when no
+        # full-set aggregate was supplied (the displayed set is the whole scope).
+        "attention_scanned_total": attention_scanned_total,
         "attention_counts": attention_counts,
         "executive_summary": {
             "headline": headline,
@@ -611,6 +736,14 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
             truncated = True
             reports = reports[:limit]
 
+    # D2: the at-risk headline count must reflect the WHOLE active/filter scope
+    # (~6.9k projects in prod), not just the ≤50 we could afford to build full
+    # reports for. This aggregate is a handful of EXISTS-backed COUNTs whose
+    # cost is independent of project count, so the page stays cheap while the
+    # count becomes honest. _portfolio_project_stmt ignores attention_level
+    # (a post-hoc Python filter), so the same filters give the right scope.
+    attention_override = portfolio_attention_totals(sess, filters, now=now)
+
     safe_filters = {
         "q": (filters.get("q") or "").strip(),
         "project_numbers": _clean_project_numbers(filters.get("project_numbers") or []),
@@ -628,7 +761,7 @@ def portfolio_project_report(sess: Session, *, filters: dict | None = None,
         "limit": limit,
         "truncated": truncated,
         "reports": reports,
-        "summary": _portfolio_summary(reports),
+        "summary": _portfolio_summary(reports, attention_override=attention_override),
         "labels": REPORT_TABLES,
         "include_private": bool(include_private),
         "capabilities_visible": bool(is_admin),
@@ -640,6 +773,7 @@ __all__ = [
     "meeting_packet_report",
     "meeting_packet_batch_report",
     "portfolio_project_report",
+    "portfolio_attention_totals",
     "REPORT_TABLES",
     "DEFAULT_PORTFOLIO_LIMIT",
     "MAX_PORTFOLIO_LIMIT",
