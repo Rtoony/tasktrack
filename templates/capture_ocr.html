@@ -239,5 +239,6 @@ document.getElementById('project_number').addEventListener('input', event => {
 });
 document.getElementById('ocr_text').addEventListener('input', () => { parsedOcr = null; renderParsed(null); setParseStatus(''); });
 </script>
+{% include "partials/feedback_widget.html" %}
 </body>
 </html>
