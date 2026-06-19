@@ -21,13 +21,12 @@ from __future__ import annotations
 
 from flask import Blueprint, Response, jsonify, redirect, request, session
 
-from sqlalchemy import select
-
 from ..auth import login_required
 from ..config import ALLOWED_TABLES
 from ..db import get_session
 from ..models import Attachment, to_dict
 from ..services import attachments as att_svc
+from ..services import remarkable as rm_svc
 from ..services.tickets import TABLE_MODELS, can_view_record_detail
 from ..tokens import check_scoped_token
 
@@ -121,6 +120,28 @@ def download_attachment(attachment_id):
     except att_svc.AttachmentError as e:
         return jsonify({"error": str(e)}), e.status_code
     return redirect(url, code=302)
+
+
+@bp.route("/api/v1/attachments/<int:attachment_id>/remarkable", methods=["POST"])
+@login_required
+def send_attachment_to_remarkable(attachment_id):
+    """#55: push a PDF/image attachment to the reMarkable tablet.
+
+    Same access rule as download (you must be able to view the parent record).
+    Every client-visible failure mode (unsupported type, vault locked, client
+    unavailable, upload error) returns a JSON error with a real status code via
+    RemarkableError — never a 500.
+    """
+    sess = get_session()
+    att = sess.get(Attachment, attachment_id)
+    if att is None or not _attachment_accessible(sess, att):
+        return jsonify({"error": "Attachment not found"}), 404
+    try:
+        result = rm_svc.send_attachment(sess, att)
+    except rm_svc.RemarkableError as e:
+        return jsonify({"error": str(e)}), e.status_code
+    sess.commit()
+    return jsonify(result), 200
 
 
 @bp.route("/api/v1/attachments/<int:attachment_id>", methods=["DELETE"])

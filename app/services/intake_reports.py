@@ -170,7 +170,8 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
     source_values = _clean_sources(sources)
     days = max(1, min(int(days or 30), 3650))
     limit = max(1, min(int(limit or 100), 500))
-    since = datetime.now() - timedelta(days=days)
+    # B2: created_at/reported_date are SQLite CURRENT_TIMESTAMP = UTC; window in UTC.
+    since = datetime.utcnow() - timedelta(days=days)
     rows: list[dict] = []
 
     for table, cfg in INTAKE_REPORT_TABLES.items():
@@ -203,7 +204,9 @@ def intake_source_report(sess: Session, *, sources=None, days: int = 30,
     rows = rows[:limit]
 
     return {
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
+        # B2: created_at/reported_date are SQLite CURRENT_TIMESTAMP = UTC; window in UTC.
+        # generated_at kept UTC too so the whole report payload is single-tz (matches `since`).
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds"),
         "filters": {
             "sources": source_values,
             "days": days,

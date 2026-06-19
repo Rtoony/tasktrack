@@ -129,8 +129,12 @@ def draft_interview_ratings(employee_name, employee_role, categories, descriptio
                 score = int(score)
             except (TypeError, ValueError):
                 score = None
+            # B2: an out-of-range model score (e.g. -1, 7) is garbage signal, not a
+            # real rating. Null it (renders as N/A; the manager chooses) rather than
+            # clamping — clamping would manufacture a confident fabricated low/high
+            # score on a real person, the exact punitive failure #51 guards against.
             if score is not None and not (0 <= score <= 3):
-                score = max(0, min(3, score))
+                score = None
         clean.append({"category_id": cid, "score": score, "note": str(r.get("note") or "")[:120]})
     traj = str(data.get("trajectory") or "steady").strip().lower()
     if traj not in ("rising", "steady"):

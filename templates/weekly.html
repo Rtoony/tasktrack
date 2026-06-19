@@ -27,15 +27,30 @@
   .day-form input { width:55px; padding:0.2rem 0.4rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); color:var(--text); font-family:inherit; font-size:0.8rem; }
   .day-form button { background:var(--accent); border:none; color:#0b1220; padding:0.25rem 0.7rem; border-radius:var(--radius); cursor:pointer; font-size:0.78rem; font-weight:500; }
 
-  /* Top stat row */
-  .totals { display:grid; grid-template-columns:repeat(4, 1fr); gap:0.8rem; margin-bottom:1.5rem; }
+  /* Top stat row — 5 cards since W9 added "Stuck (31d+)". */
+  .totals { display:grid; grid-template-columns:repeat(5, 1fr); gap:0.8rem; margin-bottom:1.5rem; }
   .stat { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.1rem; }
   .stat-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.4rem; }
   .stat-value { font-size:1.8rem; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; }
   .stat.created .stat-value  { color:var(--accent); }
   .stat.completed .stat-value{ color:var(--ok); }
   .stat.active .stat-value   { color:var(--text); }
+  .stat.stuck .stat-value    { color:var(--warn); }
   .stat.overdue .stat-value  { color:var(--danger); }
+
+  /* W8: week picker + week-over-week delta line. */
+  .week-picker { display:inline-flex; align-items:center; gap:0.55rem; margin-left:1rem; font-size:0.8rem; }
+  .week-picker a { color:var(--accent); text-decoration:none; }
+  .week-picker a:hover { text-decoration:underline; }
+  .week-picker .current { color:var(--text-muted); font-family:'IBM Plex Mono', monospace; }
+  .week-picker .disabled { color:var(--text-dim); cursor:default; }
+  .wow { color:var(--text-muted); font-size:0.85rem; margin:0 0 1.15rem; font-variant-numeric:tabular-nums; }
+  .wow strong { color:var(--text); font-weight:600; }
+  .delta-up   { color:var(--ok); }     /* completed went up — good */
+  .delta-down { color:var(--danger); } /* completed went down */
+  .delta-flat { color:var(--text-dim); }
+  /* "more created" is non-punitive: never colored good/bad, just neutral. */
+  .delta-neutral { color:var(--text-muted); }
 
   /* Bucket sections */
   .bucket { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1rem 1.15rem; margin-bottom:0.9rem; }
@@ -93,7 +108,7 @@
   .skill-change .who { color:var(--text); font-weight:600; }
   .skill-change .cat { color:var(--text-muted); }
   @media print {
-    header,.day-form,.toggle-link,.report-actions { display:none !important; }
+    header,.day-form,.toggle-link,.report-actions,.week-picker { display:none !important; }
   }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
@@ -117,20 +132,51 @@
   {% include "partials/report_sidebar.html" %}
   <div class="report-content">
 <main>
+  {# W8: `&bd` suffix preserves the rollup view across week-picker / day-form
+     navigation so toggling a week doesn't silently drop the breakdown. #}
+  {% set bd = '&breakdown=1' if show_breakdown else '' %}
+  {% set wo = week_offset|default(0) %}
   <h1>Week in Review</h1>
   <div class="range">
     Window: <strong>{{ snapshot.since }}</strong> &rarr; <strong>{{ snapshot.until }}</strong>
-    ({{ snapshot.days }} day{{ '' if snapshot.days == 1 else 's' }})
+    {% if wo >= 1 %}
+      <span style="color:var(--text-dim);">(calendar week, Mon&ndash;Sun)</span>
+    {% else %}
+      ({{ snapshot.days }} day{{ '' if snapshot.days == 1 else 's' }})
+    {% endif %}
+    {% if wo == 0 %}
+    {# Day-form only steers the live trailing window; for a fixed calendar
+       week the day count is implied, so we hide it and offer "This week". #}
     <form class="day-form" method="get" action="/weekly">
       <label for="day-input" style="color:var(--text-dim);">Days:</label>
       <input id="day-input" type="number" min="1" max="90" name="days" value="{{ snapshot.days }}">
       {% if show_breakdown %}<input type="hidden" name="breakdown" value="1">{% endif %}
       <button type="submit">Refresh</button>
     </form>
+    {% endif %}
+    {# W8: compact week picker. Older &rarr; newer; "This week" returns to the
+       live trailing window (week_offset=0, the default/unchanged behavior). #}
+    <span class="week-picker">
+      {% if wo < (max_week_offset|default(520)) %}
+        <a href="/weekly?week_offset={{ wo + 1 }}{{ bd }}" title="Older week">&#9664; Older</a>
+      {% else %}
+        <span class="disabled">&#9664; Older</span>
+      {% endif %}
+      {% if wo >= 1 %}
+        <span class="current">week&#8209;{{ wo }}</span>
+        {% if wo > 1 %}
+          <a href="/weekly?week_offset={{ wo - 1 }}{{ bd }}" title="Newer week">Newer &#9654;</a>
+        {% else %}
+          <a href="/weekly?days=7{{ bd }}" title="Back to the live week">This week &#9654;</a>
+        {% endif %}
+      {% else %}
+        <span class="current">this week</span>
+      {% endif %}
+    </span>
     {% if show_breakdown %}
-      <a class="toggle-link" href="/weekly?days={{ snapshot.days }}">Hide rollups</a>
+      <a class="toggle-link" href="/weekly?{{ 'week_offset=' ~ wo if wo >= 1 else 'days=' ~ snapshot.days }}">Hide rollups</a>
     {% else %}
-      <a class="toggle-link" href="/weekly?days={{ snapshot.days }}&breakdown=1">Show status rollups</a>
+      <a class="toggle-link" href="/weekly?{{ 'week_offset=' ~ wo if wo >= 1 else 'days=' ~ snapshot.days }}&breakdown=1">Show status rollups</a>
     {% endif %}
   </div>
 
@@ -155,6 +201,34 @@
     {% endif %}
   </p>
 
+  {# W8: one-line week-over-week delta vs the immediately prior equal-length
+     window. "More created" is deliberately neutral (this is a personal
+     tracker, not a scoreboard); only the completed delta gets a good/bad tint,
+     and gently. ▲/▼/= with theme vars so it survives dark mode. #}
+  {% set cd = snapshot.wow_delta.created %}
+  {% set pd = snapshot.wow_delta.completed %}
+  <p class="wow">
+    <strong>Created {{ snapshot.totals.created }}</strong>
+    (<span class="delta-neutral">{% if cd > 0 %}&#9650;{{ cd }}{% elif cd < 0 %}&#9660;{{ -cd }}{% else %}&#8212; no change{% endif %}</span> vs prior week)
+    &middot;
+    <strong>Completed {{ snapshot.totals.completed }}</strong>
+    (<span class="{{ 'delta-up' if pd > 0 else ('delta-down' if pd < 0 else 'delta-flat') }}">{% if pd > 0 %}&#9650;{{ pd }}{% elif pd < 0 %}&#9660;{{ -pd }}{% else %}&#8212; no change{% endif %}</span>)
+  </p>
+
+  {# W9: net-backlog framing — created minus completed = net change in active
+     inventory across the window. Non-punitive language: "growing/shrinking/flat",
+     not "behind". #}
+  {% set nb = snapshot.net_backlog %}
+  <p class="wow" style="margin-bottom:1.15rem;">
+    {% if nb > 0 %}
+      Net backlog <strong class="delta-down">+{{ nb }}</strong> this window &mdash; the active pile grew (more created than closed).
+    {% elif nb < 0 %}
+      Net backlog <strong class="delta-up">{{ nb }}</strong> this window &mdash; you closed out more than came in.
+    {% else %}
+      Net backlog <strong>flat</strong> this window &mdash; created and completed balanced out.
+    {% endif %}
+  </p>
+
   {# W6: action row — every sibling report has Print + an export link; Weekly had
      none. No CSV button: there's no /weekly CSV endpoint, so we don't link a
      missing route. JSON honours the current window (and breakdown, if shown). #}
@@ -175,6 +249,12 @@
     <div class="stat active">
       <div class="stat-label">Active now</div>
       <div class="stat-value">{{ snapshot.totals.active_now }}</div>
+    </div>
+    {# W9: the "what's stuck" half of the weekly question, surfaced by default
+       (was hidden behind ?breakdown=1). 31d+ still-open items. #}
+    <div class="stat stuck" title="Active items 31 days or older — the 'stuck' pile">
+      <div class="stat-label">Stuck (31d+)</div>
+      <div class="stat-value">{{ snapshot.stuck_count }}</div>
     </div>
     <div class="stat overdue">
       <div class="stat-label">Overdue now</div>

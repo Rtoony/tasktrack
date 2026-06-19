@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 
 from app.db import get_session
 from app.models import PersonnelIssue, Project
+from app.services.incident_reports import incident_detail_report, incident_report
 
 
 def _seed_incidents(sess):
@@ -125,6 +126,72 @@ def test_incident_summary_counts_full_set_not_display_cap(admin_client, temp_app
     assert body["summary"]["open_count"] == 4
     assert body["summary"]["high_severity_count"] == 4
     assert body["summary"]["estimated_time_loss_minutes"] == 40
+
+
+def test_incident_days_open_uses_utc_not_local_evening(temp_app):
+    # B2 regression: reported_date is stored by SQLite CURRENT_TIMESTAMP in UTC.
+    # On a PDT (UTC-7) server, the OLD code used datetime.now() (local) as "today"
+    # and compared its date against the UTC-stored reported.date(). For an evening
+    # incident the UTC-stored value has already rolled to the next UTC day, so
+    # local_today - reported_utc.date() == 0 -> days_open masked to 0, when the
+    # incident is really a day old. Injecting now in UTC must report days_open == 1.
+    #
+    # Stored reported_date (UTC) = 2026-06-17 03:00 (== yesterday 8pm PDT).
+    # Injected now (UTC)        = 2026-06-18 03:00 (== today    8pm PDT).
+    reported_utc = datetime(2026, 6, 17, 3, 0, 0)
+    now_utc = datetime(2026, 6, 18, 3, 0, 0)
+
+    with temp_app.app_context():
+        sess = get_session()
+        issue = PersonnelIssue(
+            person_name="Evening Reporter",
+            issue_description="Evening incident",
+            severity="High",
+            status="Observed",
+            reported_date=reported_utc,
+        )
+        sess.add(issue)
+        sess.commit()
+        issue_id = issue.id
+
+        # List report: days_open on the matched row must be 1 (not the old 0).
+        packet = incident_report(sess, filters={"open_only": True}, now=now_utc)
+        row = next(r for r in packet["incidents"] if r["id"] == issue_id)
+        assert row["days_open"] == 1, f"expected 1, got {row['days_open']} (evening off-by-one)"
+        # generated_at is the UTC `now` label for a single-tz payload.
+        assert packet["generated_at"] == "2026-06-18T03:00:00"
+
+        # Detail one-pager: same UTC `now` path, same corrected days_open.
+        detail = incident_detail_report(sess, incident_id=issue_id, now=now_utc)
+        assert detail["incident"]["days_open"] == 1
+        assert detail["generated_at"] == "2026-06-18T03:00:00"
+
+
+def test_incident_window_edge_uses_utc_not_local(temp_app):
+    # B2 regression: the trailing `days` window is built from `now` (UTC). A row
+    # reported just INSIDE the UTC window must be kept, and one just OUTSIDE dropped,
+    # with no ~7h local-vs-UTC skew at the edge. Inject now in UTC and place rows
+    # ~minutes on either side of the days=7 boundary.
+    now_utc = datetime(2026, 6, 18, 12, 0, 0)
+    inside = now_utc - timedelta(days=7) + timedelta(minutes=5)   # just inside
+    outside = now_utc - timedelta(days=7) - timedelta(minutes=5)  # just outside
+
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add(PersonnelIssue(
+            person_name="Inside Window", issue_description="Inside the 7-day window",
+            severity="Low", status="Observed", reported_date=inside,
+        ))
+        sess.add(PersonnelIssue(
+            person_name="Outside Window", issue_description="Outside the 7-day window",
+            severity="Low", status="Observed", reported_date=outside,
+        ))
+        sess.commit()
+
+        packet = incident_report(sess, filters={"days": 7}, now=now_utc)
+        descriptions = {r["issue_description"] for r in packet["incidents"]}
+        assert "Inside the 7-day window" in descriptions
+        assert "Outside the 7-day window" not in descriptions
 
 
 def test_incident_report_filters(admin_client, temp_app):

@@ -356,6 +356,23 @@ def delete_attachment(sess: Session, attachment_id: int) -> Attachment:
 PRESIGN_TTL_SECONDS = int(os.environ.get("ATTACHMENT_URL_TTL_SECONDS", "300"))
 
 
+def download_bytes(att: Attachment) -> bytes:
+    """Fetch an attachment's raw bytes from MinIO into memory.
+
+    Used by server-side consumers that need the content itself (not a
+    redirect), e.g. the reMarkable bridge. Bounded by the same 50 MB upload
+    cap, so holding it in memory is fine. Raises AttachmentError on failure.
+    """
+    cfg = _config()
+    s3 = _client()
+    try:
+        obj = s3.get_object(Bucket=cfg.bucket, Key=att.object_key)
+        return obj["Body"].read()
+    except ClientError as e:
+        LOG.exception("MinIO get_object failed key=%s err=%s", att.object_key, e)
+        raise AttachmentError("Could not read the attachment.", status_code=502) from e
+
+
 def presigned_download_url(att: Attachment, ttl_seconds: int | None = None) -> str:
     if ttl_seconds is None:
         ttl_seconds = PRESIGN_TTL_SECONDS
