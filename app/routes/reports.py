@@ -4,14 +4,28 @@ from __future__ import annotations
 import csv
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import Blueprint, Response, jsonify, render_template, request, session
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from ..auth import admin_required, login_required
 from ..db import get_session
-from ..models import ReportPreset
+from ..models import (
+    CalendarEvent,
+    InboxItem,
+    PersonnelIssue,
+    Project,
+    ProjectWorkTask,
+    ReportPreset,
+    TrainingTask,
+    WorkTask,
+)
+from ..services.tickets import (
+    done_statuses_for_table,
+    is_overdue_value,
+    overdue_field_for_table,
+)
 from ..services.agenda import today_agenda
 from ..services.competency_reports import competency_report, competency_report_csv
 from ..services.csv_safe import csv_safe
@@ -49,6 +63,12 @@ REPORT_SECTIONS = [
         "title": "Today Brief",
         "subtitle": "Daily operator packet.",
         "href": "/reports/today",
+    },
+    {
+        "key": "weekly",
+        "title": "Week in Review",
+        "subtitle": "Recent activity, overdue, and rollups.",
+        "href": "/weekly",
     },
     {
         "key": "management",
@@ -129,6 +149,8 @@ def _active_report_section() -> str:
         return "management"
     if path == "/reports/today":
         return "today"
+    if path == "/weekly":
+        return "weekly"
     if path == "/reports/intake":
         return "intake"
     if path == "/reports/triage-outcomes":
@@ -676,6 +698,143 @@ def _serialize_preset_payload(data: dict, *, user_id: int | None) -> tuple[dict,
     }, None
 
 
+def _parse_event_start(raw) -> datetime | None:
+    """Parse a calendar start_at ISO string. Mirrors project_reports._parse_dt
+    so the hub's meeting window matches the meetings report exactly."""
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw).replace(" ", "T"))
+    except (TypeError, ValueError):
+        return None
+
+
+# Overdue-bearing linked tables for the cheap hub at-risk count. Calendar
+# events are intentionally excluded — _overdue_item() in project_reports never
+# treats a calendar event as an overdue linked item, so neither do we. Each
+# entry is (model, due_field). The due field matches overdue_field_for_table()'s
+# precedence for that table's columns.
+_AT_RISK_TABLES = (
+    (ProjectWorkTask, "due_at"),
+    (WorkTask, "due_date"),
+    (TrainingTask, "due_date"),
+    (PersonnelIssue, "follow_up_date"),
+)
+
+
+def _hub_action_counts(sess, is_admin: bool) -> dict:
+    """Cheap, direct counts for the 4 hub "what needs me today" tiles.
+
+    Deliberately avoids _today_brief_packet / the portfolio builder (which
+    re-run the full per-project report twice plus meetings and intake). Each
+    count is a narrow query that mirrors the definition the matching report
+    surface uses, so the tile number matches the page it deep-links to.
+    """
+    now = datetime.now()
+
+    # Intake to review — InboxItem rows whose status is not a "reviewed" terminal
+    # state. Matches intake_reports._row_payload: needs_review for inbox_items is
+    # (status not in {"Done", "Archived"}).
+    intake_to_review = sess.scalar(
+        select(func.count())
+        .select_from(InboxItem)
+        .where(InboxItem.status.notin_(("Done", "Archived")))
+    ) or 0
+
+    # Upcoming meetings — visible, non-archived, open calendar events whose start
+    # falls in the next 14 days. Mirrors meeting_packet_batch_report's window and
+    # done-status / archived / private filters (hub is not user-scoped, so private
+    # events are excluded just like the default report view).
+    done_cal = tuple(done_statuses_for_table("calendar_events"))
+    window_end = now + timedelta(days=14)
+    upcoming_meetings = 0
+    cal_rows = sess.scalars(
+        select(CalendarEvent)
+        .where(
+            CalendarEvent.archived_at.is_(None),
+            CalendarEvent.status.notin_(done_cal),
+            CalendarEvent.visibility != "private",
+        )
+    ).all()
+    for row in cal_rows:
+        start = _parse_event_start(row.start_at)
+        if start is None:
+            continue
+        if row.all_day:
+            if now.date() <= start.date() <= window_end.date():
+                upcoming_meetings += 1
+        elif now <= start <= window_end:
+            upcoming_meetings += 1
+
+    # Open incidents — admin only. PersonnelIssue rows that are not resolved
+    # (status not in done-statuses) and not archived. Mirrors incident_report's
+    # open_only definition.
+    open_incidents = None
+    if is_admin:
+        done_pi = tuple(done_statuses_for_table("personnel_issues"))
+        open_incidents = sess.scalar(
+            select(func.count())
+            .select_from(PersonnelIssue)
+            .where(
+                PersonnelIssue.archived_at.is_(None),
+                PersonnelIssue.status.notin_(done_pi),
+            )
+        ) or 0
+
+    # At-risk projects — ACTIVE projects with >=1 OVERDUE linked item. A project
+    # is at_risk per _project_management_brief iff it has an overdue linked item;
+    # an overdue linked item (per _overdue_item) is an OPEN, non-archived row in an
+    # overdue-bearing linked table whose due field is_overdue_value()==True.
+    #
+    # Cheap approach: pull only (project_id, project_number, status, due, archived)
+    # for candidate rows, resolve overdue in Python (is_overdue_value parses ISO
+    # text the same way), and collect the distinct ACTIVE projects touched. No
+    # per-project report, no workspace payload, no activity log. A linked row maps
+    # to a project by FK id OR human project_number, matching linked_rows().
+    active_ids = set(sess.scalars(select(Project.id).where(Project.active == 1)).all())
+    active_numbers = {
+        num for num in sess.scalars(
+            select(Project.project_number).where(Project.active == 1)
+        ).all() if num
+    }
+    # number -> id, so a row linked only by number still maps to one project.
+    number_to_id = dict(sess.execute(
+        select(Project.project_number, Project.id).where(Project.active == 1)
+    ).all())
+
+    at_risk_project_ids: set[int] = set()
+    for model, due_field in _AT_RISK_TABLES:
+        table = model.__tablename__
+        done = done_statuses_for_table(table)
+        rows = sess.execute(
+            select(
+                model.project_id,
+                model.project_number,
+                model.status,
+                getattr(model, due_field),
+            ).where(model.archived_at.is_(None))
+        ).all()
+        for project_id, project_number, status, due_value in rows:
+            if (status or "") in done:
+                continue
+            if not is_overdue_value(due_value):
+                continue
+            resolved_id = None
+            if project_id is not None and project_id in active_ids:
+                resolved_id = project_id
+            elif project_number and project_number in active_numbers:
+                resolved_id = number_to_id.get(project_number)
+            if resolved_id is not None:
+                at_risk_project_ids.add(resolved_id)
+
+    return {
+        "at_risk_projects": len(at_risk_project_ids),
+        "intake_to_review": int(intake_to_review),
+        "upcoming_meetings": int(upcoming_meetings),
+        "open_incidents": open_incidents,
+    }
+
+
 @bp.route("/reports", methods=["GET"])
 @login_required
 def reports_home():
@@ -700,6 +859,7 @@ def reports_home():
             "incidents", user_id=session.get("user_id"), is_admin=True,
         )).all()
     quick_actions = _managed_links(sess, REPORT_QUICK_ACTION_SET_KEY, is_admin=is_admin)
+    action_counts = _hub_action_counts(sess, is_admin)
     sess.commit()
     return render_template(
         "reports_home.html",
@@ -709,6 +869,7 @@ def reports_home():
         incident_presets=[_preset_to_dict(row, include_filters=False) for row in incident_presets],
         competency_presets=[_preset_to_dict(row, include_filters=False) for row in competency_presets],
         quick_actions=quick_actions,
+        action_counts=action_counts,
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )

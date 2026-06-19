@@ -9674,6 +9674,10 @@ function startupRouteState() {
   const hashTab = hashParts.length === 1 ? hashParts[0] : '';
   return {
     tab: params.get('tab') || hashTab || '',
+    // W3 deep-link: ?record=<id> opens that record's drawer after the tab loads.
+    // Emitted by intake reports/reviews and agent change/feedback links as
+    // `/?tab=<slug>&record=<id>` — consumed in applyStartupRouteState() below.
+    record: params.get('record') || '',
     workspace: params.get('workspace') || (hashParts[0] === 'workspace' ? hashParts.slice(1).join('/') : ''),
     mapProject: params.get('map_project') || (hashParts[0] === 'map' ? hashParts.slice(1).join('/') : ''),
     captureSource: params.get('capture_source') || '',
@@ -9692,14 +9696,62 @@ function applyCapturePresetRoute(state) {
   }
 }
 
+// W3: normalize a ?tab= value to a SPA tab slug. Most emitters send a real
+// slug ('work', 'project', 'triage', 'personal', …) which passes through
+// untouched; agent change/feedback links send the raw DB table name
+// ('work_tasks', 'project_work_tasks', …), which we map via CORE_TABLE_TO_TAB.
+// Returns '' if the value is neither a known slug nor a known table.
+function deepLinkTabSlug(value) {
+  if (!value) return '';
+  if (API_MAP[value]) return value;            // already a SPA tab slug
+  if (CORE_TABLE_TO_TAB[value]) return CORE_TABLE_TO_TAB[value];  // raw table name
+  return '';
+}
+
+// W3: open the ?record=<id> deep-link in the record drawer. Uses the same
+// fetch + openModal path as the existing editRecord(slug, id) helper (the one
+// every row click goes through): GET /api/v1/<table>/<id>, then openModal()
+// only when the record exists. Inlined rather than calling editRecord so a
+// stale/missing link can surface a toast instead of silently no-opping.
+async function applyRecordDeepLink(slug, rawId) {
+  const id = parseInt(rawId, 10);
+  if (!slug || !API_MAP[slug] || !Number.isFinite(id) || id <= 0) {
+    toast('Could not open the linked record');
+    return;
+  }
+  // The API returns the record on success and {error:"Not found"} (404) when
+  // the id is missing or not visible to the user. Surface feedback either way;
+  // never let a stale link crash startup.
+  try {
+    const data = await api('GET', '/api/v1/' + API_MAP[slug] + '/' + id);
+    if (data && !data.error) openModal(slug, data);
+    else toast('Linked record not found');
+  } catch (err) {
+    toast('Could not open the linked record');
+  }
+}
+
 async function applyStartupRouteState() {
   const state = startupRouteState();
   if (STANDALONE_TAB) return;
   if (state.tab && state.tab !== 'dashboard') activateTab(state.tab, { history: false });
+  // W3: a deep-link's ?tab= may be a real slug (handled above) OR a raw DB table
+  // name (agent change/feedback links emit `?tab=work_tasks`). For the table-name
+  // form the line above is a no-op (no such section), so fall back to the
+  // normalized slug here. Slug-form ?tab= already activated, so deepSlug ===
+  // state.tab and this is harmless (re-activating the same tab).
+  const deepSlug = deepLinkTabSlug(state.tab);
+  if (deepSlug && deepSlug !== state.tab && deepSlug !== 'dashboard') {
+    activateTab(deepSlug, { history: false });
+  }
   consumeCapturePrefill();
   applyCapturePresetRoute(state);
   if (state.mapProject) focusProjectOnMapSmart(0, state.mapProject);
   if (state.workspace) await openProjectWorkspaceByNumber(state.workspace);
+  // W3: after the active tab is set + its data load has been kicked off, honor
+  // ?record=<id> by opening that record's drawer. applyRecordDeepLink does its
+  // own fetch, so it doesn't depend on the tab's table finishing loading.
+  if (state.record) await applyRecordDeepLink(deepSlug, state.record);
 }
 
 /* ── Init ──────────────────────────────────── */

@@ -9,7 +9,7 @@
   :root {
     --bg:#11161d; --surface:#18212b; --surface-2:#1f2a37;
     --border:#2a3441; --text:#ecf2f8; --text-muted:#9ca7b4; --text-dim:#6b7480;
-    --accent:#60a5fa; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
+    --accent:#38bdf8; --ok:#34d399; --warn:#fbbf24; --danger:#f87171;
     --radius:6px;
   }
   * { box-sizing:border-box; margin:0; padding:0; }
@@ -67,7 +67,7 @@
   .desc { color:var(--text-muted); }
 
   .admin-only { border-left:3px solid var(--accent); }
-  .admin-badge { display:inline-block; padding:0.05rem 0.4rem; border-radius:3px; background:rgba(96,165,250,0.15); color:var(--accent); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
+  .admin-badge { display:inline-block; padding:0.05rem 0.4rem; border-radius:3px; background:rgba(56,189,248,0.15); color:var(--accent); font-size:0.65rem; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-left:0.5rem; }
 
   /* Status / assignee / age rollup grid (?breakdown=1) */
   .rollup { margin-top:0.9rem; padding-top:0.8rem; border-top:1px solid var(--border); display:grid; grid-template-columns:repeat(3, 1fr); gap:0.9rem; }
@@ -80,7 +80,11 @@
   ul.dist .v { color:var(--text); font-variant-numeric:tabular-nums; font-weight:500; }
   .toggle-link { color:var(--accent); text-decoration:none; font-size:0.78rem; margin-left:0.9rem; }
   .toggle-link:hover { text-decoration:underline; }
+  @media print {
+    header,.day-form,.toggle-link { display:none !important; }
+  }
 </style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
 <body>
 <header>
@@ -88,13 +92,18 @@
     <div class="brand"><span>//</span> {{ brand_name }} <span style="color:var(--text-muted);font-weight:400;margin-left:0.4rem">Week in Review</span></div>
     <nav class="nav">
       <a href="/">Dashboard</a>
-      <a href="/reports">Reports</a>
+      <a href="/reports">Report Center</a>
+      <a href="/reports/today">Today Brief</a>
+      <a href="/reports/projects">Portfolio</a>
       {% if is_admin %}<a href="/admin">Admin</a>{% endif %}
       <a href="/logout">Sign out</a>
     </nav>
   </div>
 </header>
 
+<div class="report-shell">
+  {% include "partials/report_sidebar.html" %}
+  <div class="report-content">
 <main>
   <h1>Week in Review</h1>
   <div class="range">
@@ -271,5 +280,7 @@
     Completion timestamps approximate (uses updated_at on tables without a completed_at column).
   </p>
 </main>
+  </div>
+</div>
 </body>
 </html>
