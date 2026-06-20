@@ -106,23 +106,31 @@ def format_reminder(row: CalendarEvent) -> str:
     return "\n".join(lines)
 
 
+# LEASH 2026-06-19: Telegram notification leg DROPPED — reminders are now
+# Slack-only. Flip this to True to restore the dual-leg behaviour (the Telegram
+# code below is left intact, guarded, so the change is fully reversible).
+_TELEGRAM_LEG_ENABLED = False
+
+
 def _default_sender(text: str) -> bool:
-    """Send one reminder on BOTH legs during the Telegram→Slack parallel phase.
+    """Send one reminder on the Slack leg (Telegram leg leashed off).
 
     Slack: via nexus-notify (@sentinel) to ``SLACK_REMINDERS_CHANNEL`` if that
-    env is set, else the default #alerts channel. Telegram: the existing
-    master-sync path. Imported/spawned lazily so importing this module (e.g. in
-    tests) never drags in the scripts package or requires messaging env.
-    Returns True if EITHER leg delivered, so the reminder is stamped (not
-    re-sent) once it's out on at least one channel; False only if both fail
-    (retried next sweep).
+    env is set, else the default #alerts channel. Spawned lazily so importing
+    this module (e.g. in tests) never drags in the scripts package or requires
+    messaging env. Returns True if Slack delivered, so the reminder is stamped
+    (not re-sent) once it's out; False if Slack fails (retried next sweep).
+
+    The Telegram leg below is gated behind ``_TELEGRAM_LEG_ENABLED`` (default
+    False per the LEASH "drop telegram now" pass) — Slack remains the sole
+    delivery channel while the Telegram path stays defined for easy revert.
     """
     import os
     import subprocess
     import sys
     from pathlib import Path
 
-    # --- Slack leg (additive). Best-effort; never raises. ---
+    # --- Slack leg. Best-effort; never raises. ---
     slack_ok = False
     try:
         cmd = ["/home/rtoony/bin/nexus-notify", "--bot=sentinel", "--slack-only"]
@@ -136,27 +144,29 @@ def _default_sender(text: str) -> bool:
     except Exception as exc:  # noqa: BLE001
         LOG.warning("reminder slack leg error: %s", exc)
 
-    # --- Telegram leg (existing master-sync path). ---
+    # --- Telegram leg (existing master-sync path) — LEASHED OFF. ---
     tg_ok = False
-    scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
-    if str(scripts_dir) not in sys.path:
-        sys.path.insert(0, str(scripts_dir))
-    try:
-        from notify_master_sync import send_telegram  # type: ignore
+    if _TELEGRAM_LEG_ENABLED:
+        scripts_dir = Path(__file__).resolve().parents[2] / "scripts"
+        if str(scripts_dir) not in sys.path:
+            sys.path.insert(0, str(scripts_dir))
+        try:
+            from notify_master_sync import send_telegram  # type: ignore
 
-        token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
-        chat_id = os.environ.get("TELEGRAM_CLAUDE_CHAT_ID", "").strip()
-        if token and chat_id:
-            tg_ok = bool(send_telegram(text, token=token, chat_id=chat_id))
-        else:
-            LOG.warning(
-                "TELEGRAM_BOT_TOKEN / TELEGRAM_CLAUDE_CHAT_ID not set; "
-                "telegram reminder leg skipped"
-            )
-    except Exception as exc:  # noqa: BLE001
-        LOG.warning("reminder telegram sender unavailable: %s", exc)
+            token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+            chat_id = os.environ.get("TELEGRAM_CLAUDE_CHAT_ID", "").strip()
+            if token and chat_id:
+                tg_ok = bool(send_telegram(text, token=token, chat_id=chat_id))
+            else:
+                LOG.warning(
+                    "TELEGRAM_BOT_TOKEN / TELEGRAM_CLAUDE_CHAT_ID not set; "
+                    "telegram reminder leg skipped"
+                )
+        except Exception as exc:  # noqa: BLE001
+            LOG.warning("reminder telegram sender unavailable: %s", exc)
 
-    return slack_ok or tg_ok
+    # Slack-only delivery decision: stamp when Slack delivered.
+    return slack_ok
 
 
 def dispatch_reminders(
