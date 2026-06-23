@@ -8101,7 +8101,7 @@ const FORMS = {
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'category',label:'Category',type:'endpoint-select',endpoint:'/api/v1/options/work_category',valueKey:'value',displayKey:'label',emptyLabel:'— choose category —',hint:'What kind of work this is (CAD Standards Portal, LISP / Automation, ...). Admin-managed list.'},
     {key:'task_type',label:'Type',type:'select',options:['','Idea','Bug','Feature','Improvement'],hint:'#46: what kind of request — Idea / Bug / Feature / Improvement.'},
-    {key:'description',label:'Requested Change',type:'textarea'},
+    {key:'description',label:'Requested Change',type:'textarea',rows:4},
     {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
     {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
     {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked'},
@@ -8636,7 +8636,7 @@ function renderField(f,value) {
     }
     return wrap;
   } else if (f.type==='textarea') {
-    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true;  /* #40 */
+    input=document.createElement('textarea'); input.id='f-'+f.key; input.textContent=value; if(f.required)input.required=true; if(f.placeholder)input.placeholder=f.placeholder; input.spellcheck=true; if(f.rows)input.rows=f.rows; /* #40 */
   } else if (f.type==='ai-summary') {
     // #34: editable AI summary draft + a button that drafts it (locally) from the saved task.
     const ta=document.createElement('textarea'); ta.id='f-'+f.key; ta.textContent=value; ta.spellcheck=true;
