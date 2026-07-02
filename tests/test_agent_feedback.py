@@ -181,3 +181,75 @@ def test_status_not_found(client, temp_app, with_bot_token):
     r = client.post("/api/v1/feedback/999999/status",
                     json={"status": "Fixed"}, headers={"X-Token": BOT_TOKEN})
     assert r.status_code == 404
+
+
+# ── dev-status lane (#76) ────────────────────────────────────────────────────
+def test_dev_status_requires_bot_token(client, temp_app):
+    fid = _seed(temp_app)
+    r = client.post(f"/api/v1/feedback/{fid}/dev-status", json={"dev_status": "building"})
+    assert r.status_code == 401
+
+
+def test_dev_status_happy_path_never_touches_human_status(client, temp_app, with_bot_token):
+    fid = _seed(temp_app, status="Planned")
+    r = client.post(f"/api/v1/feedback/{fid}/dev-status",
+                    headers={"X-Token": BOT_TOKEN},
+                    json={"dev_status": "tests-pass-awaiting-promote", "note": "branch codev/x"})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body["ok"] is True and body["changed"] is True
+    assert body["from"] == "unclaimed" and body["to"] == "tests-pass-awaiting-promote"
+    with temp_app.app_context():
+        row = get_session().get(FeedbackItem, fid)
+        assert row.dev_status == "tests-pass-awaiting-promote"
+        assert row.status == "Planned"          # human lane untouched
+        assert row.completed_at is None
+        assert row.resolution_notes in ("", None)
+
+
+def test_dev_status_rejects_unknown_value(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    r = client.post(f"/api/v1/feedback/{fid}/dev-status",
+                    headers={"X-Token": BOT_TOKEN}, json={"dev_status": "shipped!!"})
+    assert r.status_code == 400
+    with temp_app.app_context():
+        assert get_session().get(FeedbackItem, fid).dev_status == "unclaimed"
+
+
+def test_dev_status_writes_activity_log_with_note(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    client.post(f"/api/v1/feedback/{fid}/dev-status",
+                headers={"X-Token": BOT_TOKEN},
+                json={"dev_status": "building", "note": "dispatched as fix-thing"})
+    with temp_app.app_context():
+        logs = get_session().execute(select(ActivityLog).where(
+            ActivityLog.table_name == "feedback_items",
+            ActivityLog.record_id == fid,
+            ActivityLog.action == "dev_status_change")).scalars().all()
+        assert len(logs) == 1
+        assert logs[0].user_name == "Hermes"
+        assert "dispatched as fix-thing" in logs[0].new_value
+
+
+def test_dev_status_idempotent_same_value_no_new_log(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    for _ in range(2):
+        r = client.post(f"/api/v1/feedback/{fid}/dev-status",
+                        headers={"X-Token": BOT_TOKEN}, json={"dev_status": "building"})
+        assert r.status_code == 200
+    assert r.get_json()["changed"] is False
+    with temp_app.app_context():
+        logs = get_session().execute(select(ActivityLog).where(
+            ActivityLog.record_id == fid,
+            ActivityLog.action == "dev_status_change")).scalars().all()
+        assert len(logs) == 1
+
+
+def test_dev_status_listed_in_agent_brief(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    client.post(f"/api/v1/feedback/{fid}/dev-status",
+                headers={"X-Token": BOT_TOKEN}, json={"dev_status": "building"})
+    items = client.get("/api/v1/feedback?status=all",
+                       headers={"X-Token": BOT_TOKEN}).get_json()["items"]
+    mine = next(i for i in items if i["id"] == fid)
+    assert mine["dev_status"] == "building"
