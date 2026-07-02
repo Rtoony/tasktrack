@@ -368,6 +368,9 @@ class FeedbackItem(Base):
     feedback_type: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'Bug'"))
     priority: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'Medium'"))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'New'"))
+    # Co-dev pipeline's own lane (#76): what the ROBOT did, never overwriting the
+    # human status. Written only by the bot-scoped dev-status endpoint.
+    dev_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'unclaimed'"))
     page_url: Mapped[str] = mapped_column(Text, server_default=text("''"))
     tab: Mapped[str] = mapped_column(Text, server_default=text("''"))
     component_label: Mapped[str] = mapped_column(Text, server_default=text("''"))

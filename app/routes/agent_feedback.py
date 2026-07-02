@@ -12,7 +12,8 @@ The session-authed UI feedback API lives in api.py / feedback.py — this module
 the headless-agent surface only.
 
     GET  /api/v1/feedback?status=open&type=Bug&limit=50
-    POST /api/v1/feedback/<id>/status   body: {"status": "Fixed", "resolution_notes": "..."}
+    POST /api/v1/feedback/<id>/status       body: {"status": "Fixed", "resolution_notes": "..."}
+    POST /api/v1/feedback/<id>/dev-status   body: {"dev_status": "building", "note": "..."}
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from ..tokens import check_scoped_token
 bp = Blueprint("agent_feedback", __name__)
 
 _FLOW = ALLOWED_TABLES["feedback_items"]["status_flow"]
+_DEV_FLOW = ALLOWED_TABLES["feedback_items"]["dev_status_flow"]
 _MAX_LIMIT = 200
 
 
@@ -51,6 +53,7 @@ def _brief(row) -> dict:
         "feedback_type": row.feedback_type,
         "priority": row.priority,
         "status": row.status,
+        "dev_status": row.dev_status,
         "page_url": row.page_url,
         "tab": row.tab,
         "component_label": row.component_label,
@@ -231,3 +234,47 @@ def set_feedback_status(record_id):
         sess.refresh(row)
     return jsonify({"ok": True, "from": old, "to": row.status, "changed": changed,
                     "item": to_dict(row)})
+
+
+@bp.route("/api/v1/feedback/<int:record_id>/dev-status", methods=["POST"])
+@limiter.limit("30 per minute; 300 per hour", exempt_when=_skip_limit_for_tests)
+def set_feedback_dev_status(record_id):
+    """Move an item along the PIPELINE's own lane (#76). body: {dev_status, note?}.
+
+    Strictly separate from the human status: this endpoint never reads or writes
+    ``status``/``completed_at``/``resolution_notes`` — the robot records what the
+    robot did (planned/building/tests-pass-awaiting-promote/...), and Josh's
+    triage lane stays his. This is the structural fix for the #68/#69 incident:
+    a tests-passing unpromoted fix becomes visible on the feedback record itself.
+    """
+    err = check_scoped_token("bot")
+    if err:
+        return err
+
+    data = request.get_json(silent=True) or {}
+    requested = (data.get("dev_status") or "").strip()
+    if requested not in _DEV_FLOW:
+        return jsonify({"error": f"dev_status must be one of {_DEV_FLOW}"}), 400
+
+    sess = get_session()
+    row = sess.get(FeedbackItem, record_id)
+    if row is None:
+        return jsonify({"error": "feedback item not found"}), 404
+
+    old = row.dev_status
+    changed = old != requested
+    if changed:
+        row.dev_status = requested
+        # Cap like agent_comments does (8k body / 80-char activity): an uncapped
+        # note would let the 50MB JSON limit flood the activity log.
+        note = str(data.get("note") or "")[:500]
+        sess.add(ActivityLog(
+            table_name="feedback_items", record_id=record_id, action="dev_status_change",
+            field_name="dev_status", old_value=str(old),
+            new_value=str(requested) + (f" — {note}" if note else ""),
+            user_name="Hermes",
+        ))
+        row.updated_at = _utcnow_naive()
+        sess.commit()
+        sess.refresh(row)
+    return jsonify({"ok": True, "from": old, "to": row.dev_status, "changed": changed})
