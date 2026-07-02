@@ -171,7 +171,7 @@ ALLOWED_TABLES = {
         "status_flow": ["New", "Triaged", "Planned", "In Progress", "Needs Info", "Ready to Test", "Fixed", "Accepted", "Closed", "Won't Fix", "Archived"],
         # Pipeline-owned build-state lane (#76). Deliberately NOT in "fields":
         # humans see it as a badge; only the bot-scoped dev-status endpoint writes it.
-        "dev_status_flow": ["unclaimed", "planned", "building",
+        "dev_status_flow": ["unclaimed", "planned", "building", "tests-fail",
                             "tests-pass-awaiting-promote", "promoted", "abandoned"],
     },
     "calendar_events": {

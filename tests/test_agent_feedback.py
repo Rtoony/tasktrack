@@ -253,3 +253,22 @@ def test_dev_status_listed_in_agent_brief(client, temp_app, with_bot_token):
                        headers={"X-Token": BOT_TOKEN}).get_json()["items"]
     mine = next(i for i in items if i["id"] == fid)
     assert mine["dev_status"] == "building"
+
+
+def test_dev_status_accepts_tests_fail(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    r = client.post(f"/api/v1/feedback/{fid}/dev-status",
+                    headers={"X-Token": BOT_TOKEN}, json={"dev_status": "tests-fail"})
+    assert r.status_code == 200 and r.get_json()["to"] == "tests-fail"
+
+
+def test_dev_status_note_capped_at_500(client, temp_app, with_bot_token):
+    fid = _seed(temp_app)
+    client.post(f"/api/v1/feedback/{fid}/dev-status",
+                headers={"X-Token": BOT_TOKEN},
+                json={"dev_status": "building", "note": "x" * 60000})
+    with temp_app.app_context():
+        row = get_session().execute(select(ActivityLog).where(
+            ActivityLog.record_id == fid,
+            ActivityLog.action == "dev_status_change")).scalars().one()
+        assert len(row.new_value) < 600

@@ -149,10 +149,15 @@ def digest():
         select(InboxItem).where(InboxItem.status == "New")
         .order_by(InboxItem.created_at.asc())
     ).all()
+    # Personnel-destined captures are sensitive (same boundary as TASK_TABLES
+    # excluding personnel_issues): count them, never export their titles to a
+    # payload that ends up in Slack.
+    triage_redacted = sum(1 for r in triage_rows
+                          if (r.suggested_table or "") == "personnel_issues")
     triage_awaiting = [{
         "id": r.id, "title": r.title, "source": r.source or "",
         "created_at": str(r.created_at) if r.created_at else None,
-    } for r in triage_rows[:10]]
+    } for r in triage_rows if (r.suggested_table or "") != "personnel_issues"][:10]
     parked_rows = sess.scalars(select(WorkTask)).all()
     parked = [r for r in parked_rows
               if r.status == "Not Started"
@@ -209,6 +214,7 @@ def digest():
             "active": sum(c["active"] for c in by_table.values()),
             "by_table": by_table,
             "triage_awaiting": len(triage_rows),
+            "triage_redacted": triage_redacted,
             "parked": len(parked),
         },
         "overdue": overdue,

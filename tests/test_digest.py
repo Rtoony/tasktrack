@@ -198,3 +198,21 @@ def test_digest_parked_respects_stale_days_param(client, temp_app, with_bot_toke
     assert body["counts"]["parked"] == 1
     body = client.get("/api/v1/digest?stale_days=10", headers={"X-Token": BOT_TOKEN}).get_json()
     assert body["counts"]["parked"] == 0
+
+
+def test_digest_redacts_personnel_destined_captures(client, temp_app, with_bot_token):
+    from app.models import InboxItem
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add_all([
+            InboxItem(title="normal capture", status="New", source="email"),
+            InboxItem(title="Conor xref issue again", status="New", source="email",
+                      suggested_table="personnel_issues"),
+        ])
+        sess.commit()
+    body = client.get("/api/v1/digest", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["counts"]["triage_awaiting"] == 2          # count includes it
+    assert body["counts"]["triage_redacted"] == 1
+    titles = [i["title"] for i in body["triage_awaiting"]]
+    assert "normal capture" in titles
+    assert all("Conor" not in t for t in titles)           # title never exported

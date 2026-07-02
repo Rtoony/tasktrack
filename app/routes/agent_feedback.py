@@ -265,7 +265,9 @@ def set_feedback_dev_status(record_id):
     changed = old != requested
     if changed:
         row.dev_status = requested
-        note = str(data.get("note") or "")
+        # Cap like agent_comments does (8k body / 80-char activity): an uncapped
+        # note would let the 50MB JSON limit flood the activity log.
+        note = str(data.get("note") or "")[:500]
         sess.add(ActivityLog(
             table_name="feedback_items", record_id=record_id, action="dev_status_change",
             field_name="dev_status", old_value=str(old),
