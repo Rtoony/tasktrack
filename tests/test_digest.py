@@ -149,3 +149,52 @@ def test_monthly_throughput(client, temp_app, with_bot_token):
     assert "Done thing" in body["completed_titles"]
     assert body["open"]["overdue"] >= 1
     assert body["open"]["active"] >= 1
+
+
+# ── funnel-drain signals (#72) ───────────────────────────────────────────────
+def test_digest_counts_triage_awaiting(client, temp_app, with_bot_token):
+    from app.models import InboxItem
+    with temp_app.app_context():
+        sess = get_session()
+        sess.add_all([
+            InboxItem(title="new email request", status="New", source="email"),
+            InboxItem(title="another capture", status="New", source="web-form"),
+            InboxItem(title="already archived", status="Archived", source="email"),
+        ])
+        sess.commit()
+    body = client.get("/api/v1/digest", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["counts"]["triage_awaiting"] == 2
+    titles = [i["title"] for i in body["triage_awaiting"]]
+    assert "new email request" in titles and "already archived" not in titles
+
+
+def test_digest_counts_parked_work(client, temp_app, with_bot_token):
+    stale = datetime.utcnow() - timedelta(days=30)
+    with temp_app.app_context():
+        sess = get_session()
+        old = WorkTask(title="rotting backlog item", status="Not Started")
+        fresh = WorkTask(title="fresh capture", status="Not Started")
+        active = WorkTask(title="being worked", status="In Progress")
+        sess.add_all([old, fresh, active])
+        sess.commit()
+        # backdate updated_at past the stale window (default 14d)
+        old.updated_at = stale
+        sess.commit()
+    body = client.get("/api/v1/digest", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["counts"]["parked"] == 1
+    assert body["parked"][0]["title"] == "rotting backlog item"
+    assert body["stale_days"] == 14
+
+
+def test_digest_parked_respects_stale_days_param(client, temp_app, with_bot_token):
+    with temp_app.app_context():
+        sess = get_session()
+        t = WorkTask(title="two days old", status="Not Started")
+        sess.add(t)
+        sess.commit()
+        t.updated_at = datetime.utcnow() - timedelta(days=2)
+        sess.commit()
+    body = client.get("/api/v1/digest?stale_days=1", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["counts"]["parked"] == 1
+    body = client.get("/api/v1/digest?stale_days=10", headers={"X-Token": BOT_TOKEN}).get_json()
+    assert body["counts"]["parked"] == 0
