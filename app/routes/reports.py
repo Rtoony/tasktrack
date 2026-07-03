@@ -37,6 +37,7 @@ from ..services.project_reports import (
     portfolio_project_report,
     project_status_report,
 )
+from ..services.report_settings import get_report_letterhead
 from ..services.tickets import done_statuses_for_table
 from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
@@ -156,6 +157,16 @@ def _visible_report_sections() -> list[dict]:
     return [section for section in REPORT_SECTIONS if is_admin or not section.get("admin_only")]
 
 
+def _letterhead() -> dict:
+    """Letterhead config for printable Documents (app_settings: report_letterhead).
+
+    Rendered by templates/partials/report_letterhead.html and styled by
+    static/css/report-print.css so browser-printed PDFs read as official
+    department documents. One primary-key read per page render.
+    """
+    return get_report_letterhead(get_session())
+
+
 @bp.context_processor
 def report_nav_context():
     active = _active_report_section()
@@ -165,6 +176,7 @@ def report_nav_context():
         "report_sections": sections,
         "active_report_section": active,
         "active_report_meta": active_meta,
+        "letterhead": _letterhead(),
     }
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
