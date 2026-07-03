@@ -38,6 +38,7 @@ from ..services.project_reports import (
     project_status_report,
 )
 from ..services.report_settings import get_report_letterhead
+from ..services.thursday_packet import thursday_packet
 from ..services.tickets import done_statuses_for_table
 from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
@@ -51,6 +52,12 @@ REPORT_SECTIONS = [
         "title": "Overview",
         "subtitle": "Quick actions and saved presets.",
         "href": "/reports",
+    },
+    {
+        "key": "thursday",
+        "title": "Thursday Packet",
+        "subtitle": "Weekly management document — print Thursday morning.",
+        "href": "/reports/thursday",
     },
     {
         "key": "today",
@@ -141,6 +148,8 @@ def _active_report_section() -> str:
         return "meeting"
     if path == "/reports/management":
         return "management"
+    if path == "/reports/thursday":
+        return "thursday"
     if path == "/reports/today":
         return "today"
     if path == "/weekly":
@@ -898,6 +907,30 @@ def today_brief_page():
     return render_template(
         "reports_today.html",
         packet=_today_brief_packet(get_session()),
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
+def _thursday_packet_payload(sess):
+    """Thursday Packet with request-arg windows (mirrors _today_brief_packet)."""
+    window_days = _int_arg("window_days", 7, 1, 31)
+    due_days = _int_arg("due_days", 7, 1, 31)
+    return thursday_packet(sess, window_days=window_days, due_days=due_days)
+
+
+@bp.route("/api/v1/reports/thursday", methods=["GET"])
+@login_required
+def thursday_packet_json():
+    return jsonify(_thursday_packet_payload(get_session()))
+
+
+@bp.route("/reports/thursday", methods=["GET"])
+@login_required
+def thursday_packet_page():
+    return render_template(
+        "thursday_packet.html",
+        packet=_thursday_packet_payload(get_session()),
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )
