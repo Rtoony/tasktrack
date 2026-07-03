@@ -4772,14 +4772,26 @@ async function reloadMap(fit) {
   try {
     const res = await fetch(url);
     if (res.status === 401) { window.location='/login'; return; }
+    if (!res.ok) throw new Error('geojson HTTP ' + res.status);
     geo = await res.json();
-  } catch (e) { geo = { features: [] }; }
+  } catch (e) {
+    // Surfaced 2026-07-03: this catch used to swallow every failure into
+    // "No projects match these filters" — a lie that hid the real error.
+    console.error('[map] pin load failed:', e);
+    geo = { features: [], _error: String(e && e.message || e) };
+  }
 
   if (mapClusterLayer) { mapClusterLayer.remove(); mapClusterLayer = null; }
   if (mapLayer) { mapLayer.remove(); mapLayer = null; }
   const features = (geo.features || []);
 
-  document.getElementById('map-empty').style.display = features.length ? 'none' : 'block';
+  const mapEmptyEl = document.getElementById('map-empty');
+  mapEmptyEl.style.display = features.length ? 'none' : 'block';
+  // Honest empty-state: a load error is not "no matches" (review 07-03).
+  const emptyTitle = mapEmptyEl.querySelector('.empty-title');
+  if (emptyTitle) emptyTitle.textContent = (geo && geo._error)
+    ? 'Map failed to load pins — ' + geo._error
+    : 'No projects match these filters';
   document.getElementById('map-host').style.display = features.length ? 'block' : 'none';
   // Distinct project count vs. site count — both useful when a project
   // can render many pins (the worst is "223.00" with 84 sites).
