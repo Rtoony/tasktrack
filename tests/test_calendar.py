@@ -396,13 +396,16 @@ def test_dashboard_includes_calendar_surface(auth_client):
     assert r.status_code == 200
     html = r.data.decode("utf-8")
     assert 'id="core-loop"' in html
-    assert 'id="core-tracker-cards"' in html
+    # Command deck (#73): tracker grid + standalone overdue/due-soon panels were
+    # replaced by the digest strip + three-panel spine; overdue/due-soon now
+    # surface inside the Projects panel rows.
+    assert 'id="deck-triage-list"' in html
+    assert 'id="deck-projects-list"' in html
+    assert 'id="deck-caddev-list"' in html
+    assert 'id="deck-overdue"' in html
     assert 'id="core-review-queue"' in html
-    assert 'id="core-overdue"' in html
-    assert 'id="core-due-soon"' in html
-    assert "function renderCoreOverdue(stats)" in html
-    assert "coreDueQueueRows(stats, 'overdue_items', 'Overdue', 'red')" in html
-    assert "coreDueQueueRows(stats, 'due_soon_items', 'Due soon', 'amber')" in html
+    assert "function renderDeck(data)" in html
+    assert "deckDueChip" in html
     assert 'class="modal-overlay record-overlay"' in html
     assert '.modal-overlay { display:none; position:fixed; inset:0; background:rgba(22,22,22,0.42); backdrop-filter:blur(2px); z-index:1200;' in html
     assert 'class="modal record-drawer"' in html

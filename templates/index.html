@@ -932,7 +932,47 @@
   @keyframes scorecardRowFlash { 0%{background:color-mix(in srgb, var(--accent) 32%, var(--surface))} 100%{background:transparent} }
   tr.scorecard-row-flash > td { animation: scorecardRowFlash 1.6s ease-out; }
 
-
+  /* ── Command deck (#73) — digest-parity strip + three-panel work spine ── */
+  .deck-strip { display:flex; flex-wrap:wrap; align-items:baseline; gap:0.4rem 1.4rem;
+    padding:0.55rem 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+    font-size:0.82rem; color:var(--text-muted); }
+  .deck-strip b { font-family:'IBM Plex Mono',monospace; font-size:1.05rem; font-weight:700;
+    color:var(--text); margin-right:0.15rem; }
+  .deck-stat.danger b { color:var(--danger); }
+  .deck-stat.warn b { color:var(--warn); }
+  .deck-stat-link { background:none; border:0; padding:0; font:inherit; color:inherit;
+    cursor:pointer; text-decoration:underline dotted; text-underline-offset:3px; }
+  .deck-stat-link:hover { color:var(--text); }
+  .deck-spine { display:grid; grid-template-columns:1fr; gap:0.9rem; margin:1.1rem 0; }
+  @media (min-width:1200px) { .deck-spine { grid-template-columns:1fr 1.6fr 1fr; } }
+  .deck-panel .core-list { min-height:3rem; }
+  .deck-panel-wide .core-list { max-height:26rem; overflow-y:auto; }
+  .deck-subhead { display:flex; align-items:center; justify-content:space-between; gap:0.5rem;
+    margin-top:0.8rem; padding-top:0.6rem; border-top:1px solid var(--border);
+    font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.05em;
+    color:var(--text-muted); }
+  .deck-link { background:none; border:0; padding:0; font:inherit; font-size:0.72rem;
+    color:var(--accent); cursor:pointer; }
+  .deck-link:hover { text-decoration:underline; }
+  .deck-row { display:flex; align-items:center; gap:0.6rem; padding:0.45rem 0.2rem;
+    border-bottom:1px solid var(--border); cursor:pointer; }
+  .deck-row:last-child { border-bottom:0; }
+  .deck-row:hover { background:var(--surface-2, rgba(127,127,127,0.06)); }
+  .deck-row-main { flex:1 1 auto; min-width:0; }
+  .deck-row-title { font-size:0.84rem; font-weight:600; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; }
+  .deck-row-meta { font-size:0.7rem; color:var(--text-muted); font-family:'IBM Plex Mono',monospace;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .deck-chip { flex:0 0 auto; font-size:0.66rem; font-weight:700; padding:0.1rem 0.4rem;
+    border:1px solid var(--border); border-radius:999px; color:var(--text-muted); }
+  .deck-chip.late { color:var(--danger); border-color:var(--danger); }
+  .deck-chip.today { color:var(--warn); border-color:var(--warn); }
+  .deck-row-act { flex:0 0 auto; }
+  .deck-more { margin-top:1.25rem; }
+  .deck-more > summary { cursor:pointer; font-size:0.78rem; font-weight:700;
+    color:var(--text-muted); padding:0.5rem 0.2rem; border-top:1px solid var(--border);
+    list-style-position:inside; }
+  .deck-more > summary:hover { color:var(--text); }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
@@ -1109,22 +1149,16 @@
             <a class="btn btn-export" href="/reports">Reports</a>
           </div>
         </div>
-        <div class="core-stat-strip" aria-label="TaskTrack daily summary">
-          <div class="core-stat-tile">
-            <div class="core-stat-value" id="core-open-count">0</div>
-            <div class="core-stat-label">Open items</div>
-            <div class="core-stat-note">across work queues</div>
-          </div>
-          <div class="core-stat-tile">
-            <div class="core-stat-value warn" id="core-review-count">0</div>
-            <div class="core-stat-label">Need review</div>
-            <div class="core-stat-note">web, paper, OCR</div>
-          </div>
-          <div class="core-stat-tile">
-            <div class="core-stat-value danger" id="core-overdue-count">0</div>
-            <div class="core-stat-label">Overdue</div>
-            <div class="core-stat-note">active only</div>
-          </div>
+        <!-- Command-deck strip (#73): digest-parity numbers, thin text stats.
+             Same source as the 06:05 Slack digest (services.funnel) — never drifts. -->
+        <div class="deck-strip" aria-label="TaskTrack daily summary">
+          <span class="deck-stat danger"><b id="deck-overdue">0</b> overdue</span>
+          <span class="deck-stat"><b id="deck-due-today">0</b> due today</span>
+          <span class="deck-stat warn"><b id="deck-triage">0</b> awaiting triage</span>
+          <button class="deck-stat deck-stat-link" type="button" id="deck-parked-pill"
+                  title="Not Started work untouched past the stale window — opens the Work tab">
+            <b id="deck-parked">0</b> parked <span id="deck-parked-days">14</span>d+
+          </button>
         </div>
       </div>
 
@@ -1142,8 +1176,33 @@
         </div>
       </div>
 
-      <div class="core-section-label">Trackers</div>
-      <div class="core-tracker-grid" id="core-tracker-cards"></div>
+      <!-- The spine (#73): three panels mirroring the real loop, left to right —
+           triage what came in, drive project tasks to done, keep CAD dev honest. -->
+      <div class="deck-spine">
+        <section class="core-panel deck-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag amber">In</span><span>Triage</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('triage')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-triage-list"><div class="core-empty">Inbox is clear.</div></div>
+          <div class="deck-subhead">Needs review <span class="core-panel-hint">AI-drafted captures</span></div>
+          <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
+        </section>
+        <section class="core-panel deck-panel deck-panel-wide">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag blue">Do</span><span>Project Tasks</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="openModal('project')">+ task</button> · <button class="deck-link" type="button" onclick="activateTab('project')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-projects-list"><div class="core-empty">No active project tasks.</div></div>
+        </section>
+        <section class="core-panel deck-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag teal">Build</span><span>CAD Dev</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('work')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-caddev-list"><div class="core-empty">Nothing in flight.</div></div>
+        </section>
+      </div>
 
       <!-- Capture & triage card (was the standalone AI Intake tab) -->
       <div class="dash-card capture-card">
@@ -1315,30 +1374,6 @@
         </div>
       </div>
 
-      <div class="core-work-grid">
-        <section class="core-panel">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag amber">Review</span><span>Needs review</span></div>
-            <span class="core-panel-hint">Confirm or route captures</span>
-          </div>
-          <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
-        </section>
-        <section class="core-panel">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag red">Late</span><span>Overdue</span></div>
-            <span class="core-panel-hint">clear first</span>
-          </div>
-          <div class="core-list" id="core-overdue"><div class="core-empty">No overdue items.</div></div>
-        </section>
-        <section class="core-panel">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag blue">Due</span><span>Due soon</span></div>
-            <span class="core-panel-hint">14 day window</span>
-          </div>
-          <div class="core-list" id="core-due-soon"><div class="core-empty">No due items in the next 14 days.</div></div>
-        </section>
-      </div>
-
       <section class="core-panel">
         <div class="core-panel-head">
           <div class="core-panel-title"><span class="core-tag teal">Flow</span><span>Recent activity</span></div>
@@ -1348,6 +1383,12 @@
       </section>
     </div>
 
+    <!-- Demoted, not deleted (#73): low-traffic panels fold away; every element id
+         is preserved (renderers + the mobile companion's widget relocation both
+         key on ids, and moveWidgetToMobile's comment-placeholder restore is
+         parent-agnostic, so living inside <details> is safe). -->
+    <details class="deck-more">
+      <summary>More panels — intake review, today plan, calendar, reminders{% if user_role == 'admin' %}, admin{% endif %}</summary>
     <div class="dash-card" style="margin:1.25rem 0;">
       <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
         <span>Intake Review</span>
@@ -1429,6 +1470,7 @@
       </div>
     </div>
     {% endif %}
+    </details>
   </section>
 
   <!-- ── INBOX ─────────────────────────────── -->
@@ -5320,6 +5362,123 @@ function renderCoreRecentActivity(rows) {
   });
 }
 
+// ── Command deck (#73): digest-parity strip + the three-panel work spine ──
+function deckRow({ title, meta, chip, chipClass, onOpen, action }) {
+  const row = document.createElement('div');
+  row.className = 'deck-row';
+  const main = document.createElement('div');
+  main.className = 'deck-row-main';
+  const t = document.createElement('div');
+  t.className = 'deck-row-title'; t.textContent = title || '(untitled)'; t.title = title || '';
+  const m = document.createElement('div');
+  m.className = 'deck-row-meta'; m.textContent = meta || '';
+  main.appendChild(t); main.appendChild(m);
+  row.appendChild(main);
+  if (chip) {
+    const c = document.createElement('span');
+    c.className = 'deck-chip' + (chipClass ? ' ' + chipClass : '');
+    c.textContent = chip;
+    row.appendChild(c);
+  }
+  if (action) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-sm btn-export deck-row-act';
+    b.textContent = action.label;
+    b.addEventListener('click', (e) => { e.stopPropagation(); action.run(); });
+    row.appendChild(b);
+  }
+  if (onOpen) row.addEventListener('click', onOpen);
+  return row;
+}
+
+function deckFill(hostId, rows, emptyText) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  host.replaceChildren();
+  if (!rows.length) { host.innerHTML = '<div class="core-empty">' + esc(emptyText) + '</div>'; return; }
+  rows.forEach(r => host.appendChild(r));
+}
+
+function deckAge(iso) {
+  if (!iso) return '';
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  return days <= 0 ? 'today' : days + 'd';
+}
+
+function deckDueChip(raw) {
+  const due = String(raw || '').slice(0, 10);
+  if (!due) return null;
+  const today = new Date().toISOString().slice(0, 10);
+  if (due < today) return { chip: 'late ' + due.slice(5), chipClass: 'late' };
+  if (due === today) return { chip: 'today', chipClass: 'today' };
+  return { chip: due.slice(5), chipClass: '' };
+}
+
+async function renderDeck(data) {
+  const s = data.stats || {};
+  const funnel = data.funnel || {};
+  const taskOverdue = (s.work_tasks?.overdue||0) + (s.project_work_tasks?.overdue||0) + (s.training_tasks?.overdue||0);
+  const taskDueToday = (s.work_tasks?.due_today||0) + (s.project_work_tasks?.due_today||0) + (s.training_tasks?.due_today||0);
+  coreSetText('deck-overdue', taskOverdue);
+  coreSetText('deck-due-today', taskDueToday);
+  coreSetText('deck-triage', funnel.triage_total ?? 0);
+  coreSetText('deck-parked', funnel.parked_total ?? 0);
+  coreSetText('deck-parked-days', funnel.stale_days ?? 14);
+  const pill = document.getElementById('deck-parked-pill');
+  if (pill && !pill.dataset.wired) {
+    pill.dataset.wired = '1';
+    pill.addEventListener('click', () => activateTab('work'));
+  }
+
+  const [inbox, projects, cad] = await Promise.all([
+    api('GET', '/api/v1/inbox_items?sort=created_at&order=asc'),
+    api('GET', '/api/v1/project_work_tasks?sort=due_at&order=asc'),
+    api('GET', '/api/v1/work_tasks?sort=updated_at&order=desc'),
+  ]);
+
+  const inboxRows = (Array.isArray(inbox) ? inbox : [])
+    .filter(r => (r.status || 'New') === 'New')
+    .slice(0, 8)
+    .map(r => deckRow({
+      title: r.title,
+      meta: (r.source || 'manual') + ' · ' + deckAge(r.created_at),
+      onOpen: () => editRecord('triage', r.id),
+      action: { label: 'Assign', run: () => openTriagePromote(r) },
+    }));
+  deckFill('deck-triage-list', inboxRows, 'Inbox is clear.');
+
+  const DONE_P = new Set(['Complete']);
+  const projRows = (Array.isArray(projects) ? projects : [])
+    .filter(r => !DONE_P.has(r.status))
+    .sort((a, b) => {
+      const da = String(a.due_at || '9999'), db_ = String(b.due_at || '9999');
+      return da < db_ ? -1 : da > db_ ? 1 : (a.id - b.id);
+    })
+    .slice(0, 12)
+    .map(r => {
+      const due = deckDueChip(r.due_at) || {};
+      return deckRow({
+        title: r.title,
+        meta: [r.project_number, r.engineer, r.status].filter(Boolean).join(' · '),
+        chip: due.chip, chipClass: due.chipClass,
+        onOpen: () => editRecord('project', r.id),
+      });
+    });
+  deckFill('deck-projects-list', projRows, 'No active project tasks.');
+
+  const CAD_ACTIVE = { 'In Progress': 0, 'New': 1 };
+  const cadRows = (Array.isArray(cad) ? cad : [])
+    .filter(r => r.status in CAD_ACTIVE)
+    .sort((a, b) => CAD_ACTIVE[a.status] - CAD_ACTIVE[b.status] || (a.id - b.id))
+    .slice(0, 8)
+    .map(r => deckRow({
+      title: r.title,
+      meta: [r.category, r.status].filter(Boolean).join(' · '),
+      onOpen: () => editRecord('work', r.id),
+    }));
+  deckFill('deck-caddev-list', cadRows, 'Nothing in flight.');
+}
+
 async function loadDashboard() {
   const data = await api('GET','/api/v1/dashboard');
   if (!data) return;
@@ -5331,6 +5490,7 @@ async function loadDashboard() {
   const intakeReview = data.intake?.summary?.needs_review_count || 0;
 
   renderCoreLoop(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
+  renderDeck(data);
   mobileUpdateFromDashboard(data, { totalActive, totalOverdue, totalHigh, totalComplete, intakeReview });
 
   renderDashboardIntake(data.intake);

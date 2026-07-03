@@ -26,6 +26,7 @@ from ..models import (
 )
 from ..services.audit import log_activity
 from ..services.csv_safe import csv_safe
+from ..services.funnel import funnel_counts
 from ..services.intake_reports import intake_source_report
 from ..services.task_summary import draft_summary, SUMMARY_TABLES
 from ..services.tickets import (
@@ -183,6 +184,15 @@ def dashboard_stats():
                 if not is_overdue_value(r.get(due_field))
                 and _is_due_soon_value(r.get(due_field))
             ]
+        # Command-deck strip (#73): "due today" is its own beat, distinct from
+        # the 14-day due_soon window.
+        due_today = 0
+        if due_field:
+            today_iso = date.today().isoformat()
+            due_today = sum(
+                1 for r in active
+                if str(r.get(due_field) or "")[:10] == today_iso
+            )
 
         by_status = {}
         for r in all_rows:
@@ -217,6 +227,7 @@ def dashboard_stats():
             "active": len(active),
             "overdue": len(overdue),
             "overdue_items": overdue[:10],
+            "due_today": due_today,
             "due_soon": len(due_soon),
             "due_soon_items": due_soon[:10],
             "by_status": by_status,
@@ -238,7 +249,10 @@ def dashboard_stats():
         limit=25,
         needs_review=True,
     )
-    return jsonify({"stats": stats, "recent_activity": recent, "intake": intake})
+    # Command-deck strip (#73): same funnel numbers as the 06:05 Slack digest —
+    # shared service so the landing page and the morning card can never drift.
+    return jsonify({"stats": stats, "recent_activity": recent, "intake": intake,
+                    "funnel": funnel_counts(sess)})
 
 
 # ── Search ─────────────────────────────────────────────────────────────────
