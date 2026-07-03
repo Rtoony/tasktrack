@@ -93,6 +93,10 @@
   .action-copy { color:var(--text-muted); font-size:0.74rem; margin-top:0.25rem; }
   @media (max-width:1200px) { .action-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
   @media (max-width:640px) { .action-grid { grid-template-columns:1fr; } }
+  /* Report Center groups: Documents (print-first packets) featured first,
+     Queues & Analytics second. */
+  .group-heading { display:flex; align-items:center; gap:0.6rem; margin:1.3rem 0 0.8rem; font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.09em; color:var(--text-muted); }
+  .group-heading::after { content:''; flex:1; height:1px; background:var(--border); }
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
 </head>
@@ -126,6 +130,7 @@
         <p class="sub">Build meeting-ready packets from TaskTrack data. Private calendar items stay user-scoped; capability details stay admin-gated.</p>
       </div>
       <div class="hero-actions">
+        <a class="btn" href="/reports/thursday">Thursday Packet</a>
         <a class="btn secondary" href="/reports/today">Today Brief</a>
         <a class="btn secondary" href="/reports/management">Management Packet</a>
         {% if user_role == 'admin' %}<a class="btn secondary" href="/admin/reports">Admin Shortcuts</a>{% endif %}
@@ -170,8 +175,21 @@
       </div>
     </section>
 
+    {# Documents — the print-first packets that leave the building as official
+       department documents. Featured first; Queues & Analytics follow. #}
+    <h2 class="group-heading" id="documents">Documents</h2>
     <div class="grid">
       <div>
+        <section class="card" id="thursday">
+          <h2>Thursday Packet</h2>
+          <p>The weekly ritual document: completed work, in-flight commitments, and risks &amp; overdue — print Thursday morning for the evening management meeting.</p>
+          <div class="actions">
+            <a class="btn" href="/reports/thursday">Open Packet</a>
+            <a class="btn secondary" href="/reports/thursday?window_days=14&due_days=14">14-Day Windows</a>
+            <a class="btn ghost" href="/api/v1/reports/thursday">JSON</a>
+          </div>
+        </section>
+
         <section class="card" id="management">
           <h2>Management Packet</h2>
           <p>Assemble the existing Today Brief, portfolio executive summary, at-risk actions, intake review, meeting prep, and admin incident summary into one print-ready packet.</p>
@@ -198,55 +216,6 @@
           </div>
         </section>
 
-        <section class="card" id="project-one">
-          <h2>Project Status One-Pager</h2>
-          <p>Open a focused project report with linked tasks, calendar items, overlay context, map links, and recent activity.</p>
-          {# H3: client-side "recently opened" memory so a project you opened minutes
-             ago is one click away, instead of re-typing its number every visit.
-             Populated from localStorage by JS below; hidden until there's history. #}
-          <div class="recent-row" id="recent-projects" hidden>
-            <span class="recent-label">Recently opened</span>
-          </div>
-          <div class="lookup-row">
-            <div>
-              <label for="project-picker">Find Project</label>
-              <input id="project-picker" list="project-picker-options" placeholder="type number, name, or client">
-              <datalist id="project-picker-options"></datalist>
-            </div>
-            <button class="btn" type="button" onclick="openProjectReport()">Open Project</button>
-          </div>
-        </section>
-
-        <section class="card" id="portfolio">
-          <h2>Portfolio Packets</h2>
-          <p>Use a saved preset or start with a common packet. Portfolio packets are print-friendly and can include your private events only when explicitly requested.</p>
-          <div class="actions">
-            <a class="btn" href="/reports/projects">Build Custom Packet</a>
-            <a class="btn secondary" href="/reports/projects?display_status=active&limit=12">Active Projects</a>
-            <a class="btn secondary" href="/reports/projects?attention_level=at_risk&limit=25">At-Risk Queue</a>
-            <a class="btn secondary" href="/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25">At-Risk CSV</a>
-            <a class="btn secondary" href="/reports/projects?include_inactive=1&limit=25">All Visible Projects</a>
-          </div>
-          <div class="quick-row">
-            <div><div class="quick-title">Saved Portfolio Presets</div><div class="quick-meta">Owner-private unless shared.</div></div>
-            <a class="btn ghost" href="/reports/projects">Manage Presets</a>
-          </div>
-          <div class="preset-list" style="margin-top:0.7rem">
-            {% if presets %}
-              {% for preset in presets %}
-              <div class="preset-item">
-                <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Portfolio packet{% if preset.is_shared %} / shared{% endif %}</div></div>
-                <a class="btn secondary" href="/reports/projects?preset={{ preset.id }}">Open</a>
-              </div>
-              {% endfor %}
-            {% else %}
-              <div class="empty">No saved portfolio presets yet.</div>
-            {% endif %}
-          </div>
-        </section>
-      </div>
-
-      <div>
         {% if user_role == 'admin' %}
         <section class="card" id="admin-reports">
           <h2>Competency Reports</h2>
@@ -275,55 +244,26 @@
             {% endif %}
           </div>
         </section>
-
-        <section class="card">
-          <h2>Incident Reports</h2>
-          <p>Admin-only capability and incident reporting with full narratives, filters, printable output, JSON, and CSV.</p>
-          <div class="actions">
-            <a class="btn" href="/reports/incidents?open_only=1">Open Incidents</a>
-            <a class="btn secondary" href="/reports/incidents?severity=High&open_only=1">High Severity</a>
-            <a class="btn secondary" href="/reports/incidents?follow_up_due=1">Follow-Up Due</a>
-            <a class="btn ghost" href="/api/v1/reports/incidents.csv?open_only=1">CSV</a>
-          </div>
-          <div class="quick-row">
-            <div><div class="quick-title">Saved Incident Presets</div><div class="quick-meta">Admin-only reusable capability packets.</div></div>
-            <a class="btn ghost" href="/reports/incidents">Manage</a>
-          </div>
-          <div class="preset-list" style="margin-top:0.7rem">
-            {% if incident_presets %}
-              {% for preset in incident_presets %}
-              <div class="preset-item">
-                <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Incident report{% if preset.is_shared %} / shared{% endif %}</div></div>
-                <a class="btn secondary" href="/reports/incidents?preset={{ preset.id }}">Open</a>
-              </div>
-              {% endfor %}
-            {% else %}
-              <div class="empty">No saved incident presets yet.</div>
-            {% endif %}
-          </div>
-        </section>
         {% endif %}
+      </div>
 
-        <section class="card" id="intake">
-          <h2>Intake Review</h2>
-          <p>Audit scanned forms, reMarkable OCR captures, and other source-tagged items that need operator review.</p>
-          <div class="actions">
-            <a class="btn" href="/intake/review?needs_review=1">Review Queue</a>
-            <a class="btn secondary" href="/reports/intake?needs_review=1">Audit Report</a>
-            <a class="btn secondary" href="/reports/intake?sources=web-form,paper-form,remarkable-ocr&days=30">Web/Paper/OCR Last 30</a>
-            <a class="btn ghost" href="/api/v1/reports/intake.csv?sources=web-form,paper-form,remarkable-ocr&days=30">CSV</a>
+      <div>
+        <section class="card" id="project-one">
+          <h2>Project Status One-Pager</h2>
+          <p>Open a focused project report with linked tasks, calendar items, overlay context, map links, and recent activity.</p>
+          {# H3: client-side "recently opened" memory so a project you opened minutes
+             ago is one click away, instead of re-typing its number every visit.
+             Populated from localStorage by JS below; hidden until there's history. #}
+          <div class="recent-row" id="recent-projects" hidden>
+            <span class="recent-label">Recently opened</span>
           </div>
-        </section>
-
-        <section class="card" id="weekly">
-          <h2>Weekly Review</h2>
-          <p>Use this for check-ins, recent work, overdue summaries, and quick operational status.</p>
-          <div class="actions">
-            <a class="btn" href="/reports/today">Today Brief</a>
-            <a class="btn secondary" href="/weekly?days=7">7 Days</a>
-            <a class="btn secondary" href="/weekly?days=14">14 Days</a>
-            <a class="btn secondary" href="/weekly?days=30">30 Days</a>
-            <a class="btn ghost" href="/api/v1/weekly?days=7">JSON</a>
+          <div class="lookup-row">
+            <div>
+              <label for="project-picker">Find Project</label>
+              <input id="project-picker" list="project-picker-options" placeholder="type number, name, or client">
+              <datalist id="project-picker-options"></datalist>
+            </div>
+            <button class="btn" type="button" onclick="openProjectReport()">Open Project</button>
           </div>
         </section>
 
@@ -352,6 +292,93 @@
           </div>
           <div id="meeting-packets" class="event-list"><div class="empty">Loading upcoming events...</div></div>
         </section>
+      </div>
+    </div>
+
+    <h2 class="group-heading" id="queues">Queues &amp; Analytics</h2>
+    <div class="grid">
+      <div>
+        <section class="card" id="portfolio">
+          <h2>Portfolio Packets</h2>
+          <p>Use a saved preset or start with a common packet. Portfolio packets are print-friendly and can include your private events only when explicitly requested.</p>
+          <div class="actions">
+            <a class="btn" href="/reports/projects">Build Custom Packet</a>
+            <a class="btn secondary" href="/reports/projects?display_status=active&limit=12">Active Projects</a>
+            <a class="btn secondary" href="/reports/projects?attention_level=at_risk&limit=25">At-Risk Queue</a>
+            <a class="btn secondary" href="/api/v1/reports/projects/actions.csv?attention_level=at_risk&limit=25">At-Risk CSV</a>
+            <a class="btn secondary" href="/reports/projects?include_inactive=1&limit=25">All Visible Projects</a>
+          </div>
+          <div class="quick-row">
+            <div><div class="quick-title">Saved Portfolio Presets</div><div class="quick-meta">Owner-private unless shared.</div></div>
+            <a class="btn ghost" href="/reports/projects">Manage Presets</a>
+          </div>
+          <div class="preset-list" style="margin-top:0.7rem">
+            {% if presets %}
+              {% for preset in presets %}
+              <div class="preset-item">
+                <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Portfolio packet{% if preset.is_shared %} / shared{% endif %}</div></div>
+                <a class="btn secondary" href="/reports/projects?preset={{ preset.id }}">Open</a>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="empty">No saved portfolio presets yet.</div>
+            {% endif %}
+          </div>
+        </section>
+
+        <section class="card" id="intake">
+          <h2>Intake Review</h2>
+          <p>Audit scanned forms, reMarkable OCR captures, and other source-tagged items that need operator review.</p>
+          <div class="actions">
+            <a class="btn" href="/intake/review?needs_review=1">Review Queue</a>
+            <a class="btn secondary" href="/reports/intake?needs_review=1">Audit Report</a>
+            <a class="btn secondary" href="/reports/intake?sources=web-form,paper-form,remarkable-ocr&days=30">Web/Paper/OCR Last 30</a>
+            <a class="btn ghost" href="/api/v1/reports/intake.csv?sources=web-form,paper-form,remarkable-ocr&days=30">CSV</a>
+          </div>
+        </section>
+      </div>
+
+      <div>
+        <section class="card" id="weekly">
+          <h2>Weekly Review</h2>
+          <p>Use this for check-ins, recent work, overdue summaries, and quick operational status.</p>
+          <div class="actions">
+            <a class="btn" href="/reports/today">Today Brief</a>
+            <a class="btn secondary" href="/weekly?days=7">7 Days</a>
+            <a class="btn secondary" href="/weekly?days=14">14 Days</a>
+            <a class="btn secondary" href="/weekly?days=30">30 Days</a>
+            <a class="btn ghost" href="/api/v1/weekly?days=7">JSON</a>
+          </div>
+        </section>
+
+        {% if user_role == 'admin' %}
+        <section class="card">
+          <h2>Incident Reports</h2>
+          <p>Admin-only capability and incident reporting with full narratives, filters, printable output, JSON, and CSV.</p>
+          <div class="actions">
+            <a class="btn" href="/reports/incidents?open_only=1">Open Incidents</a>
+            <a class="btn secondary" href="/reports/incidents?severity=High&open_only=1">High Severity</a>
+            <a class="btn secondary" href="/reports/incidents?follow_up_due=1">Follow-Up Due</a>
+            <a class="btn ghost" href="/api/v1/reports/incidents.csv?open_only=1">CSV</a>
+          </div>
+          <div class="quick-row">
+            <div><div class="quick-title">Saved Incident Presets</div><div class="quick-meta">Admin-only reusable capability packets.</div></div>
+            <a class="btn ghost" href="/reports/incidents">Manage</a>
+          </div>
+          <div class="preset-list" style="margin-top:0.7rem">
+            {% if incident_presets %}
+              {% for preset in incident_presets %}
+              <div class="preset-item">
+                <div><div class="preset-name">{{ preset.name }}</div><div class="quick-meta">Incident report{% if preset.is_shared %} / shared{% endif %}</div></div>
+                <a class="btn secondary" href="/reports/incidents?preset={{ preset.id }}">Open</a>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="empty">No saved incident presets yet.</div>
+            {% endif %}
+          </div>
+        </section>
+        {% endif %}
       </div>
     </div>
   </main>
