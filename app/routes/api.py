@@ -26,6 +26,7 @@ from ..models import (
 )
 from ..services.audit import log_activity
 from ..services.csv_safe import csv_safe
+from ..services.funnel import funnel_counts
 from ..services.intake_reports import intake_source_report
 from ..services.task_summary import draft_summary, SUMMARY_TABLES
 from ..services.tickets import (
@@ -238,7 +239,10 @@ def dashboard_stats():
         limit=25,
         needs_review=True,
     )
-    return jsonify({"stats": stats, "recent_activity": recent, "intake": intake})
+    # Command-deck strip (#73): same funnel numbers as the 06:05 Slack digest —
+    # shared service so the landing page and the morning card can never drift.
+    return jsonify({"stats": stats, "recent_activity": recent, "intake": intake,
+                    "funnel": funnel_counts(sess)})
 
 
 # ── Search ─────────────────────────────────────────────────────────────────

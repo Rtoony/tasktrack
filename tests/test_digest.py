@@ -216,3 +216,27 @@ def test_digest_redacts_personnel_destined_captures(client, temp_app, with_bot_t
     titles = [i["title"] for i in body["triage_awaiting"]]
     assert "normal capture" in titles
     assert all("Conor" not in t for t in titles)           # title never exported
+
+
+def test_dashboard_funnel_matches_digest(client, temp_app, with_bot_token):
+    """The command deck strip and the Slack digest must report the same numbers
+    (shared services.funnel)."""
+    from app.models import InboxItem
+    with temp_app.app_context():
+        sess = get_session()
+        t = WorkTask(title="old parked", status="Not Started")
+        sess.add_all([t, InboxItem(title="waiting", status="New", source="email")])
+        sess.commit()
+        t.updated_at = datetime.utcnow() - timedelta(days=30)
+        sess.commit()
+    digest = client.get("/api/v1/digest", headers={"X-Token": BOT_TOKEN}).get_json()
+    # dashboard is session-authed: log in via the test client session
+    with client.session_transaction() as s:
+        s["user_id"] = 1
+        s["user_email"] = "t@t"
+        s["user_name"] = "T"
+        s["user_role"] = "admin"
+    dash = client.get("/api/v1/dashboard").get_json()
+    assert dash["funnel"]["triage_total"] == digest["counts"]["triage_awaiting"] == 1
+    assert dash["funnel"]["parked_total"] == digest["counts"]["parked"] == 1
+    assert dash["funnel"]["stale_days"] == 14

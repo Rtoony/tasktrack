@@ -20,7 +20,8 @@ from sqlalchemy import func, select
 from .. import limiter
 from ..config import ALLOWED_TABLES
 from ..db import get_session
-from ..models import ActivityLog, InboxItem, WorkTask, to_dict
+from ..models import ActivityLog, to_dict
+from ..services.funnel import funnel_counts
 from ..services.tickets import (
     TABLE_MODELS,
     done_statuses_for_table,
@@ -140,33 +141,15 @@ def digest():
 
         by_table[table] = counts
 
-    # Funnel-drain signals (#72): the two numbers a single-user tool lives or
-    # dies by — what's waiting on a triage decision, and what's quietly rotting
-    # in the backlog. Capture channels fill the funnel; this is the drain gauge.
+    # Funnel-drain signals (#72): shared with /api/v1/dashboard via services.funnel
+    # so the Slack digest and the command deck can never drift.
     stale_days = _clamp(request.args.get("stale_days"), 14, 1, 365)
-    stale_cutoff = datetime.utcnow() - timedelta(days=stale_days)
-    triage_rows = sess.scalars(
-        select(InboxItem).where(InboxItem.status == "New")
-        .order_by(InboxItem.created_at.asc())
-    ).all()
-    # Personnel-destined captures are sensitive (same boundary as TASK_TABLES
-    # excluding personnel_issues): count them, never export their titles to a
-    # payload that ends up in Slack.
-    triage_redacted = sum(1 for r in triage_rows
-                          if (r.suggested_table or "") == "personnel_issues")
-    triage_awaiting = [{
-        "id": r.id, "title": r.title, "source": r.source or "",
-        "created_at": str(r.created_at) if r.created_at else None,
-    } for r in triage_rows if (r.suggested_table or "") != "personnel_issues"][:10]
-    parked_rows = sess.scalars(select(WorkTask)).all()
-    parked = [r for r in parked_rows
-              if r.status == "Not Started"
-              and getattr(r, "archived_at", None) is None
-              and r.updated_at is not None and r.updated_at < stale_cutoff]
-    parked_sample = [{
-        "id": r.id, "title": r.title, "category": r.category or "",
-        "updated_at": str(r.updated_at),
-    } for r in sorted(parked, key=lambda r: r.updated_at)[:10]]
+    funnel = funnel_counts(sess, stale_days)
+    triage_rows_total = funnel["triage_total"]
+    triage_redacted = funnel["triage_redacted"]
+    triage_awaiting = funnel["triage_awaiting"]
+    parked = funnel["parked_total"]
+    parked_sample = funnel["parked_sample"]
 
     # Soonest first; overdue shows the most-overdue (oldest due) first.
     overdue.sort(key=lambda i: _due_date(i["due"]) or date.max)
@@ -213,9 +196,9 @@ def digest():
             "due_soon": len(due_soon),
             "active": sum(c["active"] for c in by_table.values()),
             "by_table": by_table,
-            "triage_awaiting": len(triage_rows),
+            "triage_awaiting": triage_rows_total,
             "triage_redacted": triage_redacted,
-            "parked": len(parked),
+            "parked": parked,
         },
         "overdue": overdue,
         "due_today": due_today,
