@@ -981,6 +981,13 @@
     padding:0.55rem 0.2rem; list-style-position:inside; }
   .form-more > summary:hover { color:var(--text); }
   .form-more[open] > summary { margin-bottom:0.4rem; }
+
+  /* Competency scorecard evidence (E1): capability notes beside their category */
+  .scorecard-evidence { margin:0.25rem 0 0.45rem; display:flex; flex-direction:column; gap:0.2rem; }
+  .scorecard-evidence-item { font-size:0.68rem; color:var(--text-muted); cursor:pointer;
+    padding:0.18rem 0.3rem; border-left:2px solid var(--accent); background:rgba(96,165,250,0.06);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:320px; }
+  .scorecard-evidence-item:hover { color:var(--text); }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
@@ -4213,6 +4220,9 @@ function openEmployeeScorecard(rawEmpId, focus) {
   const switchingEmployee = empId !== compScorecardEmpId;
   compScorecardEmpId = empId || null;
   compSelected = null;
+  // E1: pull capability evidence once, then re-render so the notes appear
+  // beside the categories they belong to (non-blocking on first paint).
+  if (empId && !compEvidence) ensureCompEvidence().then(() => renderEmployeeScorecard());
   renderScorecardSelect();
   renderMatrix();
   renderEmployeeScorecard();
@@ -4252,6 +4262,53 @@ function cssAttrEscape(s) {
   return String(s).replace(/["\\]/g, '\\$&');
 }
 
+// ── Competency evidence (E1, 2026-07-03): capability entries already carry
+// person_ids + skill_category_id — surface them while scoring so a rating is
+// grounded in the logged record, not memory. Derive-don't-enter.
+let compEvidence = null;
+async function ensureCompEvidence() {
+  if (compEvidence) return compEvidence;
+  const rows = await api('GET', '/api/v1/personnel_issues');
+  compEvidence = Array.isArray(rows) ? rows : [];
+  return compEvidence;
+}
+function evidencePersonIds(row) {
+  try { return (JSON.parse(row.person_ids || '[]') || []).map(String); }
+  catch (e) { return []; }
+}
+function evidenceFor(empId, catId) {
+  const eid = String(empId);
+  return (compEvidence || []).filter(r =>
+    evidencePersonIds(r).includes(eid)
+    && Number(r.skill_category_id || 0) === Number(catId));
+}
+function evidenceUnfiledCount(empId) {
+  const eid = String(empId);
+  return (compEvidence || []).filter(r =>
+    evidencePersonIds(r).includes(eid) && !Number(r.skill_category_id || 0)).length;
+}
+function evidenceSummaryText(empId) {
+  if (!compEvidence) return 'Loading capability evidence…';
+  const eid = String(empId);
+  const total = compEvidence.filter(r => evidencePersonIds(r).includes(eid)).length;
+  if (!total) return 'No capability notes on file yet — log one from this card.';
+  const unfiled = evidenceUnfiledCount(empId);
+  return total + ' capability note' + (total === 1 ? '' : 's') + ' on file'
+    + (unfiled ? ' (' + unfiled + ' without a skill category — set one to surface them beside their category)' : '') + '.';
+}
+
+function evidenceHtml(empId, catId) {
+  const rows = evidenceFor(empId, catId);
+  if (!rows.length) return '';
+  const items = rows.slice(0, 3).map(r =>
+    '<div class="scorecard-evidence-item" onclick="event.stopPropagation();editRecord(\'personnel\',' + r.id + ')" title="Open capability note #' + r.id + '">' +
+      '<span class="badge">' + esc(r.coaching_type || r.severity || 'note') + '</span> ' +
+      esc(String(r.issue_description || '').slice(0, 90)) +
+    '</div>').join('');
+  const more = rows.length > 3 ? '<div class="scorecard-evidence-item" style="cursor:default">+' + (rows.length - 3) + ' more on the Capabilities tab</div>' : '';
+  return '<div class="scorecard-evidence">' + items + more + '</div>';
+}
+
 // #51 U6: hide the matrix card while a scorecard is open; restore it on close.
 function syncMatrixVisibility() {
   const wrap = document.getElementById('comp-wrap');
@@ -4283,7 +4340,7 @@ function renderEmployeeScorecard() {
       const existing = prelim?.score ?? baseline?.score ?? dimDetail.score ?? '';
       const note = prelim?.notes || '';
       rows.push('<tr data-scorecard-row="1" data-cat-id="' + cat.id + '" data-dim-slug="' + esc(dim.slug) + '">' +
-        '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' : '') +
+        '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' + evidenceHtml(emp.id, cat.id) : '') +
           '<strong>' + esc(dim.name || dim.slug) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(dim.anchor || '') + '</div></td>' +
         '<td style="white-space:nowrap;font-weight:700">' + (dimDetail.score == null ? 'N/A' : scoreLabel(dimDetail.score)) + '</td>' +
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:105px">' + esc(scorecardMarkerSummary(self)) + '</td>' +
@@ -4299,7 +4356,8 @@ function renderEmployeeScorecard() {
       '<div style="display:flex;align-items:center;gap:0.85rem;min-width:min(100%,420px)">' + employeeAvatarHtml(emp, 88) +
         '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
-        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (growth opportunity); 2 = Capable; 3 = Mentor.</div></div>' +
+        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (growth opportunity); 2 = Capable; 3 = Mentor.</div>' +
+        '<div class="workspace-sub">' + esc(evidenceSummaryText(emp.id)) + '</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
         '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
