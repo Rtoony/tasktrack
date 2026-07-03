@@ -24,7 +24,11 @@ from flask import Blueprint, jsonify, render_template, request, session
 
 from ..auth import login_required
 from ..db import get_session
-from ..routes.reports import _active_report_section, _visible_report_sections
+from ..routes.reports import (
+    REPORT_SECTION_GROUPS,
+    _active_report_section,
+    _visible_report_sections,
+)
 from ..services.weekly import weekly_snapshot
 
 bp = Blueprint("weekly", __name__)
@@ -50,6 +54,7 @@ def _weekly_report_nav() -> dict:
     )
     return {
         "report_sections": sections,
+        "report_section_groups": REPORT_SECTION_GROUPS,
         "active_report_section": active,
         "active_report_meta": active_meta,
     }

@@ -1,16 +1,31 @@
 <aside class="report-sidebar" aria-label="Report sections">
   <div class="report-sidebar-head">
     <div class="report-sidebar-title">Report Console</div>
-    <div class="report-sidebar-subtitle">Packets, filters, presets, and exports.</div>
+    <div class="report-sidebar-subtitle">Documents first; queues and analytics below.</div>
   </div>
+  {# Grouped nav: Documents (print-first packets) featured first, then
+     Queues & Analytics. Groups come from REPORT_SECTIONS[*].group via the
+     reports blueprint context processor; sections missing a group render
+     under Queues so nothing can silently vanish from the nav. #}
+  {% set group_defs = report_section_groups or [('documents', 'Documents'), ('queues', 'Queues & Analytics')] %}
+  {% for group_key, group_label in group_defs %}
+  {% set group_sections = report_sections | selectattr('group', 'defined') | selectattr('group', 'equalto', group_key) | list %}
+  {% if group_key == 'queues' %}
+    {% set ungrouped = report_sections | rejectattr('group', 'defined') | list %}
+    {% set group_sections = group_sections + ungrouped %}
+  {% endif %}
+  {% if group_sections %}
+  <div class="report-nav-group-label">{{ group_label }}</div>
   <nav class="report-side-nav">
-    {% for section in report_sections %}
+    {% for section in group_sections %}
     <a href="{{ section.href }}" class="{{ 'active' if active_report_section == section.key else '' }}">
       <span class="report-nav-title">{{ section.title }}</span>
       <span class="report-nav-copy">{{ section.subtitle }}</span>
     </a>
     {% endfor %}
   </nav>
+  {% endif %}
+  {% endfor %}
   <div class="report-sidebar-foot">
     Print buttons still hide this navigation so packets remain clean on paper.
   </div>

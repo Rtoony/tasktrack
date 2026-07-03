@@ -224,10 +224,12 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Meeting Packet" in html
-    assert "TaskTrack Meeting Packet" in html
-    assert "print-masthead" in html
+    # Print treatment is the shared Document stylesheet + letterhead partial.
+    assert "report-print.css" in html
+    assert 'class="letterhead print-only"' in html
+    assert "Meeting Prep Packet" in html
+    assert "Prepared by" in html
     assert "print-footer" in html
-    assert "@page { size: letter" in html
     assert "Project Management Brief" in html
     assert "Meeting Action Queue" in html
     assert "Prepare for Management sync" in html
@@ -237,7 +239,7 @@ def test_meeting_packet_html_renders_and_prints_without_capability_leak(auth_cli
     assert "7711.20" in html
     assert '/?workspace=7711.20' in html
     assert '/?map_project=7711.20' in html
-    assert "@media print" in html
+    assert "Internal — prepared for management review" in html
     assert "Capability note (restricted)" in html
     assert "Sensitive capability narrative" not in html
 
@@ -270,12 +272,14 @@ def test_meeting_packet_batch_json_and_html(auth_client, temp_app):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     assert "Meeting Packet Batch" in html
-    assert "TaskTrack Meeting Packet Batch" in html
+    # Shared Document print treatment: stylesheet link + letterhead partial.
+    assert "report-print.css" in html
+    assert 'class="letterhead print-only"' in html
+    assert "Meeting Prep Packet" in html
     assert "Management sync" in html
     assert "Unlinked staff sync" in html
     assert "Owner private meeting" not in html
     assert "window.print" in html
-    assert "@page { size: letter" in html
     assert "Saved Preset" in html
     assert "saveMeetingPreset" in html
     assert "updateMeetingPreset" in html

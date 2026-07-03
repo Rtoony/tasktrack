@@ -1,0 +1,25 @@
+{# Shared Document letterhead — print-only masthead for official packets.
+   Styled by static/css/report-print.css; text comes from the `letterhead`
+   context (app_settings key `report_letterhead`, injected by the reports
+   blueprint context processor).
+
+   Set before including:
+     {% set doc_title  = "Thursday Packet" %}     required — the document name
+     {% set doc_period = packet.window.week_of %} optional — the period line
+
+   Empty company renders gracefully: the department becomes the top line. #}
+<section class="letterhead print-only" aria-label="Document letterhead">
+  <div class="letterhead-main">
+    {% if letterhead.company %}
+    <div class="letterhead-company">{{ letterhead.company }}</div>
+    <div class="letterhead-department">{{ letterhead.department }}</div>
+    {% else %}
+    <div class="letterhead-company">{{ letterhead.department }}</div>
+    {% endif %}
+  </div>
+  <div class="letterhead-doc">
+    <div class="letterhead-title">{{ doc_title }}{% if letterhead.title_suffix %} — {{ letterhead.title_suffix }}{% endif %}</div>
+    {% if doc_period %}<div class="letterhead-period">{{ doc_period }}</div>{% endif %}
+    <div class="letterhead-prepared">Prepared by {{ letterhead.preparer }}</div>
+  </div>
+</section>

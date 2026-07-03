@@ -37,6 +37,8 @@ from ..services.project_reports import (
     portfolio_project_report,
     project_status_report,
 )
+from ..services.report_settings import get_report_letterhead
+from ..services.thursday_packet import thursday_packet
 from ..services.tickets import done_statuses_for_table
 from ..services.triage_outcomes import triage_outcomes_csv, triage_outcomes_report
 
@@ -44,66 +46,98 @@ bp = Blueprint("reports", __name__)
 
 REPORT_QUICK_ACTION_SET_KEY = "report_console_quick_action"
 
+# Two sidebar groups. "documents" — the print-first packets that leave the
+# building as official department documents — is featured first; "queues" —
+# operator queues & analytics — follows (Overview stays the /reports home).
+# Nothing was removed in the reorg: every key/href predating the grouping
+# still resolves, so bookmarks and deep links keep working.
 REPORT_SECTIONS = [
+    # ── Documents ────────────────────────────────────────────────────────
     {
-        "key": "overview",
-        "title": "Overview",
-        "subtitle": "Quick actions and saved presets.",
-        "href": "/reports",
-    },
-    {
-        "key": "today",
-        "title": "Today Brief",
-        "subtitle": "Daily operator packet.",
-        "href": "/reports/today",
-    },
-    {
-        "key": "weekly",
-        "title": "Week in Review",
-        "subtitle": "Recent activity, overdue, and rollups.",
-        "href": "/weekly",
-    },
-    {
-        "key": "management",
-        "title": "Management",
-        "subtitle": "Print-ready combined packet.",
-        "href": "/reports/management",
-    },
-    {
-        "key": "portfolio",
-        "title": "Portfolio",
-        "subtitle": "Project packets and action queues.",
-        "href": "/reports/projects",
-    },
-    {
-        "key": "project",
-        "title": "Single Project",
-        "subtitle": "Focused project one-pager.",
-        "href": "/reports/project",
+        "key": "thursday",
+        "title": "Thursday Packet",
+        "subtitle": "Weekly management document — print Thursday morning.",
+        "href": "/reports/thursday",
+        "group": "documents",
     },
     {
         "key": "meetings",
-        "title": "Meetings",
-        "subtitle": "Upcoming event packet batch.",
+        "title": "Meeting Prep",
+        "subtitle": "Print packets for upcoming meetings.",
         "href": "/reports/meetings",
+        "group": "documents",
     },
     {
         "key": "meeting",
         "title": "Meeting Detail",
         "subtitle": "One event packet by ID.",
         "href": "/reports/meeting",
+        "group": "documents",
+    },
+    {
+        "key": "project",
+        "title": "Project One-Pager",
+        "subtitle": "Single project status document.",
+        "href": "/reports/project",
+        "group": "documents",
+    },
+    {
+        "key": "management",
+        "title": "Management Packet",
+        "subtitle": "Print-ready combined packet.",
+        "href": "/reports/management",
+        "group": "documents",
+    },
+    {
+        "key": "competency",
+        "title": "Competency Report",
+        "subtitle": "Admin-only rollout reports.",
+        "href": "/reports/competency",
+        "admin_only": True,
+        "group": "documents",
+    },
+    # ── Queues & Analytics ───────────────────────────────────────────────
+    {
+        "key": "overview",
+        "title": "Overview",
+        "subtitle": "Quick actions and saved presets.",
+        "href": "/reports",
+        "group": "queues",
+    },
+    {
+        "key": "today",
+        "title": "Today Brief",
+        "subtitle": "Daily operator packet.",
+        "href": "/reports/today",
+        "group": "queues",
+    },
+    {
+        "key": "weekly",
+        "title": "Week in Review",
+        "subtitle": "Recent activity, overdue, and rollups.",
+        "href": "/weekly",
+        "group": "queues",
+    },
+    {
+        "key": "portfolio",
+        "title": "Portfolio",
+        "subtitle": "Project packets and action queues.",
+        "href": "/reports/projects",
+        "group": "queues",
     },
     {
         "key": "intake",
         "title": "Intake",
         "subtitle": "Source review and CSV audit.",
         "href": "/reports/intake",
+        "group": "queues",
     },
     {
         "key": "triage-outcomes",
         "title": "Triage Outcomes",
         "subtitle": "Suggestion accuracy — auto-file graduation.",
         "href": "/reports/triage-outcomes",
+        "group": "queues",
     },
     {
         "key": "incidents",
@@ -111,14 +145,13 @@ REPORT_SECTIONS = [
         "subtitle": "Admin-only sensitive reports.",
         "href": "/reports/incidents",
         "admin_only": True,
+        "group": "queues",
     },
-    {
-        "key": "competency",
-        "title": "Competency",
-        "subtitle": "Admin-only rollout reports.",
-        "href": "/reports/competency",
-        "admin_only": True,
-    },
+]
+
+REPORT_SECTION_GROUPS = [
+    ("documents", "Documents"),
+    ("queues", "Queues & Analytics"),
 ]
 
 
@@ -140,6 +173,8 @@ def _active_report_section() -> str:
         return "meeting"
     if path == "/reports/management":
         return "management"
+    if path == "/reports/thursday":
+        return "thursday"
     if path == "/reports/today":
         return "today"
     if path == "/weekly":
@@ -156,6 +191,16 @@ def _visible_report_sections() -> list[dict]:
     return [section for section in REPORT_SECTIONS if is_admin or not section.get("admin_only")]
 
 
+def _letterhead() -> dict:
+    """Letterhead config for printable Documents (app_settings: report_letterhead).
+
+    Rendered by templates/partials/report_letterhead.html and styled by
+    static/css/report-print.css so browser-printed PDFs read as official
+    department documents. One primary-key read per page render.
+    """
+    return get_report_letterhead(get_session())
+
+
 @bp.context_processor
 def report_nav_context():
     active = _active_report_section()
@@ -163,8 +208,10 @@ def report_nav_context():
     active_meta = next((section for section in sections if section["key"] == active), sections[0])
     return {
         "report_sections": sections,
+        "report_section_groups": REPORT_SECTION_GROUPS,
         "active_report_section": active,
         "active_report_meta": active_meta,
+        "letterhead": _letterhead(),
     }
 
 _TRUE_VALUES = {"1", "true", "yes", "on"}
@@ -886,6 +933,30 @@ def today_brief_page():
     return render_template(
         "reports_today.html",
         packet=_today_brief_packet(get_session()),
+        user_name=session.get("user_name", ""),
+        user_role=session.get("user_role", "user"),
+    )
+
+
+def _thursday_packet_payload(sess):
+    """Thursday Packet with request-arg windows (mirrors _today_brief_packet)."""
+    window_days = _int_arg("window_days", 7, 1, 31)
+    due_days = _int_arg("due_days", 7, 1, 31)
+    return thursday_packet(sess, window_days=window_days, due_days=due_days)
+
+
+@bp.route("/api/v1/reports/thursday", methods=["GET"])
+@login_required
+def thursday_packet_json():
+    return jsonify(_thursday_packet_payload(get_session()))
+
+
+@bp.route("/reports/thursday", methods=["GET"])
+@login_required
+def thursday_packet_page():
+    return render_template(
+        "thursday_packet.html",
+        packet=_thursday_packet_payload(get_session()),
         user_name=session.get("user_name", ""),
         user_role=session.get("user_role", "user"),
     )

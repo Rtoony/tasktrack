@@ -973,6 +973,21 @@
     color:var(--text-muted); padding:0.5rem 0.2rem; border-top:1px solid var(--border);
     list-style-position:inside; }
   .deck-more > summary:hover { color:var(--text); }
+
+  /* Progressive-disclosure section inside CRUD modals (2026-07-03 forms trim) */
+  .form-more { margin:0.9rem 0 0.6rem; border-top:1px solid var(--border); }
+  .form-more > summary { cursor:pointer; font-size:0.74rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted);
+    padding:0.55rem 0.2rem; list-style-position:inside; }
+  .form-more > summary:hover { color:var(--text); }
+  .form-more[open] > summary { margin-bottom:0.4rem; }
+
+  /* Competency scorecard evidence (E1): capability notes beside their category */
+  .scorecard-evidence { margin:0.25rem 0 0.45rem; display:flex; flex-direction:column; gap:0.2rem; }
+  .scorecard-evidence-item { font-size:0.68rem; color:var(--text-muted); cursor:pointer;
+    padding:0.18rem 0.3rem; border-left:2px solid var(--accent); background:rgba(96,165,250,0.06);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:320px; }
+  .scorecard-evidence-item:hover { color:var(--text); }
 </style>
 <meta name="csrf-token" content="{{ csrf_token }}">
 </head>
@@ -1162,48 +1177,6 @@
         </div>
       </div>
 
-      <div class="project-command" id="project-command" aria-label="Project command">
-        <div class="project-command-copy">
-          <div class="project-command-title"><span class="core-tag blue">Project</span><span>Open project context</span></div>
-          <div class="project-command-sub">Use one project number to jump into the workspace, map, report, or a prefilled project task.</div>
-        </div>
-        <div class="project-command-controls">
-          <input id="project-command-number" class="project-command-input" type="text" inputmode="numeric" maxlength="7" placeholder="2301.04" aria-label="Project number">
-          <button class="btn btn-primary" type="button" onclick="runProjectCommand('workspace')">Workspace</button>
-          <button class="btn btn-export" type="button" onclick="runProjectCommand('map')">Map</button>
-          <button class="btn btn-export" type="button" onclick="runProjectCommand('report')">Report</button>
-          <button class="btn btn-export" type="button" onclick="runProjectCommand('task')">+ Task</button>
-        </div>
-      </div>
-
-      <!-- The spine (#73): three panels mirroring the real loop, left to right —
-           triage what came in, drive project tasks to done, keep CAD dev honest. -->
-      <div class="deck-spine">
-        <section class="core-panel deck-panel">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag amber">In</span><span>Triage</span></div>
-            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('triage')">open tab &rarr;</button></span>
-          </div>
-          <div class="core-list" id="deck-triage-list"><div class="core-empty">Inbox is clear.</div></div>
-          <div class="deck-subhead">Needs review <span class="core-panel-hint">AI-drafted captures</span></div>
-          <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
-        </section>
-        <section class="core-panel deck-panel deck-panel-wide">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag blue">Do</span><span>Project Tasks</span></div>
-            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="openModal('project')">+ task</button> · <button class="deck-link" type="button" onclick="activateTab('project')">open tab &rarr;</button></span>
-          </div>
-          <div class="core-list" id="deck-projects-list"><div class="core-empty">No active project tasks.</div></div>
-        </section>
-        <section class="core-panel deck-panel">
-          <div class="core-panel-head">
-            <div class="core-panel-title"><span class="core-tag teal">Build</span><span>CAD Dev</span></div>
-            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('work')">open tab &rarr;</button></span>
-          </div>
-          <div class="core-list" id="deck-caddev-list"><div class="core-empty">Nothing in flight.</div></div>
-        </section>
-      </div>
-
       <!-- Capture & triage card (was the standalone AI Intake tab) -->
       <div class="dash-card capture-card">
         <div class="dash-card-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;">
@@ -1233,6 +1206,8 @@
                       <option value="work_tasks" selected>CAD Dev</option>
                       <option value="project_work_tasks">Project Tasks</option>
                       <option value="training_tasks">Training</option>
+                      <option value="personnel_issues">Capability Note</option>
+                      <option value="personal_items">Internal Follow-up</option>
                     </select>
                   </div>
                   <div class="field">
@@ -1334,6 +1309,19 @@
                 <label>Title (gist)</label>
                 <input type="text" id="intake-field-title">
               </div>
+              <!-- Project target: the two report-load-bearing fields, editable right
+                   in the preview instead of buried in presets (2026-07-03). Values
+                   write through to the preset inputs at confirm. -->
+              <div class="field-row" id="intake-project-preview-row" style="display:none">
+                <div class="field">
+                  <label>Project Number (####.##)</label>
+                  <input type="text" id="intake-field-project-number" inputmode="numeric" maxlength="7" placeholder="2301.04">
+                </div>
+                <div class="field">
+                  <label>Engineer</label>
+                  <input type="text" id="intake-field-engineer" placeholder="Who owns it">
+                </div>
+              </div>
               <div class="starter-block" id="intake-starter-wrap" style="display:none">
                 <div class="starter-label">Start here &rarr;</div>
                 <div class="field" style="margin-bottom:0">
@@ -1372,6 +1360,48 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="project-command" id="project-command" aria-label="Project command">
+        <div class="project-command-copy">
+          <div class="project-command-title"><span class="core-tag blue">Project</span><span>Open project context</span></div>
+          <div class="project-command-sub">Use one project number to jump into the workspace, map, report, or a prefilled project task.</div>
+        </div>
+        <div class="project-command-controls">
+          <input id="project-command-number" class="project-command-input" type="text" inputmode="numeric" maxlength="7" placeholder="2301.04" aria-label="Project number">
+          <button class="btn btn-primary" type="button" onclick="runProjectCommand('workspace')">Workspace</button>
+          <button class="btn btn-export" type="button" onclick="runProjectCommand('map')">Map</button>
+          <button class="btn btn-export" type="button" onclick="runProjectCommand('report')">Report</button>
+          <button class="btn btn-export" type="button" onclick="runProjectCommand('task')">+ Task</button>
+        </div>
+      </div>
+
+      <!-- The spine (#73): three panels mirroring the real loop, left to right —
+           triage what came in, drive project tasks to done, keep CAD dev honest. -->
+      <div class="deck-spine">
+        <section class="core-panel deck-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag amber">In</span><span>Triage</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('triage')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-triage-list"><div class="core-empty">Inbox is clear.</div></div>
+          <div class="deck-subhead">Needs review <span class="core-panel-hint">AI-drafted captures</span></div>
+          <div class="core-list" id="core-review-queue"><div class="core-empty">No intake requests need review.</div></div>
+        </section>
+        <section class="core-panel deck-panel deck-panel-wide">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag blue">Do</span><span>Project Tasks</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="openModal('project')">+ task</button> · <button class="deck-link" type="button" onclick="activateTab('project')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-projects-list"><div class="core-empty">No active project tasks.</div></div>
+        </section>
+        <section class="core-panel deck-panel">
+          <div class="core-panel-head">
+            <div class="core-panel-title"><span class="core-tag teal">Build</span><span>CAD Dev</span></div>
+            <span class="core-panel-hint"><button class="deck-link" type="button" onclick="activateTab('work')">open tab &rarr;</button></span>
+          </div>
+          <div class="core-list" id="deck-caddev-list"><div class="core-empty">Nothing in flight.</div></div>
+        </section>
       </div>
 
       <section class="core-panel">
@@ -4190,6 +4220,9 @@ function openEmployeeScorecard(rawEmpId, focus) {
   const switchingEmployee = empId !== compScorecardEmpId;
   compScorecardEmpId = empId || null;
   compSelected = null;
+  // E1: pull capability evidence once, then re-render so the notes appear
+  // beside the categories they belong to (non-blocking on first paint).
+  if (empId && !compEvidence) ensureCompEvidence().then(() => renderEmployeeScorecard());
   renderScorecardSelect();
   renderMatrix();
   renderEmployeeScorecard();
@@ -4229,6 +4262,53 @@ function cssAttrEscape(s) {
   return String(s).replace(/["\\]/g, '\\$&');
 }
 
+// ── Competency evidence (E1, 2026-07-03): capability entries already carry
+// person_ids + skill_category_id — surface them while scoring so a rating is
+// grounded in the logged record, not memory. Derive-don't-enter.
+let compEvidence = null;
+async function ensureCompEvidence() {
+  if (compEvidence) return compEvidence;
+  const rows = await api('GET', '/api/v1/personnel_issues');
+  compEvidence = Array.isArray(rows) ? rows : [];
+  return compEvidence;
+}
+function evidencePersonIds(row) {
+  try { return (JSON.parse(row.person_ids || '[]') || []).map(String); }
+  catch (e) { return []; }
+}
+function evidenceFor(empId, catId) {
+  const eid = String(empId);
+  return (compEvidence || []).filter(r =>
+    evidencePersonIds(r).includes(eid)
+    && Number(r.skill_category_id || 0) === Number(catId));
+}
+function evidenceUnfiledCount(empId) {
+  const eid = String(empId);
+  return (compEvidence || []).filter(r =>
+    evidencePersonIds(r).includes(eid) && !Number(r.skill_category_id || 0)).length;
+}
+function evidenceSummaryText(empId) {
+  if (!compEvidence) return 'Loading capability evidence…';
+  const eid = String(empId);
+  const total = compEvidence.filter(r => evidencePersonIds(r).includes(eid)).length;
+  if (!total) return 'No capability notes on file yet — log one from this card.';
+  const unfiled = evidenceUnfiledCount(empId);
+  return total + ' capability note' + (total === 1 ? '' : 's') + ' on file'
+    + (unfiled ? ' (' + unfiled + ' without a skill category — set one to surface them beside their category)' : '') + '.';
+}
+
+function evidenceHtml(empId, catId) {
+  const rows = evidenceFor(empId, catId);
+  if (!rows.length) return '';
+  const items = rows.slice(0, 3).map(r =>
+    '<div class="scorecard-evidence-item" onclick="event.stopPropagation();editRecord(\'personnel\',' + r.id + ')" title="Open capability note #' + r.id + '">' +
+      '<span class="badge">' + esc(r.coaching_type || r.severity || 'note') + '</span> ' +
+      esc(String(r.issue_description || '').slice(0, 90)) +
+    '</div>').join('');
+  const more = rows.length > 3 ? '<div class="scorecard-evidence-item" style="cursor:default">+' + (rows.length - 3) + ' more on the Capabilities tab</div>' : '';
+  return '<div class="scorecard-evidence">' + items + more + '</div>';
+}
+
 // #51 U6: hide the matrix card while a scorecard is open; restore it on close.
 function syncMatrixVisibility() {
   const wrap = document.getElementById('comp-wrap');
@@ -4260,7 +4340,7 @@ function renderEmployeeScorecard() {
       const existing = prelim?.score ?? baseline?.score ?? dimDetail.score ?? '';
       const note = prelim?.notes || '';
       rows.push('<tr data-scorecard-row="1" data-cat-id="' + cat.id + '" data-dim-slug="' + esc(dim.slug) + '">' +
-        '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' : '') +
+        '<td style="min-width:250px">' + (idx === 0 ? '<div style="font-size:0.64rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.1rem">' + esc(cat.name) + '</div>' + evidenceHtml(emp.id, cat.id) : '') +
           '<strong>' + esc(dim.name || dim.slug) + '</strong><div style="font-size:0.68rem;color:var(--text-muted)">' + esc(dim.anchor || '') + '</div></td>' +
         '<td style="white-space:nowrap;font-weight:700">' + (dimDetail.score == null ? 'N/A' : scoreLabel(dimDetail.score)) + '</td>' +
         '<td style="font-size:0.72rem;color:var(--text-muted);min-width:105px">' + esc(scorecardMarkerSummary(self)) + '</td>' +
@@ -4276,7 +4356,8 @@ function renderEmployeeScorecard() {
       '<div style="display:flex;align-items:center;gap:0.85rem;min-width:min(100%,420px)">' + employeeAvatarHtml(emp, 88) +
         '<div><div class="workspace-kicker">Employee scorecard</div><div class="workspace-title">' + esc(emp.display_name) + '</div>' +
         '<div class="workspace-sub">' + esc((emp.title || '') + (emp.role ? ' · ' + emp.role : '')) + '</div>' +
-        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (growth opportunity); 2 = Capable; 3 = Mentor.</div></div>' +
+        '<div class="workspace-sub">Rate task readiness. Blank = N/A / not in role; 0 = Learning (growth opportunity); 2 = Capable; 3 = Mentor.</div>' +
+        '<div class="workspace-sub">' + esc(evidenceSummaryText(emp.id)) + '</div></div>' +
       '</div>' +
       '<div style="display:flex;gap:0.4rem;flex-wrap:wrap">' +
         '<button class="btn btn-ghost" type="button" onclick="logCapabilityNoteFor(' + emp.id + ')">+ Log capability note</button>' +
@@ -4691,14 +4772,26 @@ async function reloadMap(fit) {
   try {
     const res = await fetch(url);
     if (res.status === 401) { window.location='/login'; return; }
+    if (!res.ok) throw new Error('geojson HTTP ' + res.status);
     geo = await res.json();
-  } catch (e) { geo = { features: [] }; }
+  } catch (e) {
+    // Surfaced 2026-07-03: this catch used to swallow every failure into
+    // "No projects match these filters" — a lie that hid the real error.
+    console.error('[map] pin load failed:', e);
+    geo = { features: [], _error: String(e && e.message || e) };
+  }
 
   if (mapClusterLayer) { mapClusterLayer.remove(); mapClusterLayer = null; }
   if (mapLayer) { mapLayer.remove(); mapLayer = null; }
   const features = (geo.features || []);
 
-  document.getElementById('map-empty').style.display = features.length ? 'none' : 'block';
+  const mapEmptyEl = document.getElementById('map-empty');
+  mapEmptyEl.style.display = features.length ? 'none' : 'block';
+  // Honest empty-state: a load error is not "no matches" (review 07-03).
+  const emptyTitle = mapEmptyEl.querySelector('.empty-title');
+  if (emptyTitle) emptyTitle.textContent = (geo && geo._error)
+    ? 'Map failed to load pins — ' + geo._error
+    : 'No projects match these filters';
   document.getElementById('map-host').style.display = features.length ? 'block' : 'none';
   // Distinct project count vs. site count — both useful when a project
   // can render many pins (the worst is "223.00" with 84 sites).
@@ -8258,19 +8351,20 @@ const INCIDENT_SEVERITY_SELECT = {
 };
 const FORMS = {
   work:[
+    // 2026-07-03 usage-data trim: task_type REMOVED from the form (39/43 blank, read
+    // by no report; DB column + AI population untouched). Tail below = advanced:true.
     {key:'title',label:'Task Title',type:'text',required:true},
     {key:'category',label:'Category',type:'endpoint-select',endpoint:'/api/v1/options/work_category',valueKey:'value',displayKey:'label',emptyLabel:'— choose category —',hint:'What kind of work this is (CAD Standards Portal, LISP / Automation, ...). Admin-managed list.'},
-    {key:'task_type',label:'Type',type:'select',options:['','Idea','Bug','Feature','Improvement'],hint:'#46: what kind of request — Idea / Bug / Feature / Improvement.'},
     {key:'description',label:'Requested Change',type:'textarea',rows:4},
-    {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.'},
-    {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.'},
-    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked'},
-    {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?'},
     {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
     {key:'due_date',label:'Due Date',type:'date'},
-    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
-    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
-    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'starter_note',label:'Start Here \u2192 (five-minute starter)',type:'textarea',placeholder:'The smallest physical first step. Optional.',advanced:true},
+    {key:'clarifications_needed',label:'Questions to Resolve',type:'textarea',placeholder:'One per line. Open questions before work can start.',advanced:true},
+    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who asked',advanced:true},
+    {key:'request_reference',label:'Context / Follow-up Reference',type:'textarea',placeholder:'Who was involved in the situation, and what follow-up context should be retained for reference?',advanced:true},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)',advanced:true},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary',advanced:true},
+    {key:'project_location',label:'Project location',type:'project-map',advanced:true},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -8278,18 +8372,22 @@ const FORMS = {
     // #46: regrouped Capture -> In-Progress -> Done; Type added; engineer_id (dup of
     // engineer) dropped from form; the 5 phase-notes collapsed into one Notes box
     // (the scope/progress/confirmation/completion columns stay in the DB, unrendered).
-    {key:'_row',fields:[{key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},{key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —'}]},
+    // 2026-07-03 usage-data trim: core = the five fields filled 7-8 times out of 9
+    // (project, title, engineer, description, needed-by); billing/schedule/time tail
+    // tucked behind "More details" per RToony ("nice someday — tuck away").
+    {key:'project_number',label:'Project',type:'project-picker',required:true,requireRegistry:true,syncNameKey:'project_name',placeholder:'Pick a registry project #'},
     {key:'project_name',label:'Project Name',type:'text',required:true,lockedByProject:true,hint:'Synced from the selected registry project.'},
     {key:'title',label:'Task Title',type:'text',required:true},
-    {key:'_row',fields:[{key:'task_type',label:'Type',type:'select',options:['','Design','Review','Submittal','Field','Admin','Other']},{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT}]},
     {key:'task_description',label:'Task Description',type:'textarea',placeholder:'Optional — a clear title is often enough'},
     {key:'engineer',label:'Engineer',type:'employee-name-select'},
-    {key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']},
-    {key:'_row',fields:[{key:'due_at',label:'Needed By',type:'datetime-local',step:1800},{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local',step:1800}]},
-    {key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'},
-    {key:'notes',label:'Notes',type:'textarea',placeholder:'Scope, progress, what needs sign-off, and what was delivered — one place.'},
-    {key:'ai_summary',label:'AI Summary',type:'ai-summary'},
-    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','Pending Confirmation','Complete']}]},
+    {key:'due_at',label:'Needed By',type:'datetime-local',step:1800},
+    {key:'billing_phase',label:'Project Billing Phase',type:'endpoint-select',endpoint:'/api/v1/options/project_billing_phase',valueKey:'value',displayKey:'label',emptyLabel:'— choose billing phase —',advanced:true},
+    {key:'task_type',label:'Type',type:'select',options:['','Design','Review','Submittal','Field','Admin','Other'],advanced:true},
+    {key:'_row',advanced:true,fields:[{key:'scheduled_completion_at',label:'Scheduled Completion',type:'datetime-local',step:1800},{key:'time_required_minutes',label:'Time Required (minutes)',type:'number',min:0,step:30,placeholder:'30'}]},
+    {key:'notes',label:'Notes',type:'textarea',placeholder:'Scope, progress, what needs sign-off, and what was delivered — one place.',advanced:true},
+    {key:'ai_summary',label:'AI Summary',type:'ai-summary',advanced:true},
+    {key:'project_location',label:'Project location',type:'project-map',advanced:true},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -8301,11 +8399,11 @@ const FORMS = {
     {key:'trainees',label:'Staff Members',type:'employee-multi-name-select',idsKey:'trainee_ids',placeholder:'Pick one or more employees'},
     {key:'skill_area',label:'Skill Area',type:'endpoint-select',endpoint:'/api/v1/options/training_skill_area',valueKey:'value',displayKey:'label',emptyLabel:'— choose skill area —',hint:'Admin-managed training vocabulary.'},
     {key:'training_goals',label:'Goal / Context',type:'textarea',placeholder:'What should be learned — plus any context (who, why, prerequisites).'},
-    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this'},
-    {key:'_row',fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
-    {key:'due_date',label:'Due Date',type:'date'},
-    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
-    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'requested_by',label:'Requested By',type:'employee-name-select',placeholder:'Pick the employee who requested this',advanced:true},
+    {key:'_row',advanced:true,fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['Not Started','In Progress','On Hold','Complete']}]},
+    {key:'due_date',label:'Due Date',type:'date',advanced:true},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)',advanced:true},
+    {key:'project_location',label:'Project location',type:'project-map',advanced:true},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -8317,15 +8415,15 @@ const FORMS = {
     {key:'coaching_type',label:'Type',type:'select',options:['','Coaching','Near-miss','Recognition','Process / equipment gap']},
     {key:'issue_description',label:'What happened',type:'textarea',required:true,placeholder:'Briefly — what happened and what work exposed it? (Or a win worth noting.)'},
     {key:'person_ids',label:'People Involved',type:'fk-multi-select',endpoint:'/api/v1/employees/options',displayKey:'display_name',hint:'Pick one or more employees from the list (no free-typing). Leave blank for a 0-person note (process / equipment).'},
-    {key:'observed_by',label:'Noted By',type:'employee-name-select',placeholder:'Pick who observed it'},
-    {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links to the Competency rubric for context — does NOT change anyone\'s score.'},
     {key:'_row',fields:[{key:'severity',label:'Impact',...INCIDENT_SEVERITY_SELECT},{key:'status',label:'Status',type:'select',options:['Observed','Coaching Planned','Training Scheduled','Monitoring','Closed']}]},
-    {key:'immediate_solution',label:'What we did right away',type:'textarea',placeholder:'Any in-the-moment fix or workaround (optional).'},
-    {key:'recommended_training',label:'Growth plan / coaching',type:'textarea',placeholder:'How we grow from this — coaching, review, or training (optional).'},
-    {key:'_row',fields:[{key:'follow_up_date',label:'Follow-Up Date',type:'date'},{key:'estimated_time_loss_minutes',label:'Time Loss (min)',type:'number',placeholder:'0'}]},
-    {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea'},
-    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
-    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'observed_by',label:'Noted By',type:'employee-name-select',placeholder:'Pick who observed it',advanced:true},
+    {key:'skill_category_id',label:'Skill Category',type:'fk-select',endpoint:'/api/v1/skills/categories',displayKey:'name',hint:'Optional. Links to the Competency rubric for context — does NOT change anyone\'s score.',advanced:true},
+    {key:'immediate_solution',label:'What we did right away',type:'textarea',placeholder:'Any in-the-moment fix or workaround (optional).',advanced:true},
+    {key:'recommended_training',label:'Growth plan / coaching',type:'textarea',placeholder:'How we grow from this — coaching, review, or training (optional).',advanced:true},
+    {key:'_row',advanced:true,fields:[{key:'follow_up_date',label:'Follow-Up Date',type:'date'},{key:'estimated_time_loss_minutes',label:'Time Loss (min)',type:'number',placeholder:'0'}]},
+    {key:'resolution_notes',label:'Outcome / Progress Notes',type:'textarea',advanced:true},
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)',advanced:true},
+    {key:'project_location',label:'Project location',type:'project-map',advanced:true},
     {key:'attachments',label:'Attachments',type:'attachments'},
     {key:'links',label:'Links',type:'links'},
   ],
@@ -8340,20 +8438,21 @@ const FORMS = {
       ]},
     ]},
     {key:'_row',fields:[{key:'start_at',label:'Start',type:'datetime-local',required:true},{key:'end_at',label:'End',type:'datetime-local'}]},
-    {key:'_row',fields:[
+    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
+    {key:'_row',advanced:true,fields:[
       {key:'all_day',label:'All Day',type:'select',options:[{value:'0',label:'No'},{value:'1',label:'Yes'}]},
       {key:'visibility',label:'Visibility',type:'endpoint-select',endpoint:'/api/v1/options/calendar_visibility',valueKey:'value',displayKey:'label',emptyLabel:'— choose visibility —'},
     ]},
-    {key:'project_number',label:'Project',type:'project-picker',placeholder:'Pick or type project # (optional)'},
-    {key:'_row',fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
-    {key:'project_location',label:'Project location',type:'project-map'},
+    {key:'_row',advanced:true,fields:[{key:'location',label:'Location',type:'text'},{key:'reminder_date',label:'Reminder',type:'datetime-local'}]},
+    {key:'project_location',label:'Project location',type:'project-map',advanced:true},
     {key:'links',label:'Links',type:'links'},
   ],
   triage:[
     {key:'title',label:'Title',type:'text',required:true,placeholder:'What is this item about?'},
     {key:'body',label:'Notes',type:'textarea',placeholder:'Free-form context. Carries over to the target tracker on promote.'},
-    {key:'_row',fields:[{key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT}]},
-    {key:'_row',fields:[{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']},{key:'due_date',label:'Due Date',type:'date'}]},
+    {key:'source',label:'Source',type:'endpoint-select',endpoint:'/api/v1/options/intake_source',valueKey:'value',displayKey:'label',emptyLabel:'— choose source —'},
+    {key:'_row',advanced:true,fields:[{key:'priority',label:'Priority',...TASK_PRIORITY_SELECT},{key:'status',label:'Status',type:'select',options:['New','In Progress','Done','Archived']}]},
+    {key:'due_date',label:'Due Date',type:'date',advanced:true},
     {key:'links',label:'Links',type:'links'},
     {key:'attachments',label:'Attachments',type:'attachments'},  // #66: triage parity with other trackers (inbox_items attachments already supported server-side)
   ],
@@ -8962,11 +9061,35 @@ function buildForm(table,data) {
   if (descField && data && data.needs_review && displayData[descField]) frag.appendChild(buildMarkdownPreview(displayData[descField]));
   const notesKeys = notesAccordionKeys(table);
   const openNotesKey = notesAccordionOpenKey(table, displayData, notesKeys);
-  FORMS[table].forEach(f=>{
-    if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,displayData[sf.key])));frag.appendChild(row);}
-    else if (notesKeys.has(f.key)) frag.appendChild(renderNotesAccordion(f, displayData[f.key], f.key === openNotesKey));
-    else frag.appendChild(renderField(f,displayData[f.key]));
-  });
+  // Progressive disclosure: fields flagged advanced:true collapse into a
+  // "More details" section. Core = the 4-6 fields the usage data shows get
+  // filled; the tail stays reachable (and auto-opens when it holds data, so
+  // an existing value is never hidden). AI capture still populates advanced
+  // fields regardless — this is a form-surface change only.
+  const renderInto = (host, f) => {
+    if(f.key==='_row'){const row=document.createElement('div');row.className='field-row';f.fields.forEach(sf=>row.appendChild(renderField(sf,displayData[sf.key])));host.appendChild(row);}
+    else if (notesKeys.has(f.key)) host.appendChild(renderNotesAccordion(f, displayData[f.key], f.key === openNotesKey));
+    else host.appendChild(renderField(f,displayData[f.key]));
+  };
+  const coreFields = FORMS[table].filter(f => !f.advanced);
+  const advFields = FORMS[table].filter(f => f.advanced);
+  coreFields.forEach(f => renderInto(frag, f));
+  if (advFields.length) {
+    const det = document.createElement('details');
+    det.className = 'form-more';
+    const sum = document.createElement('summary');
+    sum.textContent = 'More details';
+    det.appendChild(sum);
+    const holdsValue = (f) => {
+      if (f.key === '_row') return f.fields.some(holdsValue);
+      if (['attachments','links','project-map','ai-summary'].includes(f.type)) return false;
+      const v = displayData[f.key];
+      return v !== undefined && v !== null && String(v).trim() !== '' && String(v) !== '0';
+    };
+    if (advFields.some(holdsValue)) det.open = true;
+    advFields.forEach(f => renderInto(det, f));
+    frag.appendChild(det);
+  }
   return frag;
 }
 
@@ -9736,6 +9859,8 @@ const INTAKE_TARGET_LABELS = {
   work_tasks: 'CAD Dev',
   project_work_tasks: 'Project Tasks',
   training_tasks: 'Training',
+  personnel_issues: 'Capability Note',
+  personal_items: 'Internal Follow-up',
 };
 
 const CAPTURE_PREFILL_KEY = 'tasktrack-capture-prefill';
@@ -9898,6 +10023,20 @@ function intakeRenderPreview(plan, model, rawText, detectedProjectNumber) {
 
   document.getElementById('intake-field-software').value = (plan.software || []).join(', ');
 
+  // Project target: surface project#/engineer as editable preview fields,
+  // mirroring the preset inputs (write-back happens at confirm).
+  const projRow = document.getElementById('intake-project-preview-row');
+  if (projRow) {
+    projRow.style.display = target === 'project_work_tasks' ? 'flex' : 'none';
+    if (target === 'project_work_tasks') {
+      document.getElementById('intake-field-project-number').value =
+        (document.getElementById('preset-project-number').value || detectedProjectNumber || '').trim();
+      document.getElementById('intake-field-engineer').value =
+        (document.getElementById('preset-engineer').value
+         || document.getElementById('preset-requested-by').value || '').trim();
+    }
+  }
+
   // Auto-fill project number hint if the server detected one and the preset is empty.
   if (target === 'project_work_tasks' && detectedProjectNumber) {
     const pn = document.getElementById('preset-project-number');
@@ -9954,6 +10093,15 @@ async function intakeConfirm() {
   intakeSetStatus('Creating ' + (INTAKE_TARGET_LABELS[target] || 'task') + ' \u2026');
 
   try {
+    // Preview mirror fields win over the (possibly stale) preset inputs.
+    if (target === 'project_work_tasks') {
+      const pnPrev = document.getElementById('intake-field-project-number');
+      const engPrev = document.getElementById('intake-field-engineer');
+      if (pnPrev && pnPrev.offsetParent !== null) {
+        document.getElementById('preset-project-number').value = pnPrev.value.trim();
+        document.getElementById('preset-engineer').value = engPrev.value.trim();
+      }
+    }
     const presets = intakeCollectPresets();
     if (!intakeValidateBeforeCommit(target, presets)) return;
 
@@ -9980,7 +10128,8 @@ async function intakeConfirm() {
     document.getElementById('intake-input').value = '';
     mobileUpdateCaptureState();
     document.getElementById('intake-preview-card').style.display = 'none';
-    const tabKey = ({ work_tasks: 'work', project_work_tasks: 'project', training_tasks: 'training' })[target];
+    const tabKey = ({ work_tasks: 'work', project_work_tasks: 'project', training_tasks: 'training',
+                      personnel_issues: 'personnel', personal_items: 'personal' })[target];
     if (tabKey) loadTable(tabKey);
     loadDashboard();
     toast((INTAKE_TARGET_LABELS[target] || 'Task') + ' created \u00b7 needs review');
@@ -10041,6 +10190,34 @@ function intakeBuildDirectPayload(target, presets, overrides, state) {
     payload.engineer = presets.engineer || presets.requested_by || '';
     if (presets.due_at) payload.due_at = presets.due_at;
     return { ...payload, ...ai };
+  }
+
+  if (target === 'personnel_issues') {
+    // Capability note: gist+checklist+context become the narrative. Payload spread
+    // AFTER ai so status stays 'Observed' (personnel vocab, not task vocab); the
+    // stray ai.priority/status keys the table lacks are dropped server-side.
+    const payload = {
+      issue_description: overrides.title_override
+        + (checklistMd ? '\n\n' + checklistMd : '')
+        + (contextBlock ? '\n\n' + contextBlock : ''),
+      severity: priority,
+      status: 'Observed',
+    };
+    if (presets.requested_by) payload.observed_by = presets.requested_by;
+    if (presets.project_number) payload.project_number = presets.project_number;
+    return { ...ai, ...payload };
+  }
+
+  if (target === 'personal_items') {
+    const payload = {
+      title: overrides.title_override,
+      category: 'Follow-up',
+      body: checklistMd + (contextBlock ? '\n\n' + contextBlock : ''),
+      status: 'New',
+      priority,
+    };
+    if (presets.due_date) payload.due_date = presets.due_date;
+    return { ...ai, ...payload };
   }
 
   if (target === 'training_tasks') {
