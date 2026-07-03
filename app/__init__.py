@@ -99,6 +99,30 @@ def create_app(db_path=None) -> Flask:
 
     app.teardown_appcontext(close_session)
     init_request_middleware(app)
+
+    # Preview-only auto-login (2026-07-03): lab previews are throwaway worktrees
+    # on a DB *copy*, bound LAN-only by preview.sh — demo/click-testing there
+    # shouldn't need credentials. Gated on an exact magic value that ONLY
+    # preview.sh sets; prod's systemd unit never carries this env var, and the
+    # value is deliberately ugly so nobody sets it by accident.
+    if os.environ.get("TASKTRACK_PREVIEW_AUTOLOGIN") == "lan-preview-only":
+        from flask import session as _session
+        from sqlalchemy import select as _select
+
+        @app.before_request
+        def _preview_autologin():
+            if "user_id" in _session:
+                return
+            from .db import get_session as _get_session
+            from .models import User as _User
+            u = _get_session().scalar(
+                _select(_User).where(_User.role == "admin").order_by(_User.id))
+            if u is not None:
+                _session["user_id"] = u.id
+                _session["user_email"] = u.email
+                _session["user_name"] = u.display_name
+                _session["user_role"] = u.role
+
     init_csrf(app)
     limiter.init_app(app)
     _register_error_handlers(app)
