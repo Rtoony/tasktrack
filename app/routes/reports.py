@@ -46,72 +46,98 @@ bp = Blueprint("reports", __name__)
 
 REPORT_QUICK_ACTION_SET_KEY = "report_console_quick_action"
 
+# Two sidebar groups. "documents" — the print-first packets that leave the
+# building as official department documents — is featured first; "queues" —
+# operator queues & analytics — follows (Overview stays the /reports home).
+# Nothing was removed in the reorg: every key/href predating the grouping
+# still resolves, so bookmarks and deep links keep working.
 REPORT_SECTIONS = [
-    {
-        "key": "overview",
-        "title": "Overview",
-        "subtitle": "Quick actions and saved presets.",
-        "href": "/reports",
-    },
+    # ── Documents ────────────────────────────────────────────────────────
     {
         "key": "thursday",
         "title": "Thursday Packet",
         "subtitle": "Weekly management document — print Thursday morning.",
         "href": "/reports/thursday",
-    },
-    {
-        "key": "today",
-        "title": "Today Brief",
-        "subtitle": "Daily operator packet.",
-        "href": "/reports/today",
-    },
-    {
-        "key": "weekly",
-        "title": "Week in Review",
-        "subtitle": "Recent activity, overdue, and rollups.",
-        "href": "/weekly",
-    },
-    {
-        "key": "management",
-        "title": "Management",
-        "subtitle": "Print-ready combined packet.",
-        "href": "/reports/management",
-    },
-    {
-        "key": "portfolio",
-        "title": "Portfolio",
-        "subtitle": "Project packets and action queues.",
-        "href": "/reports/projects",
-    },
-    {
-        "key": "project",
-        "title": "Single Project",
-        "subtitle": "Focused project one-pager.",
-        "href": "/reports/project",
+        "group": "documents",
     },
     {
         "key": "meetings",
-        "title": "Meetings",
-        "subtitle": "Upcoming event packet batch.",
+        "title": "Meeting Prep",
+        "subtitle": "Print packets for upcoming meetings.",
         "href": "/reports/meetings",
+        "group": "documents",
     },
     {
         "key": "meeting",
         "title": "Meeting Detail",
         "subtitle": "One event packet by ID.",
         "href": "/reports/meeting",
+        "group": "documents",
+    },
+    {
+        "key": "project",
+        "title": "Project One-Pager",
+        "subtitle": "Single project status document.",
+        "href": "/reports/project",
+        "group": "documents",
+    },
+    {
+        "key": "management",
+        "title": "Management Packet",
+        "subtitle": "Print-ready combined packet.",
+        "href": "/reports/management",
+        "group": "documents",
+    },
+    {
+        "key": "competency",
+        "title": "Competency Report",
+        "subtitle": "Admin-only rollout reports.",
+        "href": "/reports/competency",
+        "admin_only": True,
+        "group": "documents",
+    },
+    # ── Queues & Analytics ───────────────────────────────────────────────
+    {
+        "key": "overview",
+        "title": "Overview",
+        "subtitle": "Quick actions and saved presets.",
+        "href": "/reports",
+        "group": "queues",
+    },
+    {
+        "key": "today",
+        "title": "Today Brief",
+        "subtitle": "Daily operator packet.",
+        "href": "/reports/today",
+        "group": "queues",
+    },
+    {
+        "key": "weekly",
+        "title": "Week in Review",
+        "subtitle": "Recent activity, overdue, and rollups.",
+        "href": "/weekly",
+        "group": "queues",
+    },
+    {
+        "key": "portfolio",
+        "title": "Portfolio",
+        "subtitle": "Project packets and action queues.",
+        "href": "/reports/projects",
+        "group": "queues",
     },
     {
         "key": "intake",
         "title": "Intake",
         "subtitle": "Source review and CSV audit.",
         "href": "/reports/intake",
+        "group": "queues",
     },
     {
         "key": "triage-outcomes",
         "title": "Triage Outcomes",
         "subtitle": "Suggestion accuracy — auto-file graduation.",
         "href": "/reports/triage-outcomes",
+        "group": "queues",
     },
     {
         "key": "incidents",
@@ -119,14 +145,13 @@ REPORT_SECTIONS = [
         "subtitle": "Admin-only sensitive reports.",
         "href": "/reports/incidents",
         "admin_only": True,
+        "group": "queues",
     },
-    {
-        "key": "competency",
-        "title": "Competency",
-        "subtitle": "Admin-only rollout reports.",
-        "href": "/reports/competency",
-        "admin_only": True,
-    },
+]
+
+REPORT_SECTION_GROUPS = [
+    ("documents", "Documents"),
+    ("queues", "Queues & Analytics"),
 ]
 
 
@@ -183,6 +208,7 @@ def report_nav_context():
     active_meta = next((section for section in sections if section["key"] == active), sections[0])
     return {
         "report_sections": sections,
+        "report_section_groups": REPORT_SECTION_GROUPS,
         "active_report_section": active,
         "active_report_meta": active_meta,
         "letterhead": _letterhead(),

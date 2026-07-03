@@ -34,10 +34,19 @@
   font-size: 0.76rem;
   margin-top: 0.25rem;
 }
+.report-nav-group-label {
+  color: var(--text-dim);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  padding: 0.75rem 1rem 0;
+}
 .report-side-nav {
   display: grid;
   gap: 0.25rem;
-  padding: 0.55rem;
+  padding: 0.45rem 0.55rem 0.55rem;
 }
 .report-side-nav a {
   display: block;
