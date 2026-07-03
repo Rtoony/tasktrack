@@ -66,27 +66,12 @@
   .inline-note { color:var(--text-muted); font-size:0.76rem; margin-top:0.35rem; }
   .empty { color:var(--text-dim); font-style:italic; padding:0.4rem 0; }
   @media (max-width: 1000px) { .filters,.summary-grid,.preset-row { grid-template-columns:repeat(2,1fr); } .emp-head { flex-direction:column; } .chips,.actions { justify-content:flex-start; } }
-  @media print {
-    @page { size: letter; margin: 0.45in; }
-    body { background:#fff; color:#111827; font-size:8.8pt; }
-    header,.filter-card,.btn { display:none !important; }
-    main { max-width:none; padding:0; }
-    .print-only { display:block !important; }
-    .summary-card,.section,.employee-card { border-color:#d1d5db; background:#fff; }
-    .summary-grid { grid-template-columns:repeat(6,1fr); gap:0.08in; }
-    th,td { border-color:#e5e7eb; }
-    .chip { background:#fff; color:#374151; border-color:#d1d5db; }
-    /* #51 R2/R3/R4: keep the new growth elements ink-friendly + non-punitive on paper. */
-    .chip.strength { color:#047857; border-color:#a7f3d0; background:#ecfdf5; }
-    .legend { background:#f0f9ff; border-color:#bae6fd; color:#334155; }
-    .legend .legend-title { color:#0369a1; }
-    .legend .lv b { color:#111827; }
-    .legend .lv .lv-num { color:#0284c7; }
-    .legend .lv .lv-decision, .coverage { color:#6b7280; }
-    .chip .lvl-word, .coverage b { color:#0369a1; }
-  }
+  /* Print treatment lives in the shared report-print.css (letterhead,
+     US-Letter @page, B&W-safe tones incl. the #51 growth elements) — no
+     per-file @media print block. */
 </style>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/report-shell.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/report-print.css') }}">
 </head>
 <body>
 <header>
@@ -105,10 +90,9 @@
   {% include "partials/report_sidebar.html" %}
   <div class="report-content">
 <main>
-  <section class="print-only" style="border-bottom:1px solid #111827;margin-bottom:0.12in;padding-bottom:0.08in">
-    <strong>TaskTrack Competency Report</strong><br>
-    Generated {{ packet.generated_at[:16] }} / {{ packet.summary.employee_count }} employee{{ '' if packet.summary.employee_count == 1 else 's' }} / {{ packet.summary.category_count }} categories
-  </section>
+  {% set doc_title = "Competency Report" %}
+  {% set doc_period = packet.generated_at[:10] ~ " · " ~ packet.summary.employee_count ~ (" employee" if packet.summary.employee_count == 1 else " employees") ~ " · " ~ packet.summary.category_count ~ " categories" %}
+  {% include "partials/report_letterhead.html" %}
 
   <h1>Competency Report</h1>
   <p class="sub">Admin-only rollout report: preliminary ratings, official baselines, review coverage, and growth opportunities — a strengths-first capability picture, not a ranking.</p>
@@ -215,6 +199,11 @@
     </tbody></table></div>
   </section>
   {% endfor %}
+
+  <footer class="print-footer print-only">
+    <span>Generated {{ packet.generated_at[:16] }} · Admin-only capability data</span>
+    <span>Internal — prepared for management review</span>
+  </footer>
 </main>
   </div>
 </div>
