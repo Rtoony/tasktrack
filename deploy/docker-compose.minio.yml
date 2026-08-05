@@ -19,6 +19,11 @@ services:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: tasktrack-minio
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER not set — copy deploy/minio.env.example to deploy/minio.env}
